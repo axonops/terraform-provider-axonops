@@ -1,0 +1,11 @@
+main.tf
+CLAUDE.md
+terraform-provider-axonops
+terraform.tfstate
+terraform.tfstate.*
+.terraform/
+.terraform.lock.hcl
+*.tfvars
+crash.log
+.vscode
+swagger.json
