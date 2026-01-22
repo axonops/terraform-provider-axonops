@@ -3,11 +3,13 @@ package main
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	axonopsClient "axonops-kafka-tf/client"
 
 	"github.com/google/uuid"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64default"
@@ -18,6 +20,7 @@ import (
 )
 
 var _ resource.Resource = (*logCollectorResource)(nil)
+var _ resource.ResourceWithImportState = (*logCollectorResource)(nil)
 
 type logCollectorResource struct {
 	client *axonopsClient.AxonopsHttpClient
@@ -350,4 +353,63 @@ func (r *logCollectorResource) Delete(ctx context.Context, req resource.DeleteRe
 	}
 
 	tflog.Info(ctx, "Deleted log collector resource")
+}
+
+// ImportState imports an existing log collector into Terraform state.
+// Import ID format: cluster_name/log_collector_name
+func (r *logCollectorResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
+	// Parse the import ID
+	parts := strings.Split(req.ID, "/")
+	if len(parts) != 2 {
+		resp.Diagnostics.AddError(
+			"Invalid Import ID",
+			fmt.Sprintf("Expected import ID format: cluster_name/log_collector_name, got: %s", req.ID),
+		)
+		return
+	}
+
+	clusterName := parts[0]
+	collectorName := parts[1]
+
+	// Get all log collectors
+	collectors, err := r.client.GetLogCollectors(clusterName)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Import Error",
+			fmt.Sprintf("Unable to read log collectors: %s", err),
+		)
+		return
+	}
+
+	// Find the collector by name
+	var found *axonopsClient.LogCollectorConfig
+	for _, c := range collectors {
+		if c.Name == collectorName {
+			found = &c
+			break
+		}
+	}
+
+	if found == nil {
+		resp.Diagnostics.AddError(
+			"Import Error",
+			fmt.Sprintf("Log collector %s not found in cluster %s", collectorName, clusterName),
+		)
+		return
+	}
+
+	// Set the state
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("cluster_name"), clusterName)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("name"), found.Name)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("uuid"), found.UUID)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("filename"), found.Filename)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("date_format"), found.DateFormat)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("info_regex"), found.InfoRegex)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("warning_regex"), found.WarningRegex)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("error_regex"), found.ErrorRegex)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("debug_regex"), found.DebugRegex)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("error_alert_threshold"), int64(found.ErrorAlertThreshold))...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("supported_agent_types"), found.SupportedAgentType)...)
+
+	tflog.Info(ctx, fmt.Sprintf("Imported log collector %s from cluster %s", collectorName, clusterName))
 }

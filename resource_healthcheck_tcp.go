@@ -3,11 +3,13 @@ package main
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	axonopsClient "axonops-kafka-tf/client"
 
 	"github.com/google/uuid"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
@@ -18,6 +20,7 @@ import (
 )
 
 var _ resource.Resource = (*tcpHealthcheckResource)(nil)
+var _ resource.ResourceWithImportState = (*tcpHealthcheckResource)(nil)
 
 type tcpHealthcheckResource struct {
 	client *axonopsClient.AxonopsHttpClient
@@ -329,4 +332,60 @@ func (r *tcpHealthcheckResource) Delete(ctx context.Context, req resource.Delete
 	}
 
 	tflog.Info(ctx, "Deleted TCP healthcheck resource")
+}
+
+// ImportState imports an existing TCP healthcheck into Terraform state.
+// Import ID format: cluster_name/healthcheck_name
+func (r *tcpHealthcheckResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
+	// Parse the import ID
+	parts := strings.Split(req.ID, "/")
+	if len(parts) != 2 {
+		resp.Diagnostics.AddError(
+			"Invalid Import ID",
+			fmt.Sprintf("Expected import ID format: cluster_name/healthcheck_name, got: %s", req.ID),
+		)
+		return
+	}
+
+	clusterName := parts[0]
+	healthcheckName := parts[1]
+
+	// Get all healthchecks
+	healthchecks, err := r.client.GetHealthchecks(clusterName)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Import Error",
+			fmt.Sprintf("Unable to read healthchecks: %s", err),
+		)
+		return
+	}
+
+	// Find the TCP healthcheck by name
+	var found *axonopsClient.TCPHealthcheck
+	for _, c := range healthchecks.TCPChecks {
+		if c.Name == healthcheckName {
+			found = &c
+			break
+		}
+	}
+
+	if found == nil {
+		resp.Diagnostics.AddError(
+			"Import Error",
+			fmt.Sprintf("TCP healthcheck %s not found in cluster %s", healthcheckName, clusterName),
+		)
+		return
+	}
+
+	// Set the state
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("cluster_name"), clusterName)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("name"), found.Name)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), found.ID)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("tcp"), found.TCP)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("interval"), found.Interval)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("timeout"), found.Timeout)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("readonly"), found.Readonly)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("supported_agent_types"), found.SupportedAgentType)...)
+
+	tflog.Info(ctx, fmt.Sprintf("Imported TCP healthcheck %s from cluster %s", healthcheckName, clusterName))
 }

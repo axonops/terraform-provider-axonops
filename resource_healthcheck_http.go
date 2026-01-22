@@ -3,11 +3,13 @@ package main
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	axonopsClient "axonops-kafka-tf/client"
 
 	"github.com/google/uuid"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
@@ -20,6 +22,7 @@ import (
 )
 
 var _ resource.Resource = (*httpHealthcheckResource)(nil)
+var _ resource.ResourceWithImportState = (*httpHealthcheckResource)(nil)
 
 type httpHealthcheckResource struct {
 	client *axonopsClient.AxonopsHttpClient
@@ -391,4 +394,64 @@ func (r *httpHealthcheckResource) Delete(ctx context.Context, req resource.Delet
 	}
 
 	tflog.Info(ctx, "Deleted HTTP healthcheck resource")
+}
+
+// ImportState imports an existing HTTP healthcheck into Terraform state.
+// Import ID format: cluster_name/healthcheck_name
+func (r *httpHealthcheckResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
+	// Parse the import ID
+	parts := strings.Split(req.ID, "/")
+	if len(parts) != 2 {
+		resp.Diagnostics.AddError(
+			"Invalid Import ID",
+			fmt.Sprintf("Expected import ID format: cluster_name/healthcheck_name, got: %s", req.ID),
+		)
+		return
+	}
+
+	clusterName := parts[0]
+	healthcheckName := parts[1]
+
+	// Get all healthchecks
+	healthchecks, err := r.client.GetHealthchecks(clusterName)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Import Error",
+			fmt.Sprintf("Unable to read healthchecks: %s", err),
+		)
+		return
+	}
+
+	// Find the HTTP healthcheck by name
+	var found *axonopsClient.HTTPHealthcheck
+	for _, c := range healthchecks.HTTPChecks {
+		if c.Name == healthcheckName {
+			found = &c
+			break
+		}
+	}
+
+	if found == nil {
+		resp.Diagnostics.AddError(
+			"Import Error",
+			fmt.Sprintf("HTTP healthcheck %s not found in cluster %s", healthcheckName, clusterName),
+		)
+		return
+	}
+
+	// Set the state
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("cluster_name"), clusterName)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("name"), found.Name)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), found.ID)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("url"), found.URL)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("method"), found.Method)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("headers"), found.Headers)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("body"), found.Body)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("expected_status"), int64(found.ExpectedStatus))...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("interval"), found.Interval)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("timeout"), found.Timeout)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("readonly"), found.Readonly)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("supported_agent_types"), found.SupportedAgentType)...)
+
+	tflog.Info(ctx, fmt.Sprintf("Imported HTTP healthcheck %s from cluster %s", healthcheckName, clusterName))
 }

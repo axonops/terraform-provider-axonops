@@ -3,10 +3,12 @@ package main
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	axonopsClient "axonops-kafka-tf/client"
 
 	"github.com/google/uuid"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
@@ -16,6 +18,7 @@ import (
 )
 
 var _ resource.Resource = (*shellHealthcheckResource)(nil)
+var _ resource.ResourceWithImportState = (*shellHealthcheckResource)(nil)
 
 type shellHealthcheckResource struct {
 	client *axonopsClient.AxonopsHttpClient
@@ -307,4 +310,60 @@ func (r *shellHealthcheckResource) Delete(ctx context.Context, req resource.Dele
 	}
 
 	tflog.Info(ctx, "Deleted shell healthcheck resource")
+}
+
+// ImportState imports an existing shell healthcheck into Terraform state.
+// Import ID format: cluster_name/healthcheck_name
+func (r *shellHealthcheckResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
+	// Parse the import ID
+	parts := strings.Split(req.ID, "/")
+	if len(parts) != 2 {
+		resp.Diagnostics.AddError(
+			"Invalid Import ID",
+			fmt.Sprintf("Expected import ID format: cluster_name/healthcheck_name, got: %s", req.ID),
+		)
+		return
+	}
+
+	clusterName := parts[0]
+	healthcheckName := parts[1]
+
+	// Get all healthchecks
+	healthchecks, err := r.client.GetHealthchecks(clusterName)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Import Error",
+			fmt.Sprintf("Unable to read healthchecks: %s", err),
+		)
+		return
+	}
+
+	// Find the shell healthcheck by name
+	var found *axonopsClient.ShellHealthcheck
+	for _, c := range healthchecks.ShellChecks {
+		if c.Name == healthcheckName {
+			found = &c
+			break
+		}
+	}
+
+	if found == nil {
+		resp.Diagnostics.AddError(
+			"Import Error",
+			fmt.Sprintf("Shell healthcheck %s not found in cluster %s", healthcheckName, clusterName),
+		)
+		return
+	}
+
+	// Set the state
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("cluster_name"), clusterName)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("name"), found.Name)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), found.ID)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("script"), found.Script)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("shell"), found.Shell)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("interval"), found.Interval)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("timeout"), found.Timeout)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("readonly"), found.Readonly)...)
+
+	tflog.Info(ctx, fmt.Sprintf("Imported shell healthcheck %s from cluster %s", healthcheckName, clusterName))
 }

@@ -288,6 +288,71 @@ resource "axonops_schema" "events_value" {
 }
 ```
 
+## Importing Existing Resources
+
+All resources support importing existing configurations into Terraform state.
+
+### Import ID Formats
+
+| Resource | Import ID Format |
+|----------|------------------|
+| `axonops_topic_resource` | `cluster_name/topic_name` |
+| `axonops_acl` | `cluster_name/resource_type/resource_name/resource_pattern_type/principal/host/operation/permission_type` |
+| `axonops_connector` | `cluster_name/connect_cluster_name/connector_name` |
+| `axonops_schema` | `cluster_name/subject` |
+| `axonops_logcollector` | `cluster_name/log_collector_name` |
+| `axonops_healthcheck_tcp` | `cluster_name/healthcheck_name` |
+| `axonops_healthcheck_http` | `cluster_name/healthcheck_name` |
+| `axonops_healthcheck_shell` | `cluster_name/healthcheck_name` |
+
+### Import Examples
+
+```bash
+# Import a topic
+terraform import axonops_topic_resource.my_topic "my-cluster/my-topic"
+
+# Import an ACL
+terraform import axonops_acl.my_acl "my-cluster/TOPIC/my-topic/LITERAL/User:alice/*/READ/ALLOW"
+
+# Import a connector
+terraform import axonops_connector.my_connector "my-cluster/my-connect-cluster/my-connector"
+
+# Import a schema
+terraform import axonops_schema.my_schema "my-cluster/my-topic-value"
+
+# Import a log collector
+terraform import axonops_logcollector.my_logs "my-cluster/My Log Collector"
+
+# Import healthchecks
+terraform import axonops_healthcheck_tcp.my_check "my-cluster/My TCP Check"
+terraform import axonops_healthcheck_http.my_http "my-cluster/My HTTP Check"
+terraform import axonops_healthcheck_shell.my_shell "my-cluster/My Shell Check"
+```
+
+### Bulk Import Script
+
+For importing an entire cluster, use the provided import script:
+
+```bash
+# Usage
+./scripts/import-cluster.sh <axonops_host> <org_id> <cluster_name> <api_key> [output_dir]
+
+# Example
+./scripts/import-cluster.sh axonops.example.com:8080 myorg mycluster abc123 ./imported
+
+# The script will:
+# 1. Generate .tf files for all resources (topics, ACLs, log collectors, healthchecks)
+# 2. Create an import_commands.sh script with all terraform import commands
+# 3. Generate a provider.tf with your configuration
+```
+
+After running the script:
+1. Review the generated `.tf` files in the output directory
+2. Set your API key: `export TF_VAR_axonops_api_key='your-api-key'`
+3. Initialize Terraform: `terraform init`
+4. Run the import commands: `bash import_commands.sh`
+5. Verify the state: `terraform plan` (should show no changes)
+
 ## Development
 
 ### Building
