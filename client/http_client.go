@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"time"
@@ -98,6 +99,134 @@ func (c *AxonopsHttpClient) CreateTopic(topicName, clusterName string, partition
 		return fmt.Errorf("failed to send POST request: status %d for url %v with topicName:%v", resp.StatusCode, url, topicName)
 	}
 
+}
+
+// TopicInfo represents topic information returned from the API
+type TopicInfo struct {
+	Name              string             `json:"name"`
+	Partitions        int32              `json:"partitionCount"`
+	ReplicationFactor int32              `json:"replicationFactor"`
+	Config            []KafkaTopicConfig `json:"-"` // Populated from configs endpoint
+}
+
+// TopicConfigEntry represents a config entry from the configs endpoint
+type TopicConfigEntry struct {
+	Name            string `json:"name"`
+	Value           string `json:"value"`
+	Source          string `json:"source"`
+	IsExplicitlySet bool   `json:"isExplicitlySet"`
+}
+
+// TopicConfigDescription wraps config entries for a topic
+type TopicConfigDescription struct {
+	TopicName     string             `json:"topicName"`
+	ConfigEntries []TopicConfigEntry `json:"configEntries"`
+}
+
+// TopicConfigResponse is the response from the configs endpoint
+type TopicConfigResponse struct {
+	TopicDescription []TopicConfigDescription `json:"topicDescription"`
+}
+
+// GetTopic retrieves a topic's information including configs
+func (c *AxonopsHttpClient) GetTopic(topicName, clusterName string) (*TopicInfo, error) {
+	// Get basic topic info
+	topicUrl := fmt.Sprintf("%s://%s/%s/%s/kafka/%s/topics/%s", c.protocol, c.axonopsHost, axonops_api_version, c.orgid, clusterName, topicName)
+
+	req, err := http.NewRequest("GET", topicUrl, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create GET request: %w for url %v", err, topicUrl)
+	}
+
+	if c.apiKey != "" {
+		req.Header.Set("Authorization", c.tokenType+" "+c.apiKey)
+	}
+
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to send GET request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("failed to get topic: status %d for url %v, body: %s", resp.StatusCode, topicUrl, string(body))
+	}
+
+	var topicInfo TopicInfo
+	if err := json.NewDecoder(resp.Body).Decode(&topicInfo); err != nil {
+		return nil, fmt.Errorf("failed to decode topic response: %w", err)
+	}
+
+	// Get topic configs
+	configUrl := fmt.Sprintf("%s://%s/%s/%s/kafka/%s/topics/%s/configs", c.protocol, c.axonopsHost, axonops_api_version, c.orgid, clusterName, topicName)
+
+	configReq, err := http.NewRequest("GET", configUrl, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create GET request for configs: %w", err)
+	}
+
+	if c.apiKey != "" {
+		configReq.Header.Set("Authorization", c.tokenType+" "+c.apiKey)
+	}
+
+	configResp, err := c.client.Do(configReq)
+	if err != nil {
+		return nil, fmt.Errorf("failed to send GET request for configs: %w", err)
+	}
+	defer configResp.Body.Close()
+
+	if configResp.StatusCode == 200 {
+		var configResponse TopicConfigResponse
+		if err := json.NewDecoder(configResp.Body).Decode(&configResponse); err != nil {
+			return nil, fmt.Errorf("failed to decode configs response: %w", err)
+		}
+
+		// Only include explicitly set configs
+		if len(configResponse.TopicDescription) > 0 {
+			for _, entry := range configResponse.TopicDescription[0].ConfigEntries {
+				if entry.IsExplicitlySet {
+					topicInfo.Config = append(topicInfo.Config, KafkaTopicConfig{
+						Name:  entry.Name,
+						Value: entry.Value,
+					})
+				}
+			}
+		}
+	}
+
+	return &topicInfo, nil
+}
+
+// GetTopics retrieves all topics for a cluster
+func (c *AxonopsHttpClient) GetTopics(clusterName string) ([]TopicInfo, error) {
+	url := fmt.Sprintf("%s://%s/%s/%s/kafka/%s/topics", c.protocol, c.axonopsHost, axonops_api_version, c.orgid, clusterName)
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create GET request: %w for url %v", err, url)
+	}
+
+	if c.apiKey != "" {
+		req.Header.Set("Authorization", c.tokenType+" "+c.apiKey)
+	}
+
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to send GET request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("failed to get topics: status %d for url %v", resp.StatusCode, url)
+	}
+
+	var topics []TopicInfo
+	if err := json.NewDecoder(resp.Body).Decode(&topics); err != nil {
+		return nil, fmt.Errorf("failed to decode topics response: %w", err)
+	}
+
+	return topics, nil
 }
 
 func (c *AxonopsHttpClient) DeleteTopic(topicName, clusterName string) error {

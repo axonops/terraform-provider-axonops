@@ -7,6 +7,7 @@ import (
 
 	axonopsClient "axonops-kafka-tf/client"
 
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -14,6 +15,7 @@ import (
 )
 
 var _ resource.Resource = (*topicResource)(nil)
+var _ resource.ResourceWithImportState = (*topicResource)(nil)
 
 type topicResource struct {
 	client *axonopsClient.AxonopsHttpClient
@@ -200,4 +202,47 @@ func (e *topicResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 	}
 
 	// Delete resource using 3rd party API.
+}
+
+// ImportState imports an existing topic into Terraform state.
+// Import ID format: cluster_name/topic_name
+func (e *topicResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
+	// Parse the import ID (format: cluster_name/topic_name)
+	parts := strings.Split(req.ID, "/")
+	if len(parts) != 2 {
+		resp.Diagnostics.AddError(
+			"Invalid Import ID",
+			fmt.Sprintf("Expected import ID format: cluster_name/topic_name, got: %s", req.ID),
+		)
+		return
+	}
+
+	clusterName := parts[0]
+	topicName := parts[1]
+
+	// Get topic details from the API
+	topic, err := e.client.GetTopic(topicName, clusterName)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Import Error",
+			fmt.Sprintf("Unable to read topic %s from cluster %s: %s", topicName, clusterName, err),
+		)
+		return
+	}
+
+	// Set the state
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("name"), topic.Name)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("cluster_name"), clusterName)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("partitions"), topic.Partitions)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("replication_factor"), topic.ReplicationFactor)...)
+
+	// Convert config (dots to underscores for Terraform)
+	config := make(map[string]string)
+	for _, c := range topic.Config {
+		key := strings.ReplaceAll(c.Name, ".", "_")
+		config[key] = c.Value
+	}
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("config"), config)...)
+
+	tflog.Info(ctx, fmt.Sprintf("Imported topic %s from cluster %s", topicName, clusterName))
 }

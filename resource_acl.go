@@ -3,9 +3,11 @@ package main
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	axonopsClient "axonops-kafka-tf/client"
 
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
@@ -14,6 +16,7 @@ import (
 )
 
 var _ resource.Resource = (*aclResource)(nil)
+var _ resource.ResourceWithImportState = (*aclResource)(nil)
 
 type aclResource struct {
 	client *axonopsClient.AxonopsHttpClient
@@ -234,4 +237,39 @@ func (r *aclResource) Delete(ctx context.Context, req resource.DeleteRequest, re
 	}
 
 	tflog.Info(ctx, "Deleted ACL resource")
+}
+
+// ImportState imports an existing ACL into Terraform state.
+// Import ID format: cluster_name/resource_type/resource_name/resource_pattern_type/principal/host/operation/permission_type
+func (r *aclResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
+	// Parse the import ID
+	parts := strings.Split(req.ID, "/")
+	if len(parts) != 8 {
+		resp.Diagnostics.AddError(
+			"Invalid Import ID",
+			fmt.Sprintf("Expected import ID format: cluster_name/resource_type/resource_name/resource_pattern_type/principal/host/operation/permission_type, got: %s", req.ID),
+		)
+		return
+	}
+
+	clusterName := parts[0]
+	resourceType := parts[1]
+	resourceName := parts[2]
+	resourcePatternType := parts[3]
+	principal := parts[4]
+	host := parts[5]
+	operation := parts[6]
+	permissionType := parts[7]
+
+	// Set the state
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("cluster_name"), clusterName)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("resource_type"), resourceType)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("resource_name"), resourceName)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("resource_pattern_type"), resourcePatternType)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("principal"), principal)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("host"), host)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("operation"), operation)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("permission_type"), permissionType)...)
+
+	tflog.Info(ctx, fmt.Sprintf("Imported ACL from cluster %s", clusterName))
 }

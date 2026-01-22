@@ -3,9 +3,11 @@ package main
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	axonopsClient "axonops-kafka-tf/client"
 
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -13,6 +15,7 @@ import (
 )
 
 var _ resource.Resource = (*connectorResource)(nil)
+var _ resource.ResourceWithImportState = (*connectorResource)(nil)
 
 type connectorResource struct {
 	client *axonopsClient.AxonopsHttpClient
@@ -219,4 +222,58 @@ func (r *connectorResource) Delete(ctx context.Context, req resource.DeleteReque
 	}
 
 	tflog.Info(ctx, "Deleted connector resource")
+}
+
+// ImportState imports an existing connector into Terraform state.
+// Import ID format: cluster_name/connect_cluster_name/connector_name
+func (r *connectorResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
+	// Parse the import ID
+	parts := strings.Split(req.ID, "/")
+	if len(parts) != 3 {
+		resp.Diagnostics.AddError(
+			"Invalid Import ID",
+			fmt.Sprintf("Expected import ID format: cluster_name/connect_cluster_name/connector_name, got: %s", req.ID),
+		)
+		return
+	}
+
+	clusterName := parts[0]
+	connectClusterName := parts[1]
+	connectorName := parts[2]
+
+	// Get connector details from the API
+	connector, err := r.client.GetConnector(clusterName, connectClusterName, connectorName)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Import Error",
+			fmt.Sprintf("Unable to read connector %s: %s", connectorName, err),
+		)
+		return
+	}
+
+	if connector == nil {
+		resp.Diagnostics.AddError(
+			"Import Error",
+			fmt.Sprintf("Connector %s not found in cluster %s/%s", connectorName, clusterName, connectClusterName),
+		)
+		return
+	}
+
+	// Set the state
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("cluster_name"), clusterName)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("connect_cluster_name"), connectClusterName)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("name"), connectorName)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("type"), connector.Type)...)
+
+	// Filter out "name" key from config
+	config := make(map[string]string)
+	for key, value := range connector.Config {
+		if key == "name" {
+			continue
+		}
+		config[key] = value
+	}
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("config"), config)...)
+
+	tflog.Info(ctx, fmt.Sprintf("Imported connector %s from cluster %s/%s", connectorName, clusterName, connectClusterName))
 }

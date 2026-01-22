@@ -3,9 +3,11 @@ package main
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	axonopsClient "axonops-kafka-tf/client"
 
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -13,6 +15,7 @@ import (
 )
 
 var _ resource.Resource = (*schemaResource)(nil)
+var _ resource.ResourceWithImportState = (*schemaResource)(nil)
 
 type schemaResource struct {
 	client *axonopsClient.AxonopsHttpClient
@@ -219,4 +222,49 @@ func (r *schemaResource) Delete(ctx context.Context, req resource.DeleteRequest,
 	}
 
 	tflog.Info(ctx, "Deleted schema resource")
+}
+
+// ImportState imports an existing schema into Terraform state.
+// Import ID format: cluster_name/subject
+func (r *schemaResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
+	// Parse the import ID
+	parts := strings.Split(req.ID, "/")
+	if len(parts) != 2 {
+		resp.Diagnostics.AddError(
+			"Invalid Import ID",
+			fmt.Sprintf("Expected import ID format: cluster_name/subject, got: %s", req.ID),
+		)
+		return
+	}
+
+	clusterName := parts[0]
+	subject := parts[1]
+
+	// Get schema details from the API
+	schemaInfo, err := r.client.GetSchema(clusterName, subject, "latest")
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Import Error",
+			fmt.Sprintf("Unable to read schema %s: %s", subject, err),
+		)
+		return
+	}
+
+	if schemaInfo == nil {
+		resp.Diagnostics.AddError(
+			"Import Error",
+			fmt.Sprintf("Schema subject %s not found in cluster %s", subject, clusterName),
+		)
+		return
+	}
+
+	// Set the state
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("cluster_name"), clusterName)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("subject"), subject)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("schema"), schemaInfo.Schema)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("schema_type"), schemaInfo.Type)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("schema_id"), int64(schemaInfo.Id))...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("version"), int64(schemaInfo.Version))...)
+
+	tflog.Info(ctx, fmt.Sprintf("Imported schema %s from cluster %s", subject, clusterName))
 }
