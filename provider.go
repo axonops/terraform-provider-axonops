@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 
-	axonopsClient "axonops-tf/client"
+	axonopsClient "terraform-provider-axonops/client"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/path"

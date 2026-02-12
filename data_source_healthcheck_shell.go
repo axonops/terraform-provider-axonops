@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	axonopsClient "axonops-tf/client"
+	axonopsClient "terraform-provider-axonops/client"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"

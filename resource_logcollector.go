@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	axonopsClient "axonops-tf/client"
+	axonopsClient "terraform-provider-axonops/client"
 
 	"github.com/google/uuid"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
@@ -164,15 +164,15 @@ func (r *logCollectorResource) Create(ctx context.Context, req resource.CreateRe
 
 	// Create the new collector config
 	newCollector := axonopsClient.LogCollectorConfig{
-		Name:               data.Name.ValueString(),
-		UUID:               newUUID,
-		Filename:           data.Filename.ValueString(),
-		DateFormat:         data.DateFormat.ValueString(),
-		InfoRegex:          data.InfoRegex.ValueString(),
-		WarningRegex:       data.WarningRegex.ValueString(),
-		ErrorRegex:         data.ErrorRegex.ValueString(),
-		DebugRegex:         data.DebugRegex.ValueString(),
-		SupportedAgentType: supportedAgentTypes,
+		Name:                data.Name.ValueString(),
+		UUID:                newUUID,
+		Filename:            data.Filename.ValueString(),
+		DateFormat:          data.DateFormat.ValueString(),
+		InfoRegex:           data.InfoRegex.ValueString(),
+		WarningRegex:        data.WarningRegex.ValueString(),
+		ErrorRegex:          data.ErrorRegex.ValueString(),
+		DebugRegex:          data.DebugRegex.ValueString(),
+		SupportedAgentType:  supportedAgentTypes,
 		ErrorAlertThreshold: int(data.ErrorAlertThreshold.ValueInt64()),
 	}
 
@@ -283,15 +283,15 @@ func (r *logCollectorResource) Update(ctx context.Context, req resource.UpdateRe
 	for i, c := range existingCollectors {
 		if c.Name == stateData.Name.ValueString() {
 			existingCollectors[i] = axonopsClient.LogCollectorConfig{
-				Name:               planData.Name.ValueString(),
-				UUID:               c.UUID, // Keep the current UUID from API
-				Filename:           planData.Filename.ValueString(),
-				DateFormat:         planData.DateFormat.ValueString(),
-				InfoRegex:          planData.InfoRegex.ValueString(),
-				WarningRegex:       planData.WarningRegex.ValueString(),
-				ErrorRegex:         planData.ErrorRegex.ValueString(),
-				DebugRegex:         planData.DebugRegex.ValueString(),
-				SupportedAgentType: supportedAgentTypes,
+				Name:                planData.Name.ValueString(),
+				UUID:                c.UUID, // Keep the current UUID from API
+				Filename:            planData.Filename.ValueString(),
+				DateFormat:          planData.DateFormat.ValueString(),
+				InfoRegex:           planData.InfoRegex.ValueString(),
+				WarningRegex:        planData.WarningRegex.ValueString(),
+				ErrorRegex:          planData.ErrorRegex.ValueString(),
+				DebugRegex:          planData.DebugRegex.ValueString(),
+				SupportedAgentType:  supportedAgentTypes,
 				ErrorAlertThreshold: int(planData.ErrorAlertThreshold.ValueInt64()),
 			}
 			found = true

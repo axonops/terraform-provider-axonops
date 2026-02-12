@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	axonopsClient "axonops-tf/client"
+	axonopsClient "terraform-provider-axonops/client"
 
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -119,16 +119,16 @@ func (r *cassandraAdaptiveRepairResource) Schema(ctx context.Context, req resour
 }
 
 type cassandraAdaptiveRepairResourceData struct {
-	ClusterName        types.String `tfsdk:"cluster_name"`
-	ClusterType        types.String `tfsdk:"cluster_type"`
-	Active             types.Bool   `tfsdk:"active"`
-	Parallelism        types.Int64  `tfsdk:"parallelism"`
-	GcGraceThreshold   types.Int64  `tfsdk:"gc_grace_threshold"`
-	BlacklistedTables  types.List   `tfsdk:"blacklisted_tables"`
-	FilterTwcsTables   types.Bool   `tfsdk:"filter_twcs_tables"`
-	SegmentRetries     types.Int64  `tfsdk:"segment_retries"`
-	SegmentsPerVnode   types.Int64  `tfsdk:"segments_per_vnode"`
-	SegmentTargetSizeMB types.Int64 `tfsdk:"segment_target_size_mb"`
+	ClusterName         types.String `tfsdk:"cluster_name"`
+	ClusterType         types.String `tfsdk:"cluster_type"`
+	Active              types.Bool   `tfsdk:"active"`
+	Parallelism         types.Int64  `tfsdk:"parallelism"`
+	GcGraceThreshold    types.Int64  `tfsdk:"gc_grace_threshold"`
+	BlacklistedTables   types.List   `tfsdk:"blacklisted_tables"`
+	FilterTwcsTables    types.Bool   `tfsdk:"filter_twcs_tables"`
+	SegmentRetries      types.Int64  `tfsdk:"segment_retries"`
+	SegmentsPerVnode    types.Int64  `tfsdk:"segments_per_vnode"`
+	SegmentTargetSizeMB types.Int64  `tfsdk:"segment_target_size_mb"`
 }
 
 func (r *cassandraAdaptiveRepairResource) buildSettings(ctx context.Context, data *cassandraAdaptiveRepairResourceData, diags *[]interface{}) axonopsClient.AdaptiveRepairSettings {
