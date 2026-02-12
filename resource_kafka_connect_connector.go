@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	axonopsClient "axonops-kafka-tf/client"
+	axonopsClient "axonops-tf/client"
 
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -21,7 +21,7 @@ type connectorResource struct {
 	client *axonopsClient.AxonopsHttpClient
 }
 
-func NewConnectorResource() resource.Resource {
+func NewKafkaConnectConnectorResource() resource.Resource {
 	return &connectorResource{}
 }
 
@@ -45,7 +45,7 @@ func (r *connectorResource) Configure(ctx context.Context, req resource.Configur
 }
 
 func (r *connectorResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
-	resp.TypeName = req.ProviderTypeName + "_connector"
+	resp.TypeName = req.ProviderTypeName + "_kafka_connect_connector"
 }
 
 func (r *connectorResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {

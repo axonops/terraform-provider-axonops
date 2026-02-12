@@ -12,7 +12,7 @@ locals {
 # =============================================================================
 
 # User events topic
-resource "axonops_topic_resource" "user_events" {
+resource "axonops_kafka_topic" "user_events" {
   name               = "user-events"
   partitions         = 12
   replication_factor = 3
@@ -26,7 +26,7 @@ resource "axonops_topic_resource" "user_events" {
 }
 
 # Order events topic
-resource "axonops_topic_resource" "orders" {
+resource "axonops_kafka_topic" "orders" {
   name               = "orders"
   partitions         = 6
   replication_factor = 3
@@ -40,7 +40,7 @@ resource "axonops_topic_resource" "orders" {
 }
 
 # User profiles compacted topic
-resource "axonops_topic_resource" "user_profiles" {
+resource "axonops_kafka_topic" "user_profiles" {
   name               = "user-profiles"
   partitions         = 6
   replication_factor = 3
@@ -53,7 +53,7 @@ resource "axonops_topic_resource" "user_profiles" {
 }
 
 # Dead letter queue
-resource "axonops_topic_resource" "dlq" {
+resource "axonops_kafka_topic" "dlq" {
   name               = "dead-letter-queue"
   partitions         = 3
   replication_factor = 3
@@ -111,10 +111,10 @@ resource "axonops_schema" "orders" {
 # =============================================================================
 
 # Producer service - write to user-events
-resource "axonops_acl" "user_service_produce" {
+resource "axonops_kafka_acl" "user_service_produce" {
   cluster_name          = local.cluster_name
   resource_type         = "TOPIC"
-  resource_name         = axonops_topic_resource.user_events.name
+  resource_name         = axonops_kafka_topic.user_events.name
   resource_pattern_type = "LITERAL"
   principal             = "User:user-service"
   host                  = "*"
@@ -123,10 +123,10 @@ resource "axonops_acl" "user_service_produce" {
 }
 
 # Analytics service - read from user-events
-resource "axonops_acl" "analytics_consume" {
+resource "axonops_kafka_acl" "analytics_consume" {
   cluster_name          = local.cluster_name
   resource_type         = "TOPIC"
-  resource_name         = axonops_topic_resource.user_events.name
+  resource_name         = axonops_kafka_topic.user_events.name
   resource_pattern_type = "LITERAL"
   principal             = "User:analytics-service"
   host                  = "*"
@@ -135,7 +135,7 @@ resource "axonops_acl" "analytics_consume" {
 }
 
 # Analytics service - consumer group access
-resource "axonops_acl" "analytics_group" {
+resource "axonops_kafka_acl" "analytics_group" {
   cluster_name          = local.cluster_name
   resource_type         = "GROUP"
   resource_name         = "analytics-consumer-group"
@@ -147,10 +147,10 @@ resource "axonops_acl" "analytics_group" {
 }
 
 # Order service - produce to orders topic
-resource "axonops_acl" "order_service_produce" {
+resource "axonops_kafka_acl" "order_service_produce" {
   cluster_name          = local.cluster_name
   resource_type         = "TOPIC"
-  resource_name         = axonops_topic_resource.orders.name
+  resource_name         = axonops_kafka_topic.orders.name
   resource_pattern_type = "LITERAL"
   principal             = "User:order-service"
   host                  = "*"
@@ -163,7 +163,7 @@ resource "axonops_acl" "order_service_produce" {
 # =============================================================================
 
 # S3 sink for archiving events
-resource "axonops_connector" "s3_archive" {
+resource "axonops_kafka_connect_connector" "s3_archive" {
   cluster_name         = local.cluster_name
   connect_cluster_name = local.connect_cluster_name
   name                 = "s3-event-archive"

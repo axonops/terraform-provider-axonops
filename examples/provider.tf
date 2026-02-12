@@ -14,6 +14,6 @@ provider "axonops" {
   # Organization ID (required)
   org_id = "your-org-id"
 
-  # Token type for Authorization header: 'AxonApi' (default) or 'Bearer'
-  token_type = "AxonApi"
+  # Token type for Authorization header: 'Bearer' (default) or 'AxonApi'
+  token_type = "Bearer"
 }

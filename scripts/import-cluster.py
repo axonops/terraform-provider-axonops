@@ -118,7 +118,7 @@ def import_topics(api_base: str, api_key: str, cluster_name: str, output_dir: st
                         value = escape_hcl_string(entry.get('value', ''))
                         config_lines.append(f'    {key} = "{value}"')
 
-        resource = f'''resource "axonops_topic_resource" "{safe_name}" {{
+        resource = f'''resource "axonops_kafka_topic" "{safe_name}" {{
   name               = "{name}"
   partitions         = {partitions}
   replication_factor = {replication}
@@ -132,7 +132,7 @@ def import_topics(api_base: str, api_key: str, cluster_name: str, output_dir: st
         resource += '\n}\n'
 
         resources.append(resource)
-        imports.append(f'terraform import axonops_topic_resource.{safe_name} "{cluster_name}/{name}"')
+        imports.append(f'terraform import axonops_kafka_topic.{safe_name} "{cluster_name}/{name}"')
 
     if resources:
         with open(os.path.join(output_dir, 'topics.tf'), 'w') as f:
@@ -176,7 +176,7 @@ def import_acls(api_base: str, api_key: str, cluster_name: str, output_dir: str)
 
             safe_name = f'acl_{counter}'
 
-            resource = f'''resource "axonops_acl" "{safe_name}" {{
+            resource = f'''resource "axonops_kafka_acl" "{safe_name}" {{
   cluster_name          = "{cluster_name}"
   resource_type         = "{res_type}"
   resource_name         = "{res_name}"
@@ -189,7 +189,7 @@ def import_acls(api_base: str, api_key: str, cluster_name: str, output_dir: str)
 '''
             resources.append(resource)
             imports.append(
-                f'terraform import axonops_acl.{safe_name} '
+                f'terraform import axonops_kafka_acl.{safe_name} '
                 f'"{cluster_name}/{res_type}/{res_name}/{pattern_type}/{principal}/{host}/{operation}/{permission}"'
             )
 
@@ -302,7 +302,7 @@ def import_connectors(api_base: str, api_key: str, cluster_name: str, output_dir
                     continue
                 config_lines.append(f'    "{escape_hcl_string(key)}" = "{escape_hcl_string(str(value))}"')
 
-            resource = f'''resource "axonops_connector" "{safe_name}" {{
+            resource = f'''resource "axonops_kafka_connect_connector" "{safe_name}" {{
   cluster_name         = "{cluster_name}"
   connect_cluster_name = "{connect_cluster_name}"
   name                 = "{escape_hcl_string(connector_name)}"
@@ -314,7 +314,7 @@ def import_connectors(api_base: str, api_key: str, cluster_name: str, output_dir
 
             resources.append(resource)
             imports.append(
-                f'terraform import axonops_connector.{safe_name} '
+                f'terraform import axonops_kafka_connect_connector.{safe_name} '
                 f'"{cluster_name}/{connect_cluster_name}/{connector_name}"'
             )
 

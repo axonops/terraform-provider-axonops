@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	axonopsClient "axonops-kafka-tf/client"
+	axonopsClient "axonops-tf/client"
 
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -21,12 +21,11 @@ type topicResource struct {
 	client *axonopsClient.AxonopsHttpClient
 }
 
-func NewResource() resource.Resource {
+func NewKafkaTopicResource() resource.Resource {
 	return &topicResource{}
 }
 
 func (r *topicResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
-	tflog.Info(ctx, "KARL In configure")
 
 	if req.ProviderData == nil {
 		return
@@ -48,7 +47,7 @@ func (r *topicResource) Configure(ctx context.Context, req resource.ConfigureReq
 }
 
 func (e *topicResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
-	resp.TypeName = req.ProviderTypeName + "_topic_resource"
+	resp.TypeName = req.ProviderTypeName + "_kafka_topic"
 }
 
 func (e *topicResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
@@ -105,15 +104,12 @@ func (e *topicResource) Create(ctx context.Context, req resource.CreateRequest, 
 		return
 	}
 
-	tflog.Info(ctx, "KARL created a resource")
-
 	diags = resp.State.Set(ctx, &data)
 	resp.Diagnostics.Append(diags...)
 }
 
 func (e *topicResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
 	var data topicResourceData
-	tflog.Info(ctx, "KARL in Read resource")
 	diags := req.State.Get(ctx, &data)
 	resp.Diagnostics.Append(diags...)
 
@@ -130,7 +126,6 @@ func (e *topicResource) Read(ctx context.Context, req resource.ReadRequest, resp
 func (e *topicResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	var planData topicResourceData
 	var stateData topicResourceData
-	tflog.Info(ctx, "KARL in Update resource")
 
 	diags := req.Plan.Get(ctx, &planData)
 	resp.Diagnostics.Append(diags...)
@@ -156,23 +151,11 @@ func (e *topicResource) Update(ctx context.Context, req resource.UpdateRequest, 
 		return
 	}
 
-	// TODO: look for records are in state but not in plan and change Op to delete(?)
 	var configList []axonopsClient.KafkaUpdateTopicConfig
 	for key, value := range planData.Config {
 		configList = append(configList, axonopsClient.KafkaUpdateTopicConfig{Key: strings.ReplaceAll(key, "_", "."), Value: value.ValueString(), Op: "SET"})
 	}
 
-	// Just sending the whole list of configs for the moment
-	// for key, value := range planData.Config {
-	// 	tflog.Info(ctx, fmt.Sprintf("KARL key: %s, value %s", key, value.ValueString()))
-	// 	tflog.Info(ctx, fmt.Sprintf("KARL State value: %s, plan value %s", stateData.Config[key].ValueString(), value.ValueString()))
-	// 	if stateData.Config[key].ValueString() != value.ValueString() {
-	// 		tflog.Info(ctx, fmt.Sprintf("KARL values are different"))
-	// 		configList = append(configList, axonopsClient.KafkaTopicConfig{Name: strings.ReplaceAll(key, "_", "."), Value: value.ValueString()})
-	// 	}
-	// }
-
-	// TODO: check what happens when configs deleted
 	err := e.client.UpdateTopicConfig(planData.Name.ValueString(), planData.ClusterName.ValueString(), planData.Partitions.ValueInt32(), planData.ReplicationFactor.ValueInt32(), configList)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to update topic, got error: %s", err))
@@ -194,8 +177,6 @@ func (e *topicResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete topic, got error: %s", err))
 		return
 	}
-
-	tflog.Info(ctx, "KARL deleted a resource")
 
 	if resp.Diagnostics.HasError() {
 		return

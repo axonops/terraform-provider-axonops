@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	axonopsClient "axonops-kafka-tf/client"
+	axonopsClient "axonops-tf/client"
 
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"

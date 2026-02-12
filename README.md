@@ -1,6 +1,6 @@
-# AxonOps Terraform Provider for Kafka
+# AxonOps Terraform Provider
 
-A Terraform provider for managing Apache Kafka resources through the AxonOps platform. This provider enables Infrastructure as Code (IaC) management of Kafka topics, ACLs, connectors, and schemas.
+A Terraform provider for managing resources through the AxonOps platform. This provider enables Infrastructure as Code (IaC) management of Kafka topics, ACLs, connectors, schemas, Cassandra backups, healthchecks, alerting, and more.
 
 ## Features
 
@@ -13,15 +13,15 @@ A Terraform provider for managing Apache Kafka resources through the AxonOps pla
 
 - [Terraform](https://www.terraform.io/downloads.html) >= 1.0
 - [Go](https://golang.org/doc/install) >= 1.23 (for building from source)
-- Access to an AxonOps instance with Kafka cluster(s)
+- Access to an AxonOps instance
 
 ## Installation
 
 ### Building from Source
 
 ```bash
-git clone https://github.com/axonops/axonops-kafka-tf.git
-cd axonops-kafka-tf
+git clone https://github.com/axonops/axonops-tf.git
+cd axonops-tf
 go build -o terraform-provider-axonops
 ```
 
@@ -32,7 +32,7 @@ For local development, add to `~/.terraformrc`:
 ```hcl
 provider_installation {
   dev_overrides {
-    "hashicorp/axonops" = "/path/to/axonops-kafka-tf"
+    "hashicorp/axonops" = "/path/to/axonops-tf"
   }
   direct {}
 }
@@ -51,7 +51,7 @@ ARCH="amd64"     # or "arm64" for ARM-based systems
 VERSION="1.0.0"
 
 # Download the release
-curl -LO "https://github.com/axonops/axonops-kafka-tf/releases/download/v${VERSION}/terraform-provider-axonops_v${VERSION}_${OS}_${ARCH}.zip"
+curl -LO "https://github.com/axonops/axonops-tf/releases/download/v${VERSION}/terraform-provider-axonops_v${VERSION}_${OS}_${ARCH}.zip"
 
 # Create the plugin directory
 mkdir -p ~/.terraform.d/plugins/registry.terraform.io/hashicorp/axonops/${VERSION}/${OS}_${ARCH}/
@@ -69,8 +69,8 @@ ARCH="amd64"     # or "arm64" for ARM-based systems
 VERSION="1.0.0"
 
 # Clone and build
-git clone https://github.com/axonops/axonops-kafka-tf.git
-cd axonops-kafka-tf
+git clone https://github.com/axonops/axonops-tf.git
+cd axonops-tf
 go build -o terraform-provider-axonops
 
 # Create the plugin directory
@@ -102,29 +102,29 @@ Run `terraform init` to initialize the provider.
 ```hcl
 provider "axonops" {
   api_key          = "your-api-key"        # Required for AxonOps SaaS
-  axonops_host     = "axonops.example.com" # Default: axonops.dev.com
+  axonops_host     = "axonops.example.com" # Default: dash.axonops.cloud/<org_id>
   axonops_protocol = "https"               # Default: https
   org_id           = "your-org-id"         # Required
-  token_type       = "AxonApi"             # Options: AxonApi (default), Bearer
+  token_type       = "Bearer"              # Options: Bearer (default), AxonApi
 }
 ```
 
 | Attribute | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
 | `api_key` | string | No* | - | API key for authentication (*required for SaaS) |
-| `axonops_host` | string | No | axonops.dev.com | AxonOps server hostname |
+| `axonops_host` | string | No | dash.axonops.cloud/\<org_id\> | AxonOps server hostname |
 | `axonops_protocol` | string | No | https | Protocol (http/https) |
 | `org_id` | string | Yes | - | Organization ID |
-| `token_type` | string | No | AxonApi | Authorization header type |
+| `token_type` | string | No | Bearer | Authorization header type |
 
 ## Resources
 
-### axonops_topic_resource
+### axonops_kafka_topic
 
 Manages Kafka topics.
 
 ```hcl
-resource "axonops_topic_resource" "example" {
+resource "axonops_kafka_topic" "example" {
   name               = "my-topic"
   partitions         = 3
   replication_factor = 2
@@ -150,7 +150,7 @@ resource "axonops_topic_resource" "example" {
 Manages Kafka ACLs.
 
 ```hcl
-resource "axonops_acl" "example" {
+resource "axonops_kafka_acl" "example" {
   cluster_name          = "my-kafka-cluster"
   resource_type         = "TOPIC"
   resource_name         = "my-topic"
@@ -178,7 +178,7 @@ resource "axonops_acl" "example" {
 Manages Kafka Connect connectors.
 
 ```hcl
-resource "axonops_connector" "example" {
+resource "axonops_kafka_connect_connector" "example" {
   cluster_name         = "my-kafka-cluster"
   connect_cluster_name = "my-connect-cluster"
   name                 = "my-connector"
@@ -248,7 +248,7 @@ provider "axonops" {
 }
 
 # Create a topic
-resource "axonops_topic_resource" "events" {
+resource "axonops_kafka_topic" "events" {
   name               = "user-events"
   partitions         = 6
   replication_factor = 3
@@ -260,10 +260,10 @@ resource "axonops_topic_resource" "events" {
 }
 
 # Create an ACL for the topic
-resource "axonops_acl" "events_read" {
+resource "axonops_kafka_acl" "events_read" {
   cluster_name          = "production-kafka"
   resource_type         = "TOPIC"
-  resource_name         = axonops_topic_resource.events.name
+  resource_name         = axonops_kafka_topic.events.name
   resource_pattern_type = "LITERAL"
   principal             = "User:consumer-app"
   operation             = "READ"
@@ -273,7 +273,7 @@ resource "axonops_acl" "events_read" {
 # Register a schema for the topic
 resource "axonops_schema" "events_value" {
   cluster_name = "production-kafka"
-  subject      = "${axonops_topic_resource.events.name}-value"
+  subject      = "${axonops_kafka_topic.events.name}-value"
   schema_type  = "AVRO"
   schema       = jsonencode({
     type      = "record"
@@ -296,9 +296,9 @@ All resources support importing existing configurations into Terraform state.
 
 | Resource | Import ID Format |
 |----------|------------------|
-| `axonops_topic_resource` | `cluster_name/topic_name` |
-| `axonops_acl` | `cluster_name/resource_type/resource_name/resource_pattern_type/principal/host/operation/permission_type` |
-| `axonops_connector` | `cluster_name/connect_cluster_name/connector_name` |
+| `axonops_kafka_topic` | `cluster_name/topic_name` |
+| `axonops_kafka_acl` | `cluster_name/resource_type/resource_name/resource_pattern_type/principal/host/operation/permission_type` |
+| `axonops_kafka_connect_connector` | `cluster_name/connect_cluster_name/connector_name` |
 | `axonops_schema` | `cluster_name/subject` |
 | `axonops_logcollector` | `cluster_name/log_collector_name` |
 | `axonops_healthcheck_tcp` | `cluster_name/healthcheck_name` |
@@ -309,13 +309,13 @@ All resources support importing existing configurations into Terraform state.
 
 ```bash
 # Import a topic
-terraform import axonops_topic_resource.my_topic "my-cluster/my-topic"
+terraform import axonops_kafka_topic.my_topic "my-cluster/my-topic"
 
 # Import an ACL
-terraform import axonops_acl.my_acl "my-cluster/TOPIC/my-topic/LITERAL/User:alice/*/READ/ALLOW"
+terraform import axonops_kafka_acl.my_acl "my-cluster/TOPIC/my-topic/LITERAL/User:alice/*/READ/ALLOW"
 
 # Import a connector
-terraform import axonops_connector.my_connector "my-cluster/my-connect-cluster/my-connector"
+terraform import axonops_kafka_connect_connector.my_connector "my-cluster/my-connect-cluster/my-connector"
 
 # Import a schema
 terraform import axonops_schema.my_schema "my-cluster/my-topic-value"

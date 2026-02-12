@@ -1,7 +1,7 @@
 # Kafka Topic Examples
 
 # Basic topic with minimal configuration
-resource "axonops_topic_resource" "basic" {
+resource "axonops_kafka_topic" "basic" {
   name               = "my-basic-topic"
   partitions         = 3
   replication_factor = 2
@@ -9,7 +9,7 @@ resource "axonops_topic_resource" "basic" {
 }
 
 # Topic with custom configuration
-resource "axonops_topic_resource" "configured" {
+resource "axonops_kafka_topic" "configured" {
   name               = "my-configured-topic"
   partitions         = 6
   replication_factor = 3
@@ -25,7 +25,7 @@ resource "axonops_topic_resource" "configured" {
 }
 
 # Topic for event streaming with delete policy
-resource "axonops_topic_resource" "events" {
+resource "axonops_kafka_topic" "events" {
   name               = "user-events"
   partitions         = 12
   replication_factor = 3
@@ -40,7 +40,7 @@ resource "axonops_topic_resource" "events" {
 }
 
 # Compacted topic for state storage
-resource "axonops_topic_resource" "state_store" {
+resource "axonops_kafka_topic" "state_store" {
   name               = "user-profiles"
   partitions         = 6
   replication_factor = 3

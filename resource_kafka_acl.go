@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	axonopsClient "axonops-kafka-tf/client"
+	axonopsClient "axonops-tf/client"
 
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -22,7 +22,7 @@ type aclResource struct {
 	client *axonopsClient.AxonopsHttpClient
 }
 
-func NewACLResource() resource.Resource {
+func NewKafkaACLResource() resource.Resource {
 	return &aclResource{}
 }
 
@@ -46,7 +46,7 @@ func (r *aclResource) Configure(ctx context.Context, req resource.ConfigureReque
 }
 
 func (r *aclResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
-	resp.TypeName = req.ProviderTypeName + "_acl"
+	resp.TypeName = req.ProviderTypeName + "_kafka_acl"
 }
 
 func (r *aclResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {

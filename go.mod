@@ -1,4 +1,4 @@
-module axonops-kafka-tf
+module axonops-tf
 
 go 1.23.2
 

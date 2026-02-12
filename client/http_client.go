@@ -7,10 +7,70 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"time"
 )
 
 var axonops_api_version = "api/v1"
+
+// debugLog prints debug information if AXONOPS_DEBUG environment variable is set
+func debugLog(format string, args ...interface{}) {
+	if os.Getenv("AXONOPS_DEBUG") != "" {
+		fmt.Printf("[AXONOPS DEBUG] "+format+"\n", args...)
+	}
+}
+
+// debugRequest logs request details for debugging
+func debugRequest(req *http.Request, body []byte) {
+	if os.Getenv("AXONOPS_DEBUG") == "" {
+		return
+	}
+	fmt.Printf("[AXONOPS DEBUG] === REQUEST ===\n")
+	fmt.Printf("[AXONOPS DEBUG] Method: %s\n", req.Method)
+	fmt.Printf("[AXONOPS DEBUG] URL: %s\n", req.URL.String())
+	fmt.Printf("[AXONOPS DEBUG] Headers:\n")
+	for key, values := range req.Header {
+		for _, value := range values {
+			// Mask API key for security
+			if key == "Authorization" {
+				if len(value) > 20 {
+					fmt.Printf("[AXONOPS DEBUG]   %s: %s...%s\n", key, value[:15], value[len(value)-4:])
+				} else {
+					fmt.Printf("[AXONOPS DEBUG]   %s: %s\n", key, value)
+				}
+			} else {
+				fmt.Printf("[AXONOPS DEBUG]   %s: %s\n", key, value)
+			}
+		}
+	}
+	if body != nil && len(body) > 0 {
+		fmt.Printf("[AXONOPS DEBUG] Body: %s\n", string(body))
+	}
+}
+
+// debugResponse logs response details for debugging
+func debugResponse(resp *http.Response, body []byte) {
+	if os.Getenv("AXONOPS_DEBUG") == "" {
+		return
+	}
+	fmt.Printf("[AXONOPS DEBUG] === RESPONSE ===\n")
+	fmt.Printf("[AXONOPS DEBUG] Status: %d %s\n", resp.StatusCode, resp.Status)
+	fmt.Printf("[AXONOPS DEBUG] Headers:\n")
+	for key, values := range resp.Header {
+		for _, value := range values {
+			fmt.Printf("[AXONOPS DEBUG]   %s: %s\n", key, value)
+		}
+	}
+	if body != nil && len(body) > 0 {
+		// Truncate long responses
+		bodyStr := string(body)
+		if len(bodyStr) > 500 {
+			fmt.Printf("[AXONOPS DEBUG] Body (truncated): %s...\n", bodyStr[:500])
+		} else {
+			fmt.Printf("[AXONOPS DEBUG] Body: %s\n", bodyStr)
+		}
+	}
+}
 
 type AxonopsHttpClient struct {
 	client      *http.Client
@@ -86,6 +146,8 @@ func (c *AxonopsHttpClient) CreateTopic(topicName, clusterName string, partition
 		req.Header.Set("Authorization", c.tokenType+" "+c.apiKey)
 	}
 
+	debugRequest(req, payloadJson)
+
 	resp, err := c.client.Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to send POST request: %w", err)
@@ -93,10 +155,13 @@ func (c *AxonopsHttpClient) CreateTopic(topicName, clusterName string, partition
 
 	defer resp.Body.Close()
 
+	bodyBytes, _ := io.ReadAll(resp.Body)
+	debugResponse(resp, bodyBytes)
+
 	if resp.StatusCode == 201 {
 		return nil
 	} else {
-		return fmt.Errorf("failed to send POST request: status %d for url %v with topicName:%v", resp.StatusCode, url, topicName)
+		return fmt.Errorf("failed to send POST request: status %d for url %v with topicName:%v, body: %s", resp.StatusCode, url, topicName, string(bodyBytes))
 	}
 
 }
@@ -142,19 +207,23 @@ func (c *AxonopsHttpClient) GetTopic(topicName, clusterName string) (*TopicInfo,
 		req.Header.Set("Authorization", c.tokenType+" "+c.apiKey)
 	}
 
+	debugRequest(req, nil)
+
 	resp, err := c.client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to send GET request: %w", err)
 	}
 	defer resp.Body.Close()
 
+	bodyBytes, _ := io.ReadAll(resp.Body)
+	debugResponse(resp, bodyBytes)
+
 	if resp.StatusCode != 200 {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("failed to get topic: status %d for url %v, body: %s", resp.StatusCode, topicUrl, string(body))
+		return nil, fmt.Errorf("failed to get topic: status %d for url %v, body: %s", resp.StatusCode, topicUrl, string(bodyBytes))
 	}
 
 	var topicInfo TopicInfo
-	if err := json.NewDecoder(resp.Body).Decode(&topicInfo); err != nil {
+	if err := json.Unmarshal(bodyBytes, &topicInfo); err != nil {
 		return nil, fmt.Errorf("failed to decode topic response: %w", err)
 	}
 
@@ -315,6 +384,52 @@ type KafkaACL struct {
 	PermissionType      string `json:"permissionType"`
 }
 
+type ACLResource struct {
+	ResourceType        string     `json:"resourceType"`
+	ResourceName        string     `json:"resourceName"`
+	ResourcePatternType string     `json:"resourcePatternType"`
+	ACLs                []KafkaACL `json:"acls"`
+}
+
+type ACLResponse struct {
+	ACLResources []ACLResource `json:"aclResources"`
+}
+
+func (c *AxonopsHttpClient) GetACLs(clusterName string) (*ACLResponse, error) {
+	url := fmt.Sprintf("%s://%s/%s/%s/kafka/%s/acls", c.protocol, c.axonopsHost, axonops_api_version, c.orgid, clusterName)
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create GET request: %w for url %v", err, url)
+	}
+
+	if c.apiKey != "" {
+		req.Header.Set("Authorization", c.tokenType+" "+c.apiKey)
+	}
+
+	debugRequest(req, nil)
+
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to send GET request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+	debugResponse(resp, body)
+
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("failed to get ACLs: status %d, body: %s", resp.StatusCode, string(body))
+	}
+
+	var result ACLResponse
+	if err := json.Unmarshal(body, &result); err != nil {
+		return nil, fmt.Errorf("failed to decode ACL response: %w", err)
+	}
+
+	return &result, nil
+}
+
 func (c *AxonopsHttpClient) CreateACL(clusterName string, acl KafkaACL) error {
 	payloadJson, err := json.Marshal(acl)
 	if err != nil {
@@ -452,20 +567,25 @@ func (c *AxonopsHttpClient) CreateConnector(clusterName, connectClusterName stri
 		req.Header.Set("Authorization", c.tokenType+" "+c.apiKey)
 	}
 
+	debugRequest(req, payloadJson)
+
 	resp, err := c.client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to send POST request: %w", err)
 	}
 	defer resp.Body.Close()
 
+	bodyBytes, _ := io.ReadAll(resp.Body)
+	debugResponse(resp, bodyBytes)
+
 	if resp.StatusCode == 200 || resp.StatusCode == 201 {
 		var result KafkaConnectorResponse
-		if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		if err := json.Unmarshal(bodyBytes, &result); err != nil {
 			return nil, fmt.Errorf("failed to decode response: %w", err)
 		}
 		return &result, nil
 	} else {
-		return nil, fmt.Errorf("failed to create connector: status %d for url %v with connector:%+v", resp.StatusCode, url, connector)
+		return nil, fmt.Errorf("failed to create connector: status %d for url %v with connector:%+v, body: %s", resp.StatusCode, url, connector, string(bodyBytes))
 	}
 }
 
@@ -484,15 +604,20 @@ func (c *AxonopsHttpClient) GetConnector(clusterName, connectClusterName, connec
 		req.Header.Set("Authorization", c.tokenType+" "+c.apiKey)
 	}
 
+	debugRequest(req, nil)
+
 	resp, err := c.client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to send GET request: %w", err)
 	}
 	defer resp.Body.Close()
 
+	bodyBytes, _ := io.ReadAll(resp.Body)
+	debugResponse(resp, bodyBytes)
+
 	if resp.StatusCode == 200 {
 		var result ConnectorsListResponse
-		if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		if err := json.Unmarshal(bodyBytes, &result); err != nil {
 			return nil, fmt.Errorf("failed to decode response: %w", err)
 		}
 
@@ -504,7 +629,7 @@ func (c *AxonopsHttpClient) GetConnector(clusterName, connectClusterName, connec
 	} else if resp.StatusCode == 404 {
 		return nil, nil // Connect cluster or connector not found
 	} else {
-		return nil, fmt.Errorf("failed to get connector: status %d for url %v", resp.StatusCode, url)
+		return nil, fmt.Errorf("failed to get connector: status %d for url %v, body: %s", resp.StatusCode, url, string(bodyBytes))
 	}
 }
 
@@ -531,20 +656,25 @@ func (c *AxonopsHttpClient) UpdateConnectorConfig(clusterName, connectClusterNam
 		req.Header.Set("Authorization", c.tokenType+" "+c.apiKey)
 	}
 
+	debugRequest(req, payloadJson)
+
 	resp, err := c.client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to send PUT request: %w", err)
 	}
 	defer resp.Body.Close()
 
+	bodyBytes, _ := io.ReadAll(resp.Body)
+	debugResponse(resp, bodyBytes)
+
 	if resp.StatusCode == 200 {
 		var result KafkaConnectorResponse
-		if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		if err := json.Unmarshal(bodyBytes, &result); err != nil {
 			return nil, fmt.Errorf("failed to decode response: %w", err)
 		}
 		return &result, nil
 	} else {
-		return nil, fmt.Errorf("failed to update connector config: status %d for url %v", resp.StatusCode, url)
+		return nil, fmt.Errorf("failed to update connector config: status %d for url %v, body: %s", resp.StatusCode, url, string(bodyBytes))
 	}
 }
 
@@ -561,16 +691,21 @@ func (c *AxonopsHttpClient) DeleteConnector(clusterName, connectClusterName, con
 		req.Header.Set("Authorization", c.tokenType+" "+c.apiKey)
 	}
 
+	debugRequest(req, nil)
+
 	resp, err := c.client.Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to send DELETE request: %w", err)
 	}
 	defer resp.Body.Close()
 
+	bodyBytes, _ := io.ReadAll(resp.Body)
+	debugResponse(resp, bodyBytes)
+
 	if resp.StatusCode == 204 || resp.StatusCode == 200 {
 		return nil
 	} else {
-		return fmt.Errorf("failed to delete connector: status %d for url %v", resp.StatusCode, url)
+		return fmt.Errorf("failed to delete connector: status %d for url %v, body: %s", resp.StatusCode, url, string(bodyBytes))
 	}
 }
 
@@ -888,5 +1023,556 @@ func (c *AxonopsHttpClient) UpdateHealthchecks(clusterName string, healthchecks 
 		return nil
 	} else {
 		return fmt.Errorf("failed to update healthchecks: status %d for url %v", resp.StatusCode, reqUrl)
+	}
+}
+
+// Adaptive Repair types and methods
+
+type AdaptiveRepairSettings struct {
+	Active              bool     `json:"Active"`
+	GcGraceThreshold    int      `json:"GcGraceThreshold"`
+	TableParallelism    int      `json:"TableParallelism"`
+	BlacklistedTables   []string `json:"BlacklistedTables"`
+	FilterTWCSTables    bool     `json:"FilterTWCSTables"`
+	SegmentRetries      int      `json:"SegmentRetries"`
+	SegmentsPerVnode    int      `json:"SegmentsPerVnode,omitempty"`
+	SegmentTargetSizeMB int      `json:"SegmentTargetSizeMB,omitempty"`
+}
+
+func (c *AxonopsHttpClient) GetCassandraAdaptiveRepair(clusterType, clusterName string) (*AdaptiveRepairSettings, error) {
+	url := fmt.Sprintf("%s://%s/%s/adaptiveRepair/%s/%s/%s", c.protocol, c.axonopsHost, axonops_api_version, c.orgid, clusterType, clusterName)
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create GET request: %w for url %v", err, url)
+	}
+
+	if c.apiKey != "" {
+		req.Header.Set("Authorization", c.tokenType+" "+c.apiKey)
+	}
+
+	debugRequest(req, nil)
+
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to send GET request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	bodyBytes, _ := io.ReadAll(resp.Body)
+	debugResponse(resp, bodyBytes)
+
+	if resp.StatusCode == 200 {
+		var result AdaptiveRepairSettings
+		if err := json.Unmarshal(bodyBytes, &result); err != nil {
+			return nil, fmt.Errorf("failed to decode response: %w", err)
+		}
+		return &result, nil
+	} else {
+		return nil, fmt.Errorf("failed to get adaptive repair settings: status %d for url %v, body: %s", resp.StatusCode, url, string(bodyBytes))
+	}
+}
+
+func (c *AxonopsHttpClient) UpdateCassandraAdaptiveRepair(clusterType, clusterName string, settings AdaptiveRepairSettings) error {
+	payloadJson, err := json.Marshal(settings)
+	if err != nil {
+		return fmt.Errorf("failed to encode JSON payload: %w", err)
+	}
+
+	url := fmt.Sprintf("%s://%s/%s/adaptiveRepair/%s/%s/%s", c.protocol, c.axonopsHost, axonops_api_version, c.orgid, clusterType, clusterName)
+
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(payloadJson))
+	if err != nil {
+		return fmt.Errorf("failed to create POST request: %w for url %v", err, url)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	if c.apiKey != "" {
+		req.Header.Set("Authorization", c.tokenType+" "+c.apiKey)
+	}
+
+	debugRequest(req, payloadJson)
+
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to send POST request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	bodyBytes, _ := io.ReadAll(resp.Body)
+	debugResponse(resp, bodyBytes)
+
+	if resp.StatusCode == 200 || resp.StatusCode == 204 {
+		return nil
+	} else {
+		return fmt.Errorf("failed to update adaptive repair settings: status %d for url %v, body: %s", resp.StatusCode, url, string(bodyBytes))
+	}
+}
+
+// Cassandra Backup types and methods
+
+type CassandraBackup struct {
+	ID                      string   `json:"ID"`
+	Tag                     string   `json:"tag"`
+	LocalRetentionDuration  string   `json:"LocalRetentionDuration"`
+	Remote                  bool     `json:"Remote"`
+	RemoteConfig            string   `json:"remoteConfig,omitempty"`
+	RemotePath              string   `json:"remotePath,omitempty"`
+	RemoteRetentionDuration string   `json:"RemoteRetentionDuration,omitempty"`
+	RemoteType              string   `json:"remoteType,omitempty"`
+	Timeout                 string   `json:"timeout,omitempty"`
+	Transfers               int      `json:"transfers,omitempty"`
+	TpsLimit                int      `json:"tpslimit,omitempty"`
+	BwLimit                 string   `json:"bwlimit,omitempty"`
+	Datacenters             []string `json:"datacenters"`
+	Nodes                   []string `json:"nodes"`
+	Tables                  []string `json:"tables"`
+	Keyspaces               []string `json:"keyspaces"`
+	AllTables               bool     `json:"allTables"`
+	AllNodes                bool     `json:"allNodes"`
+	Schedule                bool     `json:"schedule"`
+	ScheduleExpr            string   `json:"scheduleExpr"`
+}
+
+type CassandraBackupsResponse struct {
+	ScheduledSnapshots []CassandraScheduledSnapshot `json:"ScheduledSnapshots"`
+}
+
+type CassandraScheduledSnapshot struct {
+	ID     string          `json:"ID"`
+	Params json.RawMessage `json:"Params"`
+}
+
+type CassandraScheduledParam struct {
+	BackupDetails string `json:"BackupDetails"`
+}
+
+func (c *AxonopsHttpClient) GetCassandraBackups(clusterType, clusterName string) ([]CassandraBackup, error) {
+	url := fmt.Sprintf("%s://%s/%s/cassandraScheduleSnapshot/%s/%s/%s", c.protocol, c.axonopsHost, axonops_api_version, c.orgid, clusterType, clusterName)
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create GET request: %w for url %v", err, url)
+	}
+
+	if c.apiKey != "" {
+		req.Header.Set("Authorization", c.tokenType+" "+c.apiKey)
+	}
+
+	debugRequest(req, nil)
+
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to send GET request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	bodyBytes, _ := io.ReadAll(resp.Body)
+	debugResponse(resp, bodyBytes)
+
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("failed to get cassandra backups: status %d for url %v, body: %s", resp.StatusCode, url, string(bodyBytes))
+	}
+
+	var response CassandraBackupsResponse
+	if err := json.Unmarshal(bodyBytes, &response); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	var backups []CassandraBackup
+	for _, snapshot := range response.ScheduledSnapshots {
+		if len(snapshot.Params) == 0 {
+			continue
+		}
+
+		// Params can be a JSON string or an array of objects
+		var params []CassandraScheduledParam
+		if err := json.Unmarshal(snapshot.Params, &params); err != nil {
+			// Try as a JSON string containing the array
+			var paramsStr string
+			if err2 := json.Unmarshal(snapshot.Params, &paramsStr); err2 == nil {
+				json.Unmarshal([]byte(paramsStr), &params)
+			}
+		}
+
+		for _, param := range params {
+			if param.BackupDetails != "" {
+				var backup CassandraBackup
+				if err := json.Unmarshal([]byte(param.BackupDetails), &backup); err != nil {
+					continue
+				}
+				if backup.ID == "" {
+					backup.ID = snapshot.ID
+				}
+				backups = append(backups, backup)
+			}
+		}
+	}
+
+	return backups, nil
+}
+
+func (c *AxonopsHttpClient) CreateCassandraBackup(clusterType, clusterName string, backup CassandraBackup) error {
+	payloadJson, err := json.Marshal(backup)
+	if err != nil {
+		return fmt.Errorf("failed to encode JSON payload: %w", err)
+	}
+
+	url := fmt.Sprintf("%s://%s/%s/cassandraSnapshot/%s/%s/%s", c.protocol, c.axonopsHost, axonops_api_version, c.orgid, clusterType, clusterName)
+
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(payloadJson))
+	if err != nil {
+		return fmt.Errorf("failed to create POST request: %w for url %v", err, url)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	if c.apiKey != "" {
+		req.Header.Set("Authorization", c.tokenType+" "+c.apiKey)
+	}
+
+	debugRequest(req, payloadJson)
+
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to send POST request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	bodyBytes, _ := io.ReadAll(resp.Body)
+	debugResponse(resp, bodyBytes)
+
+	if resp.StatusCode == 200 || resp.StatusCode == 201 || resp.StatusCode == 204 {
+		return nil
+	} else {
+		return fmt.Errorf("failed to create cassandra backup: status %d for url %v, body: %s", resp.StatusCode, url, string(bodyBytes))
+	}
+}
+
+func (c *AxonopsHttpClient) DeleteCassandraBackup(clusterType, clusterName string, backupIDs []string) error {
+	payloadJson, err := json.Marshal(backupIDs)
+	if err != nil {
+		return fmt.Errorf("failed to encode JSON payload: %w", err)
+	}
+
+	url := fmt.Sprintf("%s://%s/%s/cassandraScheduleSnapshot/%s/%s/%s", c.protocol, c.axonopsHost, axonops_api_version, c.orgid, clusterType, clusterName)
+
+	req, err := http.NewRequest("DELETE", url, bytes.NewBuffer(payloadJson))
+	if err != nil {
+		return fmt.Errorf("failed to create DELETE request: %w for url %v", err, url)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	if c.apiKey != "" {
+		req.Header.Set("Authorization", c.tokenType+" "+c.apiKey)
+	}
+
+	debugRequest(req, payloadJson)
+
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to send DELETE request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	bodyBytes, _ := io.ReadAll(resp.Body)
+	debugResponse(resp, bodyBytes)
+
+	if resp.StatusCode == 204 || resp.StatusCode == 200 {
+		return nil
+	} else {
+		return fmt.Errorf("failed to delete cassandra backup: status %d for url %v, body: %s", resp.StatusCode, url, string(bodyBytes))
+	}
+}
+
+// Metric Alert Rule types and methods
+
+type MetricAlertRule struct {
+	ID            string                 `json:"id"`
+	Alert         string                 `json:"alert"`
+	For           string                 `json:"for"`
+	Operator      string                 `json:"operator"`
+	WarningValue  float64                `json:"warningValue"`
+	CriticalValue float64                `json:"criticalValue"`
+	Expr          string                 `json:"expr"`
+	WidgetTitle   string                 `json:"widgetTitle,omitempty"`
+	CorrelationId string                 `json:"correlationId,omitempty"`
+	Annotations   MetricAlertAnnotations `json:"annotations"`
+	Filters       []MetricAlertFilter    `json:"filters,omitempty"`
+}
+
+type MetricAlertAnnotations struct {
+	Description string `json:"description"`
+	Summary     string `json:"summary"`
+	WidgetUrl   string `json:"widget_url,omitempty"`
+}
+
+type MetricAlertFilter struct {
+	Name  string   `json:"Name"`
+	Value []string `json:"Value"`
+}
+
+type AlertRulesResponse struct {
+	MetricRules []MetricAlertRule `json:"metricrules"`
+}
+
+func (c *AxonopsHttpClient) GetAlertRules(clusterType, clusterName string) ([]MetricAlertRule, error) {
+	url := fmt.Sprintf("%s://%s/%s/alert-rules/%s/%s/%s", c.protocol, c.axonopsHost, axonops_api_version, c.orgid, clusterType, clusterName)
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create GET request: %w for url %v", err, url)
+	}
+
+	if c.apiKey != "" {
+		req.Header.Set("Authorization", c.tokenType+" "+c.apiKey)
+	}
+
+	debugRequest(req, nil)
+
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to send GET request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	bodyBytes, _ := io.ReadAll(resp.Body)
+	debugResponse(resp, bodyBytes)
+
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("failed to get alert rules: status %d for url %v, body: %s", resp.StatusCode, url, string(bodyBytes))
+	}
+
+	var response AlertRulesResponse
+	if err := json.Unmarshal(bodyBytes, &response); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return response.MetricRules, nil
+}
+
+func (c *AxonopsHttpClient) CreateOrUpdateAlertRule(clusterType, clusterName string, rule MetricAlertRule) error {
+	payloadJson, err := json.Marshal(rule)
+	if err != nil {
+		return fmt.Errorf("failed to encode JSON payload: %w", err)
+	}
+
+	url := fmt.Sprintf("%s://%s/%s/alert-rules/%s/%s/%s", c.protocol, c.axonopsHost, axonops_api_version, c.orgid, clusterType, clusterName)
+
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(payloadJson))
+	if err != nil {
+		return fmt.Errorf("failed to create POST request: %w for url %v", err, url)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	if c.apiKey != "" {
+		req.Header.Set("Authorization", c.tokenType+" "+c.apiKey)
+	}
+
+	debugRequest(req, payloadJson)
+
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to send POST request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	bodyBytes, _ := io.ReadAll(resp.Body)
+	debugResponse(resp, bodyBytes)
+
+	if resp.StatusCode == 200 || resp.StatusCode == 201 {
+		return nil
+	} else {
+		return fmt.Errorf("failed to create/update alert rule: status %d for url %v, body: %s", resp.StatusCode, url, string(bodyBytes))
+	}
+}
+
+func (c *AxonopsHttpClient) DeleteAlertRule(clusterType, clusterName, alertID string) error {
+	url := fmt.Sprintf("%s://%s/%s/alert-rules/%s/%s/%s/%s", c.protocol, c.axonopsHost, axonops_api_version, c.orgid, clusterType, clusterName, alertID)
+
+	req, err := http.NewRequest("DELETE", url, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create DELETE request: %w for url %v", err, url)
+	}
+
+	if c.apiKey != "" {
+		req.Header.Set("Authorization", c.tokenType+" "+c.apiKey)
+	}
+
+	debugRequest(req, nil)
+
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to send DELETE request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	bodyBytes, _ := io.ReadAll(resp.Body)
+	debugResponse(resp, bodyBytes)
+
+	if resp.StatusCode == 204 || resp.StatusCode == 200 {
+		return nil
+	} else {
+		return fmt.Errorf("failed to delete alert rule: status %d for url %v, body: %s", resp.StatusCode, url, string(bodyBytes))
+	}
+}
+
+// Alert Route (Integration Routing) types and methods
+
+type IntegrationsResponse struct {
+	Definitions []IntegrationDefinition `json:"Definitions"`
+	Routings    []IntegrationRouting    `json:"Routings"`
+}
+
+type IntegrationDefinition struct {
+	ID     string            `json:"ID"`
+	Type   string            `json:"Type"`
+	Params map[string]string `json:"Params"`
+}
+
+type IntegrationRouting struct {
+	Type            string             `json:"Type"`
+	Routing         []IntegrationRoute `json:"Routing"`
+	OverrideInfo    bool               `json:"OverrideInfo"`
+	OverrideWarning bool               `json:"OverrideWarning"`
+	OverrideError   bool               `json:"OverrideError"`
+}
+
+type IntegrationRoute struct {
+	ID       string `json:"ID"`
+	Severity string `json:"Severity"`
+}
+
+type OverridePayload struct {
+	Value bool `json:"value"`
+}
+
+func (c *AxonopsHttpClient) GetIntegrations(clusterType, clusterName string) (*IntegrationsResponse, error) {
+	url := fmt.Sprintf("%s://%s/%s/integrations/%s/%s/%s", c.protocol, c.axonopsHost, axonops_api_version, c.orgid, clusterType, clusterName)
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create GET request: %w for url %v", err, url)
+	}
+
+	if c.apiKey != "" {
+		req.Header.Set("Authorization", c.tokenType+" "+c.apiKey)
+	}
+
+	debugRequest(req, nil)
+
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to send GET request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	bodyBytes, _ := io.ReadAll(resp.Body)
+	debugResponse(resp, bodyBytes)
+
+	if resp.StatusCode == 200 {
+		var result IntegrationsResponse
+		if err := json.Unmarshal(bodyBytes, &result); err != nil {
+			return nil, fmt.Errorf("failed to decode response: %w", err)
+		}
+		return &result, nil
+	} else {
+		return nil, fmt.Errorf("failed to get integrations: status %d for url %v, body: %s", resp.StatusCode, url, string(bodyBytes))
+	}
+}
+
+func (c *AxonopsHttpClient) SetIntegrationOverride(clusterType, clusterName, routeType, severity string, value bool) error {
+	payload := OverridePayload{Value: value}
+	payloadJson, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("failed to encode JSON payload: %w", err)
+	}
+
+	url := fmt.Sprintf("%s://%s/%s/integrations-override/%s/%s/%s/%s/%s", c.protocol, c.axonopsHost, axonops_api_version, c.orgid, clusterType, clusterName, routeType, severity)
+
+	req, err := http.NewRequest("PUT", url, bytes.NewBuffer(payloadJson))
+	if err != nil {
+		return fmt.Errorf("failed to create PUT request: %w for url %v", err, url)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	if c.apiKey != "" {
+		req.Header.Set("Authorization", c.tokenType+" "+c.apiKey)
+	}
+
+	debugRequest(req, payloadJson)
+
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to send PUT request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	bodyBytes, _ := io.ReadAll(resp.Body)
+	debugResponse(resp, bodyBytes)
+
+	if resp.StatusCode == 204 || resp.StatusCode == 200 {
+		return nil
+	} else {
+		return fmt.Errorf("failed to set integration override: status %d for url %v, body: %s", resp.StatusCode, url, string(bodyBytes))
+	}
+}
+
+func (c *AxonopsHttpClient) AddIntegrationRoute(clusterType, clusterName, routeType, severity, integrationID string) error {
+	url := fmt.Sprintf("%s://%s/%s/integrations-routing/%s/%s/%s/%s/%s/%s", c.protocol, c.axonopsHost, axonops_api_version, c.orgid, clusterType, clusterName, routeType, severity, integrationID)
+
+	req, err := http.NewRequest("POST", url, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create POST request: %w for url %v", err, url)
+	}
+
+	if c.apiKey != "" {
+		req.Header.Set("Authorization", c.tokenType+" "+c.apiKey)
+	}
+
+	debugRequest(req, nil)
+
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to send POST request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	bodyBytes, _ := io.ReadAll(resp.Body)
+	debugResponse(resp, bodyBytes)
+
+	if resp.StatusCode == 200 || resp.StatusCode == 201 || resp.StatusCode == 204 {
+		return nil
+	} else {
+		return fmt.Errorf("failed to add integration route: status %d for url %v, body: %s", resp.StatusCode, url, string(bodyBytes))
+	}
+}
+
+func (c *AxonopsHttpClient) RemoveIntegrationRoute(clusterType, clusterName, routeType, severity, integrationID string) error {
+	url := fmt.Sprintf("%s://%s/%s/integrations-routing/%s/%s/%s/%s/%s/%s", c.protocol, c.axonopsHost, axonops_api_version, c.orgid, clusterType, clusterName, routeType, severity, integrationID)
+
+	req, err := http.NewRequest("DELETE", url, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create DELETE request: %w for url %v", err, url)
+	}
+
+	if c.apiKey != "" {
+		req.Header.Set("Authorization", c.tokenType+" "+c.apiKey)
+	}
+
+	debugRequest(req, nil)
+
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to send DELETE request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	bodyBytes, _ := io.ReadAll(resp.Body)
+	debugResponse(resp, bodyBytes)
+
+	if resp.StatusCode == 204 || resp.StatusCode == 200 {
+		return nil
+	} else {
+		return fmt.Errorf("failed to remove integration route: status %d for url %v, body: %s", resp.StatusCode, url, string(bodyBytes))
 	}
 }

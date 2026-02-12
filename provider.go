@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 
-	axonopsClient "axonops-kafka-tf/client"
+	axonopsClient "axonops-tf/client"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -35,7 +35,6 @@ func New() func() provider.Provider {
 }
 
 func (p *axonopsProvider) Configure(ctx context.Context, req provider.ConfigureRequest, resp *provider.ConfigureResponse) {
-	tflog.Info(ctx, "KARL - configuring provider")
 	var config axonopsProviderModel
 	diags := req.Config.Get(ctx, &config)
 	resp.Diagnostics.Append(diags...)
@@ -44,9 +43,9 @@ func (p *axonopsProvider) Configure(ctx context.Context, req provider.ConfigureR
 	}
 
 	var protocol = "https"
-	var axonopsHost = "axonops.dev.com"
+	var axonopsHost = ""
 	var apiKey = ""
-	var tokenType = "AxonApi"
+	var tokenType = "Bearer"
 
 	if !config.AxonopsProtocol.IsNull() {
 		protocol = config.AxonopsProtocol.ValueString()
@@ -54,6 +53,11 @@ func (p *axonopsProvider) Configure(ctx context.Context, req provider.ConfigureR
 
 	if !config.AxonopsHost.IsNull() {
 		axonopsHost = config.AxonopsHost.ValueString()
+	}
+
+	// Default axonops_host uses org_id: dash.axonops.cloud/<org_id>
+	if axonopsHost == "" {
+		axonopsHost = "dash.axonops.cloud/" + config.OrgId.ValueString()
 	}
 
 	if !config.ApiKey.IsNull() {
@@ -69,14 +73,6 @@ func (p *axonopsProvider) Configure(ctx context.Context, req provider.ConfigureR
 				"token_type must be either 'AxonApi' or 'Bearer'",
 			)
 		}
-	}
-
-	if axonopsHost == "axonops.dev.com" && apiKey == "" {
-		resp.Diagnostics.AddAttributeError(
-			path.Root("api_key"),
-			"Missing Axonps API Key",
-			"If you connecting to an axonops SAAS platform then you need to have a api key specified ",
-		)
 	}
 
 	if resp.Diagnostics.HasError() {
@@ -108,20 +104,34 @@ func (p *axonopsProvider) Metadata(ctx context.Context, req provider.MetadataReq
 
 func (p *axonopsProvider) DataSources(ctx context.Context) []func() datasource.DataSource {
 	return []func() datasource.DataSource{
-		NewDataSource,
+		NewKafkaTopicDataSource,
+		NewKafkaACLDataSource,
+		NewKafkaConnectConnectorDataSource,
+		NewSchemaDataSource,
+		NewLogCollectorDataSource,
+		NewTCPHealthcheckDataSource,
+		NewHTTPHealthcheckDataSource,
+		NewShellHealthcheckDataSource,
+		NewCassandraAdaptiveRepairDataSource,
+		NewCassandraBackupDataSource,
+		NewMetricAlertRuleDataSource,
 	}
 }
 
 func (p *axonopsProvider) Resources(ctx context.Context) []func() resource.Resource {
 	return []func() resource.Resource{
-		NewResource,
-		NewACLResource,
-		NewConnectorResource,
+		NewKafkaTopicResource,
+		NewKafkaACLResource,
+		NewKafkaConnectConnectorResource,
 		NewSchemaResource,
 		NewLogCollectorResource,
 		NewTCPHealthcheckResource,
 		NewHTTPHealthcheckResource,
 		NewShellHealthcheckResource,
+		NewCassandraAdaptiveRepairResource,
+		NewCassandraBackupResource,
+		NewMetricAlertRuleResource,
+		NewAlertRouteResource,
 	}
 }
 
@@ -132,7 +142,8 @@ func (p *axonopsProvider) Schema(ctx context.Context, req provider.SchemaRequest
 				Optional: true,
 			},
 			"axonops_host": schema.StringAttribute{
-				Optional: true,
+				Optional:    true,
+				Description: "AxonOps server hostname. Default: dash.axonops.cloud/<org_id>",
 			},
 			"axonops_protocol": schema.StringAttribute{
 				Optional: true,
@@ -142,7 +153,7 @@ func (p *axonopsProvider) Schema(ctx context.Context, req provider.SchemaRequest
 			},
 			"token_type": schema.StringAttribute{
 				Optional:    true,
-				Description: "Token type for Authorization header. Valid values: 'AxonApi' (default) or 'Bearer'",
+				Description: "Token type for Authorization header. Valid values: 'Bearer' (default) or 'AxonApi'",
 			},
 		},
 	}

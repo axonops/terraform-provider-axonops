@@ -1,7 +1,7 @@
 # Kafka Connect Connector Examples
 
 # File Source Connector - reads from a file and produces to a topic
-resource "axonops_connector" "file_source" {
+resource "axonops_kafka_connect_connector" "file_source" {
   cluster_name         = "my-kafka-cluster"
   connect_cluster_name = "my-connect-cluster"
   name                 = "file-source-connector"
@@ -15,7 +15,7 @@ resource "axonops_connector" "file_source" {
 }
 
 # File Sink Connector - consumes from a topic and writes to a file
-resource "axonops_connector" "file_sink" {
+resource "axonops_kafka_connect_connector" "file_sink" {
   cluster_name         = "my-kafka-cluster"
   connect_cluster_name = "my-connect-cluster"
   name                 = "file-sink-connector"
@@ -29,7 +29,7 @@ resource "axonops_connector" "file_sink" {
 }
 
 # JDBC Source Connector - reads from a database
-resource "axonops_connector" "jdbc_source" {
+resource "axonops_kafka_connect_connector" "jdbc_source" {
   cluster_name         = "my-kafka-cluster"
   connect_cluster_name = "my-connect-cluster"
   name                 = "postgres-source"
@@ -49,7 +49,7 @@ resource "axonops_connector" "jdbc_source" {
 }
 
 # Elasticsearch Sink Connector
-resource "axonops_connector" "elasticsearch_sink" {
+resource "axonops_kafka_connect_connector" "elasticsearch_sink" {
   cluster_name         = "my-kafka-cluster"
   connect_cluster_name = "my-connect-cluster"
   name                 = "elasticsearch-sink"
@@ -66,7 +66,7 @@ resource "axonops_connector" "elasticsearch_sink" {
 }
 
 # S3 Sink Connector
-resource "axonops_connector" "s3_sink" {
+resource "axonops_kafka_connect_connector" "s3_sink" {
   cluster_name         = "my-kafka-cluster"
   connect_cluster_name = "my-connect-cluster"
   name                 = "s3-sink"
@@ -89,7 +89,7 @@ resource "axonops_connector" "s3_sink" {
 }
 
 # Debezium MySQL CDC Connector
-resource "axonops_connector" "debezium_mysql" {
+resource "axonops_kafka_connect_connector" "debezium_mysql" {
   cluster_name         = "my-kafka-cluster"
   connect_cluster_name = "my-connect-cluster"
   name                 = "mysql-cdc"
