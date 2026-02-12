@@ -241,10 +241,10 @@ terraform {
 }
 
 provider "axonops" {
-  api_key          = var.axonops_api_key
-  axonops_protocol = "https"
-  axonops_host     = "axonops.example.com"
-  org_id           = "my-organization"
+  api_key  = var.axonops_api_key
+  org_id   = "my-organization"
+  # axonops_host defaults to dash.axonops.cloud/<org_id>
+  # token_type defaults to Bearer
 }
 
 # Create a topic
