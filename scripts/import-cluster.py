@@ -55,8 +55,7 @@ def generate_provider_tf(output_dir: str, host: str, protocol: str, org_id: str)
     content = f'''terraform {{
   required_providers {{
     axonops = {{
-      source  = "hashicorp/axonops"
-      version = "1.0.0"
+      source = "axonops/axonops"
     }}
   }}
 }}

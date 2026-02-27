@@ -32,70 +32,34 @@ For local development, add to `~/.terraformrc`:
 ```hcl
 provider_installation {
   dev_overrides {
-    "hashicorp/axonops" = "/path/to/axonops-tf"
+    "axonops/axonops" = "/path/to/axonops-tf"
   }
   direct {}
 }
 ```
 
-### Install to Local Plugin Directory
+### Install from Terraform Registry
 
-To install the provider to your local Terraform plugin cache, you can either download a pre-built release or build from source.
-
-#### Option 1: Download from GitHub Releases
-
-```bash
-# Set variables for your platform
-OS="linux"       # or "darwin" for macOS, "windows" for Windows
-ARCH="amd64"     # or "arm64" for ARM-based systems
-VERSION="1.0.0"
-
-# Download the release
-curl -LO "https://github.com/axonops/axonops-tf/releases/download/v${VERSION}/terraform-provider-axonops_v${VERSION}_${OS}_${ARCH}.zip"
-
-# Create the plugin directory
-mkdir -p ~/.terraform.d/plugins/registry.terraform.io/hashicorp/axonops/${VERSION}/${OS}_${ARCH}/
-
-# Unzip to the plugin directory
-unzip "terraform-provider-axonops_v${VERSION}_${OS}_${ARCH}.zip" -d ~/.terraform.d/plugins/registry.terraform.io/hashicorp/axonops/${VERSION}/${OS}_${ARCH}/
-```
-
-#### Option 2: Build from Source
-
-```bash
-# Set variables for your platform
-OS="linux"       # or "darwin" for macOS, "windows" for Windows
-ARCH="amd64"     # or "arm64" for ARM-based systems
-VERSION="1.0.0"
-
-# Clone and build
-git clone https://github.com/axonops/axonops-tf.git
-cd axonops-tf
-go build -o terraform-provider-axonops
-
-# Create the plugin directory
-mkdir -p ~/.terraform.d/plugins/registry.terraform.io/hashicorp/axonops/${VERSION}/${OS}_${ARCH}/
-
-# Copy the binary
-cp terraform-provider-axonops ~/.terraform.d/plugins/registry.terraform.io/hashicorp/axonops/${VERSION}/${OS}_${ARCH}/
-```
-
-#### Configure Terraform
-
-Reference the provider in your Terraform configuration:
+Add the provider to your Terraform configuration and run `terraform init`:
 
 ```hcl
 terraform {
   required_providers {
     axonops = {
-      source  = "hashicorp/axonops"
-      version = "1.0.0"
+      source = "axonops/axonops"
     }
   }
 }
+
+provider "axonops" {
+  api_key = "your-api-key"  # Required for AxonOps SaaS
+  org_id  = "your-org-id"   # Required
+}
 ```
 
-Run `terraform init` to initialize the provider.
+```bash
+terraform init
+```
 
 ## Provider Configuration
 
@@ -235,7 +199,7 @@ resource "axonops_schema" "example" {
 terraform {
   required_providers {
     axonops = {
-      source = "hashicorp/axonops"
+      source = "axonops/axonops"
     }
   }
 }
