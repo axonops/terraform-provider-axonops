@@ -81,6 +81,10 @@ type AxonopsHttpClient struct {
 	tokenType   string
 }
 
+func (c *AxonopsHttpClient) OrgId() string {
+	return c.orgid
+}
+
 func CreateHTTPClient(protocol, axonopsHost, apiKey, orgid, tokenType string) *AxonopsHttpClient {
 
 	return &AxonopsHttpClient{
@@ -1288,6 +1292,7 @@ func (c *AxonopsHttpClient) DeleteCassandraBackup(clusterType, clusterName strin
 
 type MetricAlertRule struct {
 	ID            string                 `json:"id"`
+	IsWidget      bool                   `json:"isWidget"`
 	Alert         string                 `json:"alert"`
 	For           string                 `json:"for"`
 	Operator      string                 `json:"operator"`
@@ -1296,8 +1301,9 @@ type MetricAlertRule struct {
 	Expr          string                 `json:"expr"`
 	WidgetTitle   string                 `json:"widgetTitle,omitempty"`
 	CorrelationId string                 `json:"correlationId,omitempty"`
-	Annotations   MetricAlertAnnotations `json:"annotations"`
-	Filters       []MetricAlertFilter    `json:"filters,omitempty"`
+	Annotations   MetricAlertAnnotations    `json:"annotations"`
+	Filters       []MetricAlertFilter       `json:"filters,omitempty"`
+	Integrations  MetricAlertIntegrations   `json:"integrations"`
 }
 
 type MetricAlertAnnotations struct {
@@ -1309,6 +1315,14 @@ type MetricAlertAnnotations struct {
 type MetricAlertFilter struct {
 	Name  string   `json:"Name"`
 	Value []string `json:"Value"`
+}
+
+type MetricAlertIntegrations struct {
+	Type            string   `json:"Type"`
+	Routing         []string `json:"Routing"`
+	OverrideInfo    bool     `json:"OverrideInfo"`
+	OverrideWarning bool     `json:"OverrideWarning"`
+	OverrideError   bool     `json:"OverrideError"`
 }
 
 type AlertRulesResponse struct {
@@ -1379,7 +1393,7 @@ func (c *AxonopsHttpClient) CreateOrUpdateAlertRule(clusterType, clusterName str
 	bodyBytes, _ := io.ReadAll(resp.Body)
 	debugResponse(resp, bodyBytes)
 
-	if resp.StatusCode == 200 || resp.StatusCode == 201 {
+	if resp.StatusCode == 200 || resp.StatusCode == 201 || resp.StatusCode == 204 {
 		return nil
 	} else {
 		return fmt.Errorf("failed to create/update alert rule: status %d for url %v, body: %s", resp.StatusCode, url, string(bodyBytes))
@@ -1414,6 +1428,107 @@ func (c *AxonopsHttpClient) DeleteAlertRule(clusterType, clusterName, alertID st
 	} else {
 		return fmt.Errorf("failed to delete alert rule: status %d for url %v, body: %s", resp.StatusCode, url, string(bodyBytes))
 	}
+}
+
+// Dashboard Template types and methods
+
+type DashboardTemplateResponse struct {
+	Dashboards []Dashboard `json:"dashboards"`
+}
+
+type Dashboard struct {
+	UUID   string           `json:"uuid"`
+	Name   string           `json:"name"`
+	Panels []DashboardPanel `json:"panels"`
+}
+
+type DashboardPanel struct {
+	UUID    string              `json:"uuid"`
+	Title   string              `json:"title"`
+	Type    string              `json:"type,omitempty"`
+	Details DashboardPanelDetails `json:"details,omitempty"`
+}
+
+type DashboardPanelDetails struct {
+	Queries []DashboardPanelQuery `json:"queries,omitempty"`
+}
+
+type DashboardPanelQuery struct {
+	Query string `json:"query"`
+}
+
+func (c *AxonopsHttpClient) GetDashboardTemplates(clusterType, clusterName string) (*DashboardTemplateResponse, error) {
+	url := fmt.Sprintf("%s://%s/%s/dashboardtemplate/%s/%s/%s", c.protocol, c.axonopsHost, axonops_api_version, c.orgid, clusterType, clusterName)
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create GET request: %w for url %v", err, url)
+	}
+
+	if c.apiKey != "" {
+		req.Header.Set("Authorization", c.tokenType+" "+c.apiKey)
+	}
+
+	debugRequest(req, nil)
+
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to send GET request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	bodyBytes, _ := io.ReadAll(resp.Body)
+	debugResponse(resp, bodyBytes)
+
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("failed to get dashboard templates: status %d for url %v, body: %s", resp.StatusCode, url, string(bodyBytes))
+	}
+
+	var response DashboardTemplateResponse
+	if err := json.Unmarshal(bodyBytes, &response); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return &response, nil
+}
+
+// FindDashboardByName finds a dashboard by its name in the template response.
+func FindDashboardByName(templates *DashboardTemplateResponse, name string) *Dashboard {
+	for i, dash := range templates.Dashboards {
+		if dash.Name == name {
+			return &templates.Dashboards[i]
+		}
+	}
+	return nil
+}
+
+// FindPanelByTitle finds a panel by its title within a dashboard.
+// If multiple panels match, it prefers one with queries or of type events_timeline.
+func FindPanelByTitle(dash *Dashboard, title string) *DashboardPanel {
+	var candidates []*DashboardPanel
+	for i, panel := range dash.Panels {
+		if panel.Title == title {
+			candidates = append(candidates, &dash.Panels[i])
+		}
+	}
+	if len(candidates) == 0 {
+		return nil
+	}
+	if len(candidates) == 1 {
+		return candidates[0]
+	}
+	// Multiple matches: prefer one with queries, then events_timeline
+	for _, c := range candidates {
+		if len(c.Details.Queries) > 0 {
+			return c
+		}
+	}
+	for _, c := range candidates {
+		if c.Type == "events_timeline" {
+			return c
+		}
+	}
+	return candidates[0]
 }
 
 // Alert Route (Integration Routing) types and methods
