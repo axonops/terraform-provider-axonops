@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"os"
 
 	axonopsClient "terraform-provider-axonops/client"
 
@@ -24,6 +25,7 @@ type axonopsProviderModel struct {
 	ApiKey          types.String `tfsdk:"api_key"`
 	AxonopsHost     types.String `tfsdk:"axonops_host"`
 	AxonopsProtocol types.String `tfsdk:"axonops_protocol"`
+	TlsSkipVerify   types.Bool   `tfsdk:"tls_skip_verify"`
 	OrgId           types.String `tfsdk:"org_id"`
 	TokenType       types.String `tfsdk:"token_type"`
 }
@@ -34,6 +36,13 @@ func New() func() provider.Provider {
 	}
 }
 
+func getEnvOrDefault(variableName string, defaultValue string) string {
+	if value, exists := os.LookupEnv(variableName); exists {
+		return value
+	}
+	return defaultValue
+}
+
 func (p *axonopsProvider) Configure(ctx context.Context, req provider.ConfigureRequest, resp *provider.ConfigureResponse) {
 	var config axonopsProviderModel
 	diags := req.Config.Get(ctx, &config)
@@ -42,10 +51,11 @@ func (p *axonopsProvider) Configure(ctx context.Context, req provider.ConfigureR
 		return
 	}
 
-	var protocol = "https"
-	var axonopsHost = ""
-	var apiKey = ""
-	var tokenType = "Bearer"
+	var protocol = getEnvOrDefault("AXONOPS_PROTOCOL", "https")
+	var axonopsHost = getEnvOrDefault("AXONOPS_HOST", "")
+	var apiKey = getEnvOrDefault("AXONOPS_API_KEY", "")
+	var tokenType = getEnvOrDefault("AXONOPS_TOKEN_TYPE", "Bearer")
+	var tlsSkipVerify = getEnvOrDefault("AXONOPS_TLS_SKIP_VERIFY", "false") == "true"
 
 	if !config.AxonopsProtocol.IsNull() {
 		protocol = config.AxonopsProtocol.ValueString()
@@ -53,6 +63,10 @@ func (p *axonopsProvider) Configure(ctx context.Context, req provider.ConfigureR
 
 	if !config.AxonopsHost.IsNull() {
 		axonopsHost = config.AxonopsHost.ValueString()
+	}
+
+	if !config.TlsSkipVerify.IsNull() {
+		tlsSkipVerify = config.TlsSkipVerify.ValueBool()
 	}
 
 	// Default axonops_host uses org_id: dash.axonops.cloud/<org_id>
@@ -79,7 +93,7 @@ func (p *axonopsProvider) Configure(ctx context.Context, req provider.ConfigureR
 		return
 	}
 
-	client := axonopsClient.CreateHTTPClient(protocol, axonopsHost, apiKey, config.OrgId.ValueString(), tokenType)
+	client := axonopsClient.CreateHTTPClient(protocol, axonopsHost, apiKey, config.OrgId.ValueString(), tokenType, tlsSkipVerify)
 
 	if client == nil {
 		tflog.Error(ctx, "Client not initialised")
@@ -150,6 +164,10 @@ func (p *axonopsProvider) Schema(ctx context.Context, req provider.SchemaRequest
 			},
 			"org_id": schema.StringAttribute{
 				Required: true,
+			},
+			"tls_skip_verify": schema.BoolAttribute{
+				Optional:    true,
+				Description: "Skip TLS certificate verification. Default: false",
 			},
 			"token_type": schema.StringAttribute{
 				Optional:    true,
