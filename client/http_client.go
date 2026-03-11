@@ -2,6 +2,7 @@ package axonopsClient
 
 import (
 	"bytes"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -85,7 +86,7 @@ func (c *AxonopsHttpClient) OrgId() string {
 	return c.orgid
 }
 
-func CreateHTTPClient(protocol, axonopsHost, apiKey, orgid, tokenType string) *AxonopsHttpClient {
+func CreateHTTPClient(protocol, axonopsHost, apiKey, orgid, tokenType string, tlsSkipVerify bool) *AxonopsHttpClient {
 
 	return &AxonopsHttpClient{
 		protocol:    protocol,
@@ -93,6 +94,9 @@ func CreateHTTPClient(protocol, axonopsHost, apiKey, orgid, tokenType string) *A
 		apiKey:      apiKey,
 		client: &http.Client{
 			Timeout: 10 * time.Second,
+			Transport: &http.Transport{
+				TLSClientConfig: &tls.Config{InsecureSkipVerify: tlsSkipVerify},
+			},
 		},
 		orgid:     orgid,
 		tokenType: tokenType,
@@ -523,9 +527,9 @@ type ConnectorTask struct {
 
 // ConnectorsListResponse represents the response from the connectors list endpoint
 type ConnectorsListResponse struct {
-	ClusterName    string                          `json:"clusterName"`
-	ClusterAddress string                          `json:"clusterAddress"`
-	Connectors     map[string]ConnectorListEntry   `json:"connectors"`
+	ClusterName    string                        `json:"clusterName"`
+	ClusterAddress string                        `json:"clusterAddress"`
+	Connectors     map[string]ConnectorListEntry `json:"connectors"`
 }
 
 type ConnectorListEntry struct {
@@ -534,10 +538,10 @@ type ConnectorListEntry struct {
 }
 
 type ConnectorStatus struct {
-	Name      string                 `json:"name"`
-	Connector ConnectorStateInfo     `json:"connector"`
-	Tasks     []ConnectorTaskStatus  `json:"tasks"`
-	Type      string                 `json:"type"`
+	Name      string                `json:"name"`
+	Connector ConnectorStateInfo    `json:"connector"`
+	Tasks     []ConnectorTaskStatus `json:"tasks"`
+	Type      string                `json:"type"`
 }
 
 type ConnectorStateInfo struct {
@@ -837,16 +841,16 @@ func (c *AxonopsHttpClient) DeleteSchema(clusterName, subject string) error {
 // Log Collector types and methods
 
 type LogCollectorConfig struct {
-	Name               string   `json:"name"`
-	UUID               string   `json:"uuid"`
-	Filename           string   `json:"filename"`
-	DateFormat         string   `json:"dateFormat"`
-	InfoRegex          string   `json:"infoRegex"`
-	WarningRegex       string   `json:"warningRegex"`
-	ErrorRegex         string   `json:"errorRegex"`
-	DebugRegex         string   `json:"debugRegex"`
-	SupportedAgentType []string `json:"supportedAgentType"`
-	ErrorAlertThreshold int     `json:"errorAlertThreshold,omitempty"`
+	Name                string   `json:"name"`
+	UUID                string   `json:"uuid"`
+	Filename            string   `json:"filename"`
+	DateFormat          string   `json:"dateFormat"`
+	InfoRegex           string   `json:"infoRegex"`
+	WarningRegex        string   `json:"warningRegex"`
+	ErrorRegex          string   `json:"errorRegex"`
+	DebugRegex          string   `json:"debugRegex"`
+	SupportedAgentType  []string `json:"supportedAgentType"`
+	ErrorAlertThreshold int      `json:"errorAlertThreshold,omitempty"`
 }
 
 func (c *AxonopsHttpClient) GetLogCollectors(clusterName string) ([]LogCollectorConfig, error) {
@@ -1291,19 +1295,19 @@ func (c *AxonopsHttpClient) DeleteCassandraBackup(clusterType, clusterName strin
 // Metric Alert Rule types and methods
 
 type MetricAlertRule struct {
-	ID            string                 `json:"id"`
-	IsWidget      bool                   `json:"isWidget"`
-	Alert         string                 `json:"alert"`
-	For           string                 `json:"for"`
-	Operator      string                 `json:"operator"`
-	WarningValue  float64                `json:"warningValue"`
-	CriticalValue float64                `json:"criticalValue"`
-	Expr          string                 `json:"expr"`
-	WidgetTitle   string                 `json:"widgetTitle,omitempty"`
-	CorrelationId string                 `json:"correlationId,omitempty"`
-	Annotations   MetricAlertAnnotations    `json:"annotations"`
-	Filters       []MetricAlertFilter       `json:"filters,omitempty"`
-	Integrations  MetricAlertIntegrations   `json:"integrations"`
+	ID            string                  `json:"id"`
+	IsWidget      bool                    `json:"isWidget"`
+	Alert         string                  `json:"alert"`
+	For           string                  `json:"for"`
+	Operator      string                  `json:"operator"`
+	WarningValue  float64                 `json:"warningValue"`
+	CriticalValue float64                 `json:"criticalValue"`
+	Expr          string                  `json:"expr"`
+	WidgetTitle   string                  `json:"widgetTitle,omitempty"`
+	CorrelationId string                  `json:"correlationId,omitempty"`
+	Annotations   MetricAlertAnnotations  `json:"annotations"`
+	Filters       []MetricAlertFilter     `json:"filters,omitempty"`
+	Integrations  MetricAlertIntegrations `json:"integrations"`
 }
 
 type MetricAlertAnnotations struct {
@@ -1443,9 +1447,9 @@ type Dashboard struct {
 }
 
 type DashboardPanel struct {
-	UUID    string              `json:"uuid"`
-	Title   string              `json:"title"`
-	Type    string              `json:"type,omitempty"`
+	UUID    string                `json:"uuid"`
+	Title   string                `json:"title"`
+	Type    string                `json:"type,omitempty"`
 	Details DashboardPanelDetails `json:"details,omitempty"`
 }
 
