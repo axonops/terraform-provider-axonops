@@ -13,13 +13,6 @@ import (
 
 var axonops_api_version = "api/v1"
 
-// debugLog prints debug information if AXONOPS_DEBUG environment variable is set
-func debugLog(format string, args ...interface{}) {
-	if os.Getenv("AXONOPS_DEBUG") != "" {
-		fmt.Printf("[AXONOPS DEBUG] "+format+"\n", args...)
-	}
-}
-
 // debugRequest logs request details for debugging
 func debugRequest(req *http.Request, body []byte) {
 	if os.Getenv("AXONOPS_DEBUG") == "" {
@@ -43,7 +36,7 @@ func debugRequest(req *http.Request, body []byte) {
 			}
 		}
 	}
-	if body != nil && len(body) > 0 {
+	if len(body) > 0 {
 		fmt.Printf("[AXONOPS DEBUG] Body: %s\n", string(body))
 	}
 }
@@ -61,7 +54,7 @@ func debugResponse(resp *http.Response, body []byte) {
 			fmt.Printf("[AXONOPS DEBUG]   %s: %s\n", key, value)
 		}
 	}
-	if body != nil && len(body) > 0 {
+	if len(body) > 0 {
 		// Truncate long responses
 		bodyStr := string(body)
 		if len(bodyStr) > 500 {
@@ -523,9 +516,9 @@ type ConnectorTask struct {
 
 // ConnectorsListResponse represents the response from the connectors list endpoint
 type ConnectorsListResponse struct {
-	ClusterName    string                          `json:"clusterName"`
-	ClusterAddress string                          `json:"clusterAddress"`
-	Connectors     map[string]ConnectorListEntry   `json:"connectors"`
+	ClusterName    string                        `json:"clusterName"`
+	ClusterAddress string                        `json:"clusterAddress"`
+	Connectors     map[string]ConnectorListEntry `json:"connectors"`
 }
 
 type ConnectorListEntry struct {
@@ -534,10 +527,10 @@ type ConnectorListEntry struct {
 }
 
 type ConnectorStatus struct {
-	Name      string                 `json:"name"`
-	Connector ConnectorStateInfo     `json:"connector"`
-	Tasks     []ConnectorTaskStatus  `json:"tasks"`
-	Type      string                 `json:"type"`
+	Name      string                `json:"name"`
+	Connector ConnectorStateInfo    `json:"connector"`
+	Tasks     []ConnectorTaskStatus `json:"tasks"`
+	Type      string                `json:"type"`
 }
 
 type ConnectorStateInfo struct {
@@ -837,16 +830,16 @@ func (c *AxonopsHttpClient) DeleteSchema(clusterName, subject string) error {
 // Log Collector types and methods
 
 type LogCollectorConfig struct {
-	Name               string   `json:"name"`
-	UUID               string   `json:"uuid"`
-	Filename           string   `json:"filename"`
-	DateFormat         string   `json:"dateFormat"`
-	InfoRegex          string   `json:"infoRegex"`
-	WarningRegex       string   `json:"warningRegex"`
-	ErrorRegex         string   `json:"errorRegex"`
-	DebugRegex         string   `json:"debugRegex"`
-	SupportedAgentType []string `json:"supportedAgentType"`
-	ErrorAlertThreshold int     `json:"errorAlertThreshold,omitempty"`
+	Name                string   `json:"name"`
+	UUID                string   `json:"uuid"`
+	Filename            string   `json:"filename"`
+	DateFormat          string   `json:"dateFormat"`
+	InfoRegex           string   `json:"infoRegex"`
+	WarningRegex        string   `json:"warningRegex"`
+	ErrorRegex          string   `json:"errorRegex"`
+	DebugRegex          string   `json:"debugRegex"`
+	SupportedAgentType  []string `json:"supportedAgentType"`
+	ErrorAlertThreshold int      `json:"errorAlertThreshold,omitempty"`
 }
 
 func (c *AxonopsHttpClient) GetLogCollectors(clusterName string) ([]LogCollectorConfig, error) {
@@ -1195,7 +1188,7 @@ func (c *AxonopsHttpClient) GetCassandraBackups(clusterType, clusterName string)
 			// Try as a JSON string containing the array
 			var paramsStr string
 			if err2 := json.Unmarshal(snapshot.Params, &paramsStr); err2 == nil {
-				json.Unmarshal([]byte(paramsStr), &params)
+				_ = json.Unmarshal([]byte(paramsStr), &params)
 			}
 		}
 
@@ -1291,19 +1284,19 @@ func (c *AxonopsHttpClient) DeleteCassandraBackup(clusterType, clusterName strin
 // Metric Alert Rule types and methods
 
 type MetricAlertRule struct {
-	ID            string                 `json:"id"`
-	IsWidget      bool                   `json:"isWidget"`
-	Alert         string                 `json:"alert"`
-	For           string                 `json:"for"`
-	Operator      string                 `json:"operator"`
-	WarningValue  float64                `json:"warningValue"`
-	CriticalValue float64                `json:"criticalValue"`
-	Expr          string                 `json:"expr"`
-	WidgetTitle   string                 `json:"widgetTitle,omitempty"`
-	CorrelationId string                 `json:"correlationId,omitempty"`
-	Annotations   MetricAlertAnnotations    `json:"annotations"`
-	Filters       []MetricAlertFilter       `json:"filters,omitempty"`
-	Integrations  MetricAlertIntegrations   `json:"integrations"`
+	ID            string                  `json:"id"`
+	IsWidget      bool                    `json:"isWidget"`
+	Alert         string                  `json:"alert"`
+	For           string                  `json:"for"`
+	Operator      string                  `json:"operator"`
+	WarningValue  float64                 `json:"warningValue"`
+	CriticalValue float64                 `json:"criticalValue"`
+	Expr          string                  `json:"expr"`
+	WidgetTitle   string                  `json:"widgetTitle,omitempty"`
+	CorrelationId string                  `json:"correlationId,omitempty"`
+	Annotations   MetricAlertAnnotations  `json:"annotations"`
+	Filters       []MetricAlertFilter     `json:"filters,omitempty"`
+	Integrations  MetricAlertIntegrations `json:"integrations"`
 }
 
 type MetricAlertAnnotations struct {
@@ -1443,9 +1436,9 @@ type Dashboard struct {
 }
 
 type DashboardPanel struct {
-	UUID    string              `json:"uuid"`
-	Title   string              `json:"title"`
-	Type    string              `json:"type,omitempty"`
+	UUID    string                `json:"uuid"`
+	Title   string                `json:"title"`
+	Type    string                `json:"type,omitempty"`
 	Details DashboardPanelDetails `json:"details,omitempty"`
 }
 

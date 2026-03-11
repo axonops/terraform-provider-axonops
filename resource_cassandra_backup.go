@@ -194,60 +194,6 @@ type cassandraBackupResourceData struct {
 	Nodes           types.List   `tfsdk:"nodes"`
 }
 
-func (r *cassandraBackupResource) buildBackup(ctx context.Context, data *cassandraBackupResourceData, resp *resource.CreateResponse) *axonopsClient.CassandraBackup {
-	var datacenters, keyspaces, tables, nodes []string
-
-	diags := data.Datacenters.ElementsAs(ctx, &datacenters, false)
-	resp.Diagnostics.Append(diags...)
-	diags = data.Keyspaces.ElementsAs(ctx, &keyspaces, false)
-	resp.Diagnostics.Append(diags...)
-	diags = data.Tables.ElementsAs(ctx, &tables, false)
-	resp.Diagnostics.Append(diags...)
-	diags = data.Nodes.ElementsAs(ctx, &nodes, false)
-	resp.Diagnostics.Append(diags...)
-	if resp.Diagnostics.HasError() {
-		return nil
-	}
-
-	if keyspaces == nil {
-		keyspaces = []string{}
-	}
-	if tables == nil {
-		tables = []string{}
-	}
-	if nodes == nil {
-		nodes = []string{}
-	}
-
-	backup := &axonopsClient.CassandraBackup{
-		ID:                     data.ID.ValueString(),
-		Tag:                    data.Tag.ValueString(),
-		LocalRetentionDuration: data.LocalRetention.ValueString(),
-		Remote:                 data.Remote.ValueBool(),
-		Timeout:                data.Timeout.ValueString(),
-		Transfers:              int(data.Transfers.ValueInt64()),
-		TpsLimit:               int(data.TpsLimit.ValueInt64()),
-		BwLimit:                data.BwLimit.ValueString(),
-		Datacenters:            datacenters,
-		Nodes:                  nodes,
-		Tables:                 tables,
-		Keyspaces:              keyspaces,
-		AllTables:              len(tables) == 0,
-		AllNodes:               len(nodes) == 0,
-		Schedule:               data.Schedule.ValueBool(),
-		ScheduleExpr:           data.ScheduleExpr.ValueString(),
-	}
-
-	if data.Remote.ValueBool() {
-		backup.RemoteType = data.RemoteType.ValueString()
-		backup.RemotePath = data.RemotePath.ValueString()
-		backup.RemoteRetentionDuration = data.RemoteRetention.ValueString()
-		backup.RemoteConfig = data.RemoteConfig.ValueString()
-	}
-
-	return backup
-}
-
 func (r *cassandraBackupResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	var data cassandraBackupResourceData
 
