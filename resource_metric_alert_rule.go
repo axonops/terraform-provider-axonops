@@ -384,6 +384,9 @@ func (r *metricAlertRuleResource) resolveDashboardChart(clusterType, clusterName
 		return nil, fmt.Errorf("unable to fetch dashboard templates: %s", err)
 	}
 
+	dashboardName = strings.ReplaceAll(dashboardName, "$$", "$")
+	chartTitle = strings.ReplaceAll(chartTitle, "$$", "$")
+
 	dash := axonopsClient.FindDashboardByName(templates, dashboardName)
 	if dash == nil {
 		return nil, fmt.Errorf("dashboard %q not found", dashboardName)
@@ -410,15 +413,21 @@ func (r *metricAlertRuleResource) resolveDashboardChart(clusterType, clusterName
 // cleanChartQuery strips template variables (e.g. $dc, $rack) from a chart query
 // to produce a base metric expression, following the Ansible module pattern.
 func cleanChartQuery(query string) string {
-	// Remove label filters referencing variables: key=~'$var',
-	re := regexp.MustCompile(`\w+=~'\$\w*',?`)
+	// Remove label filters referencing variables: key=~'$var', or key=~"$var",
+	re := regexp.MustCompile(`\w+=~?['"]?\$\w*['"]?,?`)
 	cleaned := re.ReplaceAllString(query, "")
 	// Remove trailing comma before closing brace: , }
 	cleaned = regexp.MustCompile(`, *}`).ReplaceAllString(cleaned, "}")
-	// Collapse multiple spaces
-	cleaned = regexp.MustCompile(` +`).ReplaceAllString(cleaned, " ")
 	// Replace ($groupBy) with (dc) as default
 	cleaned = strings.ReplaceAll(cleaned, "($groupBy)", "(dc)")
+	// Remove any remaining $variable references not caught above
+	cleaned = regexp.MustCompile(`\$\w+`).ReplaceAllString(cleaned, "")
+	// Clean up dangling commas in grouping parentheses: (dc, ) or (, dc) or (dc, , host_id)
+	cleaned = regexp.MustCompile(`,\s*\)`).ReplaceAllString(cleaned, ")")
+	cleaned = regexp.MustCompile(`\(\s*,`).ReplaceAllString(cleaned, "(")
+	cleaned = regexp.MustCompile(`,\s*,`).ReplaceAllString(cleaned, ",")
+	// Collapse multiple spaces
+	cleaned = regexp.MustCompile(` +`).ReplaceAllString(cleaned, " ")
 	return strings.TrimSpace(cleaned)
 }
 
@@ -521,7 +530,12 @@ func (r *metricAlertRuleResource) Create(ctx context.Context, req resource.Creat
 			resp.Diagnostics.AddError("Metric Error", "metric is not set and the chart has no query to extract from")
 			return
 		}
-		data.Metric = types.StringValue(cleanChartQuery(resolved.ChartQuery))
+		cleanedMetric := cleanChartQuery(resolved.ChartQuery)
+		tflog.Debug(ctx, "Auto-extracted metric from chart query", map[string]interface{}{
+			"raw_query":      resolved.ChartQuery,
+			"cleaned_metric": cleanedMetric,
+		})
+		data.Metric = types.StringValue(cleanedMetric)
 	}
 
 	// Auto-set widget_url in annotations if not explicitly provided
@@ -537,6 +551,9 @@ func (r *metricAlertRuleResource) Create(ctx context.Context, req resource.Creat
 
 	filters := r.buildFilters(ctx, &data)
 	rule := r.buildRule(ctx, &data, filters)
+	tflog.Debug(ctx, "Built alert rule expression", map[string]interface{}{
+		"expr": rule.Expr,
+	})
 
 	err = r.client.CreateOrUpdateAlertRule(data.ClusterType.ValueString(), data.ClusterName.ValueString(), rule)
 	if err != nil {
