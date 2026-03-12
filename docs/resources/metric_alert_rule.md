@@ -1,6 +1,6 @@
 ---
 page_title: "axonops_metric_alert_rule Resource - axonops"
-subcategory: ""
+subcategory: "Monitoring"
 description: |-
   Manages a metric alert rule for a cluster.
 ---

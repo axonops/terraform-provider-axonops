@@ -1,6 +1,6 @@
 ---
 page_title: "axonops_log_alert_rule Resource - axonops"
-subcategory: ""
+subcategory: "Monitoring"
 description: |-
   Manages a log alert rule for a cluster.
 ---
