@@ -154,7 +154,7 @@ func (c *AxonopsHttpClient) CreateTopic(topicName, clusterName string, partition
 		return fmt.Errorf("failed to send POST request: %w", err)
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer resp.Body.Close() //nolint:errcheck
 
 	bodyBytes, _ := io.ReadAll(resp.Body)
 	debugResponse(resp, bodyBytes)
@@ -214,7 +214,7 @@ func (c *AxonopsHttpClient) GetTopic(topicName, clusterName string) (*TopicInfo,
 	if err != nil {
 		return nil, fmt.Errorf("failed to send GET request: %w", err)
 	}
-	defer func() { _ = resp.Body.Close() }()
+	defer resp.Body.Close() //nolint:errcheck
 
 	bodyBytes, _ := io.ReadAll(resp.Body)
 	debugResponse(resp, bodyBytes)
@@ -244,7 +244,7 @@ func (c *AxonopsHttpClient) GetTopic(topicName, clusterName string) (*TopicInfo,
 	if err != nil {
 		return nil, fmt.Errorf("failed to send GET request for configs: %w", err)
 	}
-	defer func() { _ = configResp.Body.Close() }()
+	defer configResp.Body.Close() //nolint:errcheck
 
 	if configResp.StatusCode == 200 {
 		var configResponse TopicConfigResponse
@@ -285,7 +285,7 @@ func (c *AxonopsHttpClient) GetTopics(clusterName string) ([]TopicInfo, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to send GET request: %w", err)
 	}
-	defer func() { _ = resp.Body.Close() }()
+	defer resp.Body.Close() //nolint:errcheck
 
 	if resp.StatusCode != 200 {
 		return nil, fmt.Errorf("failed to get topics: status %d for url %v", resp.StatusCode, url)
@@ -317,7 +317,7 @@ func (c *AxonopsHttpClient) DeleteTopic(topicName, clusterName string) error {
 	if err != nil {
 		return fmt.Errorf("failed to send DELETE request: %w", err)
 	}
-	defer func() { _ = resp.Body.Close() }()
+	defer resp.Body.Close() //nolint:errcheck
 
 	if resp.StatusCode == 204 {
 		return nil
@@ -364,7 +364,7 @@ func (c *AxonopsHttpClient) UpdateTopicConfig(topicName, clusterName string, par
 	if err != nil {
 		return fmt.Errorf("failed to send PUT request: %w", err)
 	}
-	defer func() { _ = resp.Body.Close() }()
+	defer resp.Body.Close() //nolint:errcheck
 
 	if resp.StatusCode == 204 {
 		return nil
@@ -414,7 +414,7 @@ func (c *AxonopsHttpClient) GetACLs(clusterName string) (*ACLResponse, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to send GET request: %w", err)
 	}
-	defer func() { _ = resp.Body.Close() }()
+	defer resp.Body.Close() //nolint:errcheck
 
 	body, _ := io.ReadAll(resp.Body)
 	debugResponse(resp, body)
@@ -454,7 +454,7 @@ func (c *AxonopsHttpClient) CreateACL(clusterName string, acl KafkaACL) error {
 	if err != nil {
 		return fmt.Errorf("failed to send POST request: %w", err)
 	}
-	defer func() { _ = resp.Body.Close() }()
+	defer resp.Body.Close() //nolint:errcheck
 
 	if resp.StatusCode == 200 || resp.StatusCode == 204 {
 		return nil
@@ -486,7 +486,7 @@ func (c *AxonopsHttpClient) DeleteACL(clusterName string, acl KafkaACL) error {
 	if err != nil {
 		return fmt.Errorf("failed to send DELETE request: %w", err)
 	}
-	defer func() { _ = resp.Body.Close() }()
+	defer resp.Body.Close() //nolint:errcheck
 
 	if resp.StatusCode == 204 {
 		return nil
@@ -574,7 +574,7 @@ func (c *AxonopsHttpClient) CreateConnector(clusterName, connectClusterName stri
 	if err != nil {
 		return nil, fmt.Errorf("failed to send POST request: %w", err)
 	}
-	defer func() { _ = resp.Body.Close() }()
+	defer resp.Body.Close() //nolint:errcheck
 
 	bodyBytes, _ := io.ReadAll(resp.Body)
 	debugResponse(resp, bodyBytes)
@@ -611,7 +611,7 @@ func (c *AxonopsHttpClient) GetConnector(clusterName, connectClusterName, connec
 	if err != nil {
 		return nil, fmt.Errorf("failed to send GET request: %w", err)
 	}
-	defer func() { _ = resp.Body.Close() }()
+	defer resp.Body.Close() //nolint:errcheck
 
 	bodyBytes, _ := io.ReadAll(resp.Body)
 	debugResponse(resp, bodyBytes)
@@ -664,7 +664,7 @@ func (c *AxonopsHttpClient) UpdateConnectorConfig(clusterName, connectClusterNam
 	if err != nil {
 		return nil, fmt.Errorf("failed to send PUT request: %w", err)
 	}
-	defer func() { _ = resp.Body.Close() }()
+	defer resp.Body.Close() //nolint:errcheck
 
 	bodyBytes, _ := io.ReadAll(resp.Body)
 	debugResponse(resp, bodyBytes)
@@ -699,7 +699,7 @@ func (c *AxonopsHttpClient) DeleteConnector(clusterName, connectClusterName, con
 	if err != nil {
 		return fmt.Errorf("failed to send DELETE request: %w", err)
 	}
-	defer func() { _ = resp.Body.Close() }()
+	defer resp.Body.Close() //nolint:errcheck
 
 	bodyBytes, _ := io.ReadAll(resp.Body)
 	debugResponse(resp, bodyBytes)
@@ -761,7 +761,7 @@ func (c *AxonopsHttpClient) CreateSchema(clusterName, subject string, schema Cre
 	if err != nil {
 		return nil, fmt.Errorf("failed to send POST request: %w", err)
 	}
-	defer func() { _ = resp.Body.Close() }()
+	defer resp.Body.Close() //nolint:errcheck
 
 	if resp.StatusCode == 200 || resp.StatusCode == 201 {
 		var result CreateSchemaResponse
@@ -791,7 +791,7 @@ func (c *AxonopsHttpClient) GetSchema(clusterName, subject string, version strin
 	if err != nil {
 		return nil, fmt.Errorf("failed to send GET request: %w", err)
 	}
-	defer func() { _ = resp.Body.Close() }()
+	defer resp.Body.Close() //nolint:errcheck
 
 	switch resp.StatusCode {
 	case 200:
@@ -824,7 +824,7 @@ func (c *AxonopsHttpClient) DeleteSchema(clusterName, subject string) error {
 	if err != nil {
 		return fmt.Errorf("failed to send DELETE request: %w", err)
 	}
-	defer func() { _ = resp.Body.Close() }()
+	defer resp.Body.Close() //nolint:errcheck
 
 	if resp.StatusCode == 200 || resp.StatusCode == 204 {
 		return nil
@@ -865,7 +865,7 @@ func (c *AxonopsHttpClient) GetLogCollectors(clusterName string) ([]LogCollector
 	if err != nil {
 		return nil, fmt.Errorf("failed to send GET request: %w", err)
 	}
-	defer func() { _ = resp.Body.Close() }()
+	defer resp.Body.Close() //nolint:errcheck
 
 	if resp.StatusCode == 200 {
 		var result []LogCollectorConfig
@@ -905,7 +905,7 @@ func (c *AxonopsHttpClient) UpdateLogCollectors(clusterName string, collectors [
 	if err != nil {
 		return fmt.Errorf("failed to send PUT request: %w", err)
 	}
-	defer func() { _ = resp.Body.Close() }()
+	defer resp.Body.Close() //nolint:errcheck
 
 	if resp.StatusCode == 200 || resp.StatusCode == 204 {
 		return nil
@@ -984,7 +984,7 @@ func (c *AxonopsHttpClient) GetHealthchecks(clusterName string) (*HealthchecksRe
 	if err != nil {
 		return nil, fmt.Errorf("failed to send GET request: %w", err)
 	}
-	defer func() { _ = resp.Body.Close() }()
+	defer resp.Body.Close() //nolint:errcheck
 
 	if resp.StatusCode == 200 {
 		var result HealthchecksResponse
@@ -1020,7 +1020,7 @@ func (c *AxonopsHttpClient) UpdateHealthchecks(clusterName string, healthchecks 
 	if err != nil {
 		return fmt.Errorf("failed to send PUT request: %w", err)
 	}
-	defer func() { _ = resp.Body.Close() }()
+	defer resp.Body.Close() //nolint:errcheck
 
 	if resp.StatusCode == 200 || resp.StatusCode == 204 {
 		return nil
@@ -1060,7 +1060,7 @@ func (c *AxonopsHttpClient) GetCassandraAdaptiveRepair(clusterType, clusterName 
 	if err != nil {
 		return nil, fmt.Errorf("failed to send GET request: %w", err)
 	}
-	defer func() { _ = resp.Body.Close() }()
+	defer resp.Body.Close() //nolint:errcheck
 
 	bodyBytes, _ := io.ReadAll(resp.Body)
 	debugResponse(resp, bodyBytes)
@@ -1100,7 +1100,7 @@ func (c *AxonopsHttpClient) UpdateCassandraAdaptiveRepair(clusterType, clusterNa
 	if err != nil {
 		return fmt.Errorf("failed to send POST request: %w", err)
 	}
-	defer func() { _ = resp.Body.Close() }()
+	defer resp.Body.Close() //nolint:errcheck
 
 	bodyBytes, _ := io.ReadAll(resp.Body)
 	debugResponse(resp, bodyBytes)
@@ -1168,7 +1168,7 @@ func (c *AxonopsHttpClient) GetCassandraBackups(clusterType, clusterName string)
 	if err != nil {
 		return nil, fmt.Errorf("failed to send GET request: %w", err)
 	}
-	defer func() { _ = resp.Body.Close() }()
+	defer resp.Body.Close() //nolint:errcheck
 
 	bodyBytes, _ := io.ReadAll(resp.Body)
 	debugResponse(resp, bodyBytes)
@@ -1239,7 +1239,7 @@ func (c *AxonopsHttpClient) CreateCassandraBackup(clusterType, clusterName strin
 	if err != nil {
 		return fmt.Errorf("failed to send POST request: %w", err)
 	}
-	defer func() { _ = resp.Body.Close() }()
+	defer resp.Body.Close() //nolint:errcheck
 
 	bodyBytes, _ := io.ReadAll(resp.Body)
 	debugResponse(resp, bodyBytes)
@@ -1275,7 +1275,7 @@ func (c *AxonopsHttpClient) DeleteCassandraBackup(clusterType, clusterName strin
 	if err != nil {
 		return fmt.Errorf("failed to send DELETE request: %w", err)
 	}
-	defer func() { _ = resp.Body.Close() }()
+	defer resp.Body.Close() //nolint:errcheck
 
 	bodyBytes, _ := io.ReadAll(resp.Body)
 	debugResponse(resp, bodyBytes)
@@ -1346,7 +1346,7 @@ func (c *AxonopsHttpClient) GetAlertRules(clusterType, clusterName string) ([]Me
 	if err != nil {
 		return nil, fmt.Errorf("failed to send GET request: %w", err)
 	}
-	defer func() { _ = resp.Body.Close() }()
+	defer resp.Body.Close() //nolint:errcheck
 
 	bodyBytes, _ := io.ReadAll(resp.Body)
 	debugResponse(resp, bodyBytes)
@@ -1387,7 +1387,7 @@ func (c *AxonopsHttpClient) CreateOrUpdateAlertRule(clusterType, clusterName str
 	if err != nil {
 		return fmt.Errorf("failed to send POST request: %w", err)
 	}
-	defer func() { _ = resp.Body.Close() }()
+	defer resp.Body.Close() //nolint:errcheck
 
 	bodyBytes, _ := io.ReadAll(resp.Body)
 	debugResponse(resp, bodyBytes)
@@ -1417,7 +1417,7 @@ func (c *AxonopsHttpClient) DeleteAlertRule(clusterType, clusterName, alertID st
 	if err != nil {
 		return fmt.Errorf("failed to send DELETE request: %w", err)
 	}
-	defer func() { _ = resp.Body.Close() }()
+	defer resp.Body.Close() //nolint:errcheck
 
 	bodyBytes, _ := io.ReadAll(resp.Body)
 	debugResponse(resp, bodyBytes)
@@ -1474,7 +1474,7 @@ func (c *AxonopsHttpClient) GetDashboardTemplates(clusterType, clusterName strin
 	if err != nil {
 		return nil, fmt.Errorf("failed to send GET request: %w", err)
 	}
-	defer func() { _ = resp.Body.Close() }()
+	defer resp.Body.Close() //nolint:errcheck
 
 	bodyBytes, _ := io.ReadAll(resp.Body)
 	debugResponse(resp, bodyBytes)
@@ -1578,7 +1578,7 @@ func (c *AxonopsHttpClient) GetIntegrations(clusterType, clusterName string) (*I
 	if err != nil {
 		return nil, fmt.Errorf("failed to send GET request: %w", err)
 	}
-	defer func() { _ = resp.Body.Close() }()
+	defer resp.Body.Close() //nolint:errcheck
 
 	bodyBytes, _ := io.ReadAll(resp.Body)
 	debugResponse(resp, bodyBytes)
@@ -1619,7 +1619,7 @@ func (c *AxonopsHttpClient) SetIntegrationOverride(clusterType, clusterName, rou
 	if err != nil {
 		return fmt.Errorf("failed to send PUT request: %w", err)
 	}
-	defer func() { _ = resp.Body.Close() }()
+	defer resp.Body.Close() //nolint:errcheck
 
 	bodyBytes, _ := io.ReadAll(resp.Body)
 	debugResponse(resp, bodyBytes)
@@ -1649,7 +1649,7 @@ func (c *AxonopsHttpClient) AddIntegrationRoute(clusterType, clusterName, routeT
 	if err != nil {
 		return fmt.Errorf("failed to send POST request: %w", err)
 	}
-	defer func() { _ = resp.Body.Close() }()
+	defer resp.Body.Close() //nolint:errcheck
 
 	bodyBytes, _ := io.ReadAll(resp.Body)
 	debugResponse(resp, bodyBytes)
@@ -1679,7 +1679,7 @@ func (c *AxonopsHttpClient) RemoveIntegrationRoute(clusterType, clusterName, rou
 	if err != nil {
 		return fmt.Errorf("failed to send DELETE request: %w", err)
 	}
-	defer func() { _ = resp.Body.Close() }()
+	defer resp.Body.Close() //nolint:errcheck
 
 	bodyBytes, _ := io.ReadAll(resp.Body)
 	debugResponse(resp, bodyBytes)
