@@ -1,5 +1,5 @@
 ---
-page_title: "axonops_healthcheck_http Resource - terraform-provider-axonops"
+page_title: "axonops_healthcheck_http Resource - axonops"
 subcategory: "Health Checks"
 description: |-
   Manages an HTTP healthcheck configuration for a Kafka cluster.

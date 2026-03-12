@@ -1,5 +1,5 @@
 ---
-page_title: "axonops_healthcheck_tcp Resource - terraform-provider-axonops"
+page_title: "axonops_healthcheck_tcp Resource - axonops"
 subcategory: "Health Checks"
 description: |-
   Manages a TCP healthcheck configuration for a Kafka cluster.

@@ -1,5 +1,5 @@
 ---
-page_title: "axonops_kafka_acl_list Data Source - terraform-provider-axonops"
+page_title: "axonops_kafka_acl_list Data Source - axonops"
 subcategory: "Kafka"
 description: |-
   Lists all Kafka ACLs for a cluster.

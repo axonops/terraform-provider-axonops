@@ -1,5 +1,5 @@
 ---
-page_title: "axonops_kafka_acl Resource - terraform-provider-axonops"
+page_title: "axonops_kafka_acl Resource - axonops"
 subcategory: "Kafka"
 description: |-
   Manages a Kafka ACL (Access Control List) entry.

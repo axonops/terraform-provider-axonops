@@ -1,5 +1,5 @@
 ---
-page_title: "axonops_kafka_connect_connector Resource - terraform-provider-axonops"
+page_title: "axonops_kafka_connect_connector Resource - axonops"
 subcategory: "Kafka"
 description: |-
   Manages a Kafka Connect connector.

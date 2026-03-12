@@ -1,5 +1,5 @@
 ---
-page_title: "axonops_cassandra_backup Data Source - terraform-provider-axonops"
+page_title: "axonops_cassandra_backup Data Source - axonops"
 subcategory: "Cassandra"
 description: |-
   Reads a Cassandra backup schedule.

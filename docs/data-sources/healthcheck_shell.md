@@ -1,5 +1,5 @@
 ---
-page_title: "axonops_healthcheck_shell Data Source - terraform-provider-axonops"
+page_title: "axonops_healthcheck_shell Data Source - axonops"
 subcategory: "Health Checks"
 description: |-
   Reads a shell healthcheck configuration.

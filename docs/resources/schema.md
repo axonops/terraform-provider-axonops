@@ -1,5 +1,5 @@
 ---
-page_title: "axonops_schema Resource - terraform-provider-axonops"
+page_title: "axonops_schema Resource - axonops"
 subcategory: "Kafka"
 description: |-
   Manages a Schema Registry schema subject.

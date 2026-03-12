@@ -1,5 +1,5 @@
 ---
-page_title: "axonops_cassandra_adaptive_repair Resource - terraform-provider-axonops"
+page_title: "axonops_cassandra_adaptive_repair Resource - axonops"
 subcategory: "Cassandra"
 description: |-
   Manages Cassandra adaptive repair settings for a cluster.

@@ -1,5 +1,5 @@
 ---
-page_title: "axonops_schema Data Source - terraform-provider-axonops"
+page_title: "axonops_schema Data Source - axonops"
 subcategory: "Kafka"
 description: |-
   Reads a Schema Registry schema subject.

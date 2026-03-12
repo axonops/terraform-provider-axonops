@@ -1,5 +1,5 @@
 ---
-page_title: "axonops_logcollector Resource - terraform-provider-axonops"
+page_title: "axonops_logcollector Resource - axonops"
 subcategory: "Log Collection"
 description: |-
   Manages a log collector configuration for a Kafka cluster.

@@ -1,5 +1,5 @@
 ---
-page_title: "axonops_kafka_topic Resource - terraform-provider-axonops"
+page_title: "axonops_kafka_topic Resource - axonops"
 subcategory: "Kafka"
 description: |-
   Manages a Kafka topic in an AxonOps-managed cluster.

@@ -1,5 +1,5 @@
 ---
-page_title: "axonops_kafka_topic Data Source - terraform-provider-axonops"
+page_title: "axonops_kafka_topic Data Source - axonops"
 subcategory: "Kafka"
 description: |-
   Reads a Kafka topic.

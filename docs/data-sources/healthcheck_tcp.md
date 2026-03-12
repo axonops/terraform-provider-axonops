@@ -1,5 +1,5 @@
 ---
-page_title: "axonops_healthcheck_tcp Data Source - terraform-provider-axonops"
+page_title: "axonops_healthcheck_tcp Data Source - axonops"
 subcategory: "Health Checks"
 description: |-
   Reads a TCP healthcheck configuration.

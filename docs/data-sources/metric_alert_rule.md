@@ -1,5 +1,5 @@
 ---
-page_title: "axonops_metric_alert_rule Data Source - terraform-provider-axonops"
+page_title: "axonops_metric_alert_rule Data Source - axonops"
 subcategory: "Monitoring"
 description: |-
   Reads a metric alert rule.

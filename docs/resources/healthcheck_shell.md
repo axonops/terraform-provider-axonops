@@ -1,5 +1,5 @@
 ---
-page_title: "axonops_healthcheck_shell Resource - terraform-provider-axonops"
+page_title: "axonops_healthcheck_shell Resource - axonops"
 subcategory: "Health Checks"
 description: |-
   Manages a shell healthcheck configuration for a Kafka cluster.

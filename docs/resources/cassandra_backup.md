@@ -1,5 +1,5 @@
 ---
-page_title: "axonops_cassandra_backup Resource - terraform-provider-axonops"
+page_title: "axonops_cassandra_backup Resource - axonops"
 subcategory: "Cassandra"
 description: |-
   Manages a Cassandra backup schedule.

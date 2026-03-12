@@ -1,5 +1,5 @@
 ---
-page_title: "axonops_kafka_connect_connector Data Source - terraform-provider-axonops"
+page_title: "axonops_kafka_connect_connector Data Source - axonops"
 subcategory: "Kafka"
 description: |-
   Reads a Kafka Connect connector.
