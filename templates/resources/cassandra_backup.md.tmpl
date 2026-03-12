@@ -1,0 +1,61 @@
+---
+page_title: "{{.Name}} {{.Type}} - {{.ProviderName}}"
+subcategory: "Cassandra"
+description: |-
+{{ .Description | plainmarkdown | trimspace | prefixlines "  " }}
+---
+
+# {{.Name}} ({{.Type}})
+
+{{ .Description | trimspace }}
+
+## Example Usage
+
+```terraform
+# Basic daily backup
+resource "axonops_cassandra_backup" "daily" {
+  cluster_name    = "my-cassandra-cluster"
+  tag             = "daily-backup"
+  datacenters     = ["dc1"]
+  schedule        = true
+  schedule_expr   = "0 1 * * *"  # Daily at 1 AM
+  local_retention = "10d"
+}
+
+# Backup with S3 remote storage
+resource "axonops_cassandra_backup" "remote_s3" {
+  cluster_name     = "my-cassandra-cluster"
+  tag              = "s3-backup"
+  datacenters      = ["dc1"]
+  schedule         = true
+  schedule_expr    = "0 0 * * *"
+  local_retention  = "3d"
+  remote           = true
+  remote_type      = "s3"
+  remote_path      = "my-bucket/cassandra-backups"
+  remote_retention = "90d"
+  remote_config    = "access_key_id=AKIAEXAMPLE\nsecret_access_key=SECRET\nregion=us-east-1"
+}
+
+# Selective backup
+resource "axonops_cassandra_backup" "selective" {
+  cluster_name    = "my-cassandra-cluster"
+  tag             = "selective-backup"
+  datacenters     = ["dc1"]
+  schedule        = true
+  schedule_expr   = "0 2 * * *"
+  local_retention = "7d"
+  keyspaces       = ["my_keyspace"]
+  tables          = ["my_keyspace.users", "my_keyspace.orders"]
+}
+```
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Import
+
+Cassandra backup schedules can be imported using the format `cluster_type/cluster_name/tag`:
+
+```shell
+terraform import axonops_cassandra_backup.example cassandra/my-cluster/daily-backup
+```

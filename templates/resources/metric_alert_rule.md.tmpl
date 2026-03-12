@@ -1,0 +1,29 @@
+---
+page_title: "{{.Name}} {{.Type}} - {{.ProviderName}}"
+subcategory: "Monitoring"
+description: |-
+{{ .Description | plainmarkdown | trimspace | prefixlines "  " }}
+---
+
+# {{.Name}} ({{.Type}})
+
+{{ .Description | trimspace }}
+
+## Example Usage
+
+{{ tffile "examples/resources/axonops_metric_alert_rule/resource.tf" }}
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Import
+
+Metric alert rules can be imported using the format `cluster_type/cluster_name/alert_id`:
+
+```shell
+terraform import axonops_metric_alert_rule.example cassandra/my-cluster/alert-uuid-here
+```
+
+Where:
+- `cluster_type` - The type of cluster (cassandra, kafka, or dse)
+- `cluster_name` - The name of the cluster
+- `alert_id` - The UUID of the metric alert rule

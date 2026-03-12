@@ -1,0 +1,57 @@
+---
+page_title: "{{.Name}} {{.Type}} - {{.ProviderName}}"
+subcategory: "Kafka"
+description: |-
+{{ .Description | plainmarkdown | trimspace | prefixlines "  " }}
+---
+
+# {{.Name}} ({{.Type}})
+
+{{ .Description | trimspace }}
+
+## Example Usage
+
+```terraform
+# Read an existing schema
+data "axonops_schema" "existing" {
+  cluster_name = "my-kafka-cluster"
+  subject      = "user-events-value"
+}
+
+# Output schema details
+output "schema_id" {
+  value = data.axonops_schema.existing.schema_id
+}
+
+output "schema_version" {
+  value = data.axonops_schema.existing.version
+}
+
+output "schema_type" {
+  value = data.axonops_schema.existing.schema_type
+}
+
+output "schema_definition" {
+  value = data.axonops_schema.existing.schema
+}
+
+# Use schema data to create a matching key schema
+resource "axonops_schema" "user_events_key" {
+  cluster_name = "my-kafka-cluster"
+  subject      = "user-events-key"
+  schema_type  = data.axonops_schema.existing.schema_type
+  schema       = jsonencode({
+    type      = "record"
+    name      = "UserEventKey"
+    namespace = "com.example.events"
+    fields    = [
+      {
+        name = "user_id"
+        type = "string"
+      }
+    ]
+  })
+}
+```
+
+{{ .SchemaMarkdown | trimspace }}

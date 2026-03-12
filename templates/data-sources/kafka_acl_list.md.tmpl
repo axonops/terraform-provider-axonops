@@ -1,0 +1,42 @@
+---
+page_title: "{{.Name}} {{.Type}} - {{.ProviderName}}"
+subcategory: "Kafka"
+description: |-
+{{ .Description | plainmarkdown | trimspace | prefixlines "  " }}
+---
+
+# {{.Name}} ({{.Type}})
+
+{{ .Description | trimspace }}
+
+## Example Usage
+
+```terraform
+# List all ACLs for a cluster
+data "axonops_kafka_acl_list" "all" {
+  cluster_name = "my-kafka-cluster"
+}
+
+# Output the ACL list
+output "acl_count" {
+  value = length(data.axonops_kafka_acl_list.all.acls)
+}
+
+output "all_acls" {
+  value = data.axonops_kafka_acl_list.all.acls
+}
+
+# Filter ACLs for a specific principal using locals
+locals {
+  producer_acls = [
+    for acl in data.axonops_kafka_acl_list.all.acls :
+    acl if acl.principal == "User:producer-app"
+  ]
+}
+
+output "producer_acls" {
+  value = local.producer_acls
+}
+```
+
+{{ .SchemaMarkdown | trimspace }}

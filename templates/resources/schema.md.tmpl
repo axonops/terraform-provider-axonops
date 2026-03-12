@@ -1,0 +1,71 @@
+---
+page_title: "{{.Name}} {{.Type}} - {{.ProviderName}}"
+subcategory: "Kafka"
+description: |-
+{{ .Description | plainmarkdown | trimspace | prefixlines "  " }}
+---
+
+# {{.Name}} ({{.Type}})
+
+{{ .Description | trimspace }}
+
+## Example Usage
+
+```terraform
+# Avro schema
+resource "axonops_schema" "user_events" {
+  cluster_name = "my-kafka-cluster"
+  subject      = "user-events-value"
+  schema_type  = "AVRO"
+  schema       = jsonencode({
+    type      = "record"
+    name      = "UserEvent"
+    namespace = "com.example.events"
+    fields    = [
+      { name = "user_id", type = "string" },
+      { name = "event_type", type = "string" },
+      { name = "timestamp", type = "long" }
+    ]
+  })
+}
+
+# JSON Schema
+resource "axonops_schema" "notifications" {
+  cluster_name = "my-kafka-cluster"
+  subject      = "notifications-value"
+  schema_type  = "JSON"
+  schema       = jsonencode({
+    "$schema" = "http://json-schema.org/draft-07/schema#"
+    type      = "object"
+    required  = ["id", "message"]
+    properties = {
+      id      = { type = "string" }
+      message = { type = "string" }
+    }
+  })
+}
+
+# Protobuf schema
+resource "axonops_schema" "sensor_data" {
+  cluster_name = "my-kafka-cluster"
+  subject      = "sensor-data-value"
+  schema_type  = "PROTOBUF"
+  schema       = <<-EOT
+    syntax = "proto3";
+    message SensorReading {
+      string sensor_id = 1;
+      double value = 2;
+    }
+  EOT
+}
+```
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Import
+
+Schema Registry schemas can be imported using the format `cluster_name/subject`:
+
+```shell
+terraform import axonops_schema.example my-kafka-cluster/user-events-value
+```

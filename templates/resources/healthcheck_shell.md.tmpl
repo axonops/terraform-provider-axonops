@@ -1,0 +1,85 @@
+---
+page_title: "{{.Name}} {{.Type}} - {{.ProviderName}}"
+subcategory: "Health Checks"
+description: |-
+{{ .Description | plainmarkdown | trimspace | prefixlines "  " }}
+---
+
+# {{.Name}} ({{.Type}})
+
+{{ .Description | trimspace }}
+
+## Example Usage
+
+```terraform
+# Check disk space
+resource "axonops_healthcheck_shell" "disk_space" {
+  cluster_name = "my-kafka-cluster"
+  name         = "Disk Space Check"
+  script       = "/usr/local/bin/check_disk_space.sh"
+  shell        = "/bin/bash"
+  interval     = "5m"
+  timeout      = "30s"
+}
+
+# Check Kafka process
+resource "axonops_healthcheck_shell" "kafka_process" {
+  cluster_name = "my-kafka-cluster"
+  name         = "Kafka Process Check"
+  script       = "pgrep -f kafka.Kafka"
+  interval     = "1m"
+  timeout      = "10s"
+}
+
+# Check JVM heap usage
+resource "axonops_healthcheck_shell" "jvm_heap" {
+  cluster_name = "my-kafka-cluster"
+  name         = "JVM Heap Check"
+  script       = "/usr/local/bin/check_jvm_heap.sh"
+  shell        = "/bin/bash"
+  interval     = "2m"
+  timeout      = "30s"
+}
+
+# Simple file existence check
+resource "axonops_healthcheck_shell" "config_exists" {
+  cluster_name = "my-kafka-cluster"
+  name         = "Config File Check"
+  script       = "test -f /etc/kafka/server.properties"
+  interval     = "10m"
+  timeout      = "5s"
+}
+
+# Check network connectivity
+resource "axonops_healthcheck_shell" "network_check" {
+  cluster_name = "my-kafka-cluster"
+  name         = "Network Connectivity"
+  script       = "ping -c 1 -W 2 kafka-broker-1.internal"
+  interval     = "1m"
+  timeout      = "10s"
+}
+
+# Custom monitoring script
+resource "axonops_healthcheck_shell" "custom_monitor" {
+  cluster_name = "my-kafka-cluster"
+  name         = "Custom Monitoring Script"
+  script       = "/opt/scripts/kafka-health-check.sh"
+  shell        = "/bin/bash"
+  interval     = "3m"
+  timeout      = "1m"
+}
+```
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Import
+
+Shell healthchecks can be imported using the format `cluster_name/healthcheck_name`:
+
+```shell
+terraform import axonops_healthcheck_shell.example my-kafka-cluster/Disk%20Space%20Check
+```
+
+Where:
+- `cluster_name` - The name of the cluster
+- `healthcheck_name` - The name of the healthcheck (URL-encoded if it contains spaces)

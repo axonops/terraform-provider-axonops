@@ -1,0 +1,57 @@
+---
+page_title: "AxonOps Provider"
+subcategory: ""
+description: |-
+  The AxonOps provider enables Terraform to manage Apache Cassandra, Apache Kafka, and DSE infrastructure through AxonOps.
+---
+
+# AxonOps Provider
+
+The AxonOps provider allows you to manage your Apache Cassandra, Apache Kafka, and DataStax Enterprise (DSE) clusters through [AxonOps](https://axonops.com). This provider supports both AxonOps SaaS and self-hosted deployments.
+
+## Features
+
+This provider supports managing:
+
+### Kafka Resources
+- **Topics** - Create, configure, and manage Kafka topics with partitions, replication, and custom configurations
+- **ACLs** - Manage Kafka Access Control Lists for secure topic access
+- **Connectors** - Deploy and manage Kafka Connect connectors
+- **Schemas** - Manage Schema Registry schemas (AVRO, PROTOBUF, JSON)
+
+### Cassandra/DSE Resources
+- **Adaptive Repair** - Configure Cassandra adaptive repair settings
+- **Backups** - Schedule and manage Cassandra backups with datacenter-level granularity
+
+### Monitoring & Alerting
+- **Metric Alert Rules** - Create PromQL-based metric alerts with thresholds and filters
+- **Log Alert Rules** - Create log-based alerts with content matching and severity thresholds
+- **Alert Routes** - Route alerts to integrations (Slack, PagerDuty, email, Teams, ServiceNow, webhook, OpsGenie)
+
+### Health Checks
+- **TCP Health Checks** - Monitor TCP connectivity
+- **HTTP Health Checks** - Monitor HTTP endpoints
+- **Shell Health Checks** - Run custom shell scripts for health monitoring
+
+### Log Collection
+- **Log Collectors** - Configure log collection settings
+
+## Authentication
+
+The provider supports API key authentication. You can configure credentials via provider configuration or environment variables.
+
+### Environment Variables
+
+| Variable | Description |
+|----------|-------------|
+| `AXONOPS_API_KEY` | API key for authentication |
+| `AXONOPS_HOST` | AxonOps server hostname |
+| `AXONOPS_PROTOCOL` | Protocol (http/https) |
+| `AXONOPS_TOKEN_TYPE` | Token type: 'Bearer' or 'AxonApi' |
+| `AXONOPS_TLS_SKIP_VERIFY` | Skip TLS certificate verification |
+
+## Example Usage
+
+{{ tffile "examples/provider/provider.tf" }}
+
+{{ .SchemaMarkdown | trimspace }}

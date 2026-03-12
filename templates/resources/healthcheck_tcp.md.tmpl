@@ -1,0 +1,78 @@
+---
+page_title: "{{.Name}} {{.Type}} - {{.ProviderName}}"
+subcategory: "Health Checks"
+description: |-
+{{ .Description | plainmarkdown | trimspace | prefixlines "  " }}
+---
+
+# {{.Name}} ({{.Type}})
+
+{{ .Description | trimspace }}
+
+## Example Usage
+
+```terraform
+# Check Kafka broker port
+resource "axonops_healthcheck_tcp" "kafka_broker" {
+  cluster_name          = "my-kafka-cluster"
+  name                  = "Kafka Broker Port"
+  tcp                   = "0.0.0.0:9092"
+  interval              = "30s"
+  timeout               = "10s"
+  supported_agent_types = ["broker", "kraft-broker"]
+}
+
+# Check Kafka controller port
+resource "axonops_healthcheck_tcp" "kafka_controller" {
+  cluster_name          = "my-kafka-cluster"
+  name                  = "Kafka Controller Port"
+  tcp                   = "0.0.0.0:9093"
+  interval              = "30s"
+  timeout               = "10s"
+  supported_agent_types = ["kraft-controller"]
+}
+
+# Check Schema Registry port
+resource "axonops_healthcheck_tcp" "schema_registry" {
+  cluster_name          = "my-kafka-cluster"
+  name                  = "Schema Registry Port"
+  tcp                   = "0.0.0.0:8081"
+  interval              = "1m"
+  timeout               = "15s"
+  supported_agent_types = ["schema-registry"]
+}
+
+# Check Kafka Connect port
+resource "axonops_healthcheck_tcp" "kafka_connect" {
+  cluster_name          = "my-kafka-cluster"
+  name                  = "Kafka Connect Port"
+  tcp                   = "0.0.0.0:8083"
+  interval              = "1m"
+  timeout               = "15s"
+  supported_agent_types = ["all"]
+}
+
+# Check ZooKeeper client port
+resource "axonops_healthcheck_tcp" "zookeeper" {
+  cluster_name          = "my-kafka-cluster"
+  name                  = "ZooKeeper Client Port"
+  tcp                   = "0.0.0.0:2181"
+  interval              = "30s"
+  timeout               = "10s"
+  supported_agent_types = ["zookeeper"]
+}
+```
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Import
+
+TCP healthchecks can be imported using the format `cluster_name/healthcheck_name`:
+
+```shell
+terraform import axonops_healthcheck_tcp.example my-kafka-cluster/Kafka%20Broker%20Port
+```
+
+Where:
+- `cluster_name` - The name of the cluster
+- `healthcheck_name` - The name of the healthcheck (URL-encoded if it contains spaces)

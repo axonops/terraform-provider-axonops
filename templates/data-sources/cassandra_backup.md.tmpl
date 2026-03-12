@@ -1,0 +1,50 @@
+---
+page_title: "{{.Name}} {{.Type}} - {{.ProviderName}}"
+subcategory: "Cassandra"
+description: |-
+{{ .Description | plainmarkdown | trimspace | prefixlines "  " }}
+---
+
+# {{.Name}} ({{.Type}})
+
+{{ .Description | trimspace }}
+
+## Example Usage
+
+```terraform
+# Read existing backup configuration
+data "axonops_cassandra_backup" "existing" {
+  cluster_name = "my-cassandra-cluster"
+  tag          = "daily-backup"
+}
+
+# Output backup settings
+output "backup_schedule" {
+  value = data.axonops_cassandra_backup.existing.schedule_expr
+}
+
+output "backup_datacenters" {
+  value = data.axonops_cassandra_backup.existing.datacenters
+}
+
+output "backup_local_retention" {
+  value = data.axonops_cassandra_backup.existing.local_retention
+}
+
+output "backup_remote_enabled" {
+  value = data.axonops_cassandra_backup.existing.remote
+}
+
+output "backup_keyspaces" {
+  value = data.axonops_cassandra_backup.existing.keyspaces
+}
+
+# Read DSE cluster backup configuration
+data "axonops_cassandra_backup" "dse" {
+  cluster_name = "my-dse-cluster"
+  cluster_type = "dse"
+  tag          = "dse-daily-backup"
+}
+```
+
+{{ .SchemaMarkdown | trimspace }}

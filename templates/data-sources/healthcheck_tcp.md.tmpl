@@ -1,0 +1,39 @@
+---
+page_title: "{{.Name}} {{.Type}} - {{.ProviderName}}"
+subcategory: "Health Checks"
+description: |-
+{{ .Description | plainmarkdown | trimspace | prefixlines "  " }}
+---
+
+# {{.Name}} ({{.Type}})
+
+{{ .Description | trimspace }}
+
+## Example Usage
+
+```terraform
+# Read an existing TCP healthcheck
+data "axonops_healthcheck_tcp" "existing" {
+  cluster_name = "my-kafka-cluster"
+  name         = "Kafka Broker Port"
+}
+
+# Output healthcheck details
+output "healthcheck_tcp_address" {
+  value = data.axonops_healthcheck_tcp.existing.tcp
+}
+
+output "healthcheck_interval" {
+  value = data.axonops_healthcheck_tcp.existing.interval
+}
+
+output "healthcheck_timeout" {
+  value = data.axonops_healthcheck_tcp.existing.timeout
+}
+
+output "healthcheck_agent_types" {
+  value = data.axonops_healthcheck_tcp.existing.supported_agent_types
+}
+```
+
+{{ .SchemaMarkdown | trimspace }}

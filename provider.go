@@ -129,6 +129,7 @@ func (p *axonopsProvider) DataSources(ctx context.Context) []func() datasource.D
 		NewCassandraAdaptiveRepairDataSource,
 		NewCassandraBackupDataSource,
 		NewMetricAlertRuleDataSource,
+		NewLogAlertRuleDataSource,
 	}
 }
 
@@ -146,6 +147,7 @@ func (p *axonopsProvider) Resources(ctx context.Context) []func() resource.Resou
 		NewCassandraBackupResource,
 		NewMetricAlertRuleResource,
 		NewAlertRouteResource,
+		NewLogAlertRuleResource,
 	}
 }
 

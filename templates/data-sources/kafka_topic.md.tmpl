@@ -1,0 +1,47 @@
+---
+page_title: "{{.Name}} {{.Type}} - {{.ProviderName}}"
+subcategory: "Kafka"
+description: |-
+{{ .Description | plainmarkdown | trimspace | prefixlines "  " }}
+---
+
+# {{.Name}} ({{.Type}})
+
+{{ .Description | trimspace }}
+
+## Example Usage
+
+```terraform
+# Read an existing Kafka topic
+data "axonops_kafka_topic" "existing" {
+  cluster_name = "my-kafka-cluster"
+  name         = "existing-topic"
+}
+
+# Output the topic configuration
+output "topic_partitions" {
+  value = data.axonops_kafka_topic.existing.partitions
+}
+
+output "topic_replication_factor" {
+  value = data.axonops_kafka_topic.existing.replication_factor
+}
+
+output "topic_config" {
+  value = data.axonops_kafka_topic.existing.config
+}
+
+# Use topic data to create a related resource
+resource "axonops_kafka_acl" "topic_read" {
+  cluster_name          = "my-kafka-cluster"
+  resource_type         = "TOPIC"
+  resource_name         = data.axonops_kafka_topic.existing.name
+  resource_pattern_type = "LITERAL"
+  principal             = "User:consumer-app"
+  host                  = "*"
+  operation             = "READ"
+  permission_type       = "ALLOW"
+}
+```
+
+{{ .SchemaMarkdown | trimspace }}
