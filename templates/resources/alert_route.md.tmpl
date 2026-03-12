@@ -1,0 +1,51 @@
+---
+page_title: "{{.Name}} {{.Type}} - {{.ProviderName}}"
+subcategory: ""
+description: |-
+{{ .Description | plainmarkdown | trimspace | prefixlines "  " }}
+---
+
+# {{.Name}} ({{.Type}})
+
+{{ .Description | trimspace }}
+
+Alert routes allow you to send alerts from AxonOps to external integrations such as:
+- **Slack** - Send alerts to Slack channels
+- **PagerDuty** - Integrate with PagerDuty for incident management
+- **Email** - Send alert notifications via email
+- **Microsoft Teams** - Post alerts to Teams channels
+- **ServiceNow** - Create incidents in ServiceNow
+- **Webhook** - Send alerts to custom webhook endpoints
+- **OpsGenie** - Integrate with OpsGenie for alerting
+
+## Route Types
+
+The `route_type` parameter determines which alerts are routed:
+- `global` - All alerts
+- `metrics` - Metric-based alerts
+- `backups` - Backup-related alerts
+- `servicechecks` - Service check alerts (health checks)
+- `nodes` - Node status alerts
+- `commands` - Command execution alerts
+- `repairs` - Repair operation alerts
+- `rollingrestart` - Rolling restart alerts
+
+## Example Usage
+
+{{ tffile "examples/resources/axonops_alert_route/resource.tf" }}
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Import
+
+Alert routes can be imported using the format `cluster_type/cluster_name/integration_type/route_type`:
+
+```shell
+terraform import axonops_alert_route.example cassandra/my-cluster/slack/metrics
+```
+
+Where:
+- `cluster_type` - The type of cluster (cassandra, kafka, or dse)
+- `cluster_name` - The name of the cluster
+- `integration_type` - The integration type (slack, pagerduty, email, teams, servicenow, webhook, opsgenie)
+- `route_type` - The route type (global, metrics, backups, servicechecks, nodes, commands, repairs, rollingrestart)
