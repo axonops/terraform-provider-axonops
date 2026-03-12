@@ -1,0 +1,48 @@
+---
+page_title: "{{.Name}} {{.Type}} - {{.ProviderName}}"
+subcategory: "Monitoring"
+description: |-
+{{ .Description | plainmarkdown | trimspace | prefixlines "  " }}
+---
+
+# {{.Name}} ({{.Type}})
+
+{{ .Description | trimspace }}
+
+## Example Usage
+
+```terraform
+# Read an existing metric alert rule by ID
+data "axonops_metric_alert_rule" "existing" {
+  cluster_name = "my-cassandra-cluster"
+  cluster_type = "cassandra"
+  id           = "existing-alert-id"
+}
+
+# Output the alert rule details
+output "alert_name" {
+  value = data.axonops_metric_alert_rule.existing.name
+}
+
+output "alert_metric" {
+  value = data.axonops_metric_alert_rule.existing.metric
+}
+
+output "alert_warning_threshold" {
+  value = data.axonops_metric_alert_rule.existing.warning_value
+}
+
+output "alert_critical_threshold" {
+  value = data.axonops_metric_alert_rule.existing.critical_value
+}
+
+output "alert_duration" {
+  value = data.axonops_metric_alert_rule.existing.duration
+}
+
+output "alert_operator" {
+  value = data.axonops_metric_alert_rule.existing.operator
+}
+```
+
+{{ .SchemaMarkdown | trimspace }}

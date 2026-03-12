@@ -1,5 +1,5 @@
 ---
-page_title: "axonops_log_alert_rule Data Source - axonops"
+page_title: "axonops_log_alert_rule Data Source - terraform-provider-axonops"
 subcategory: "Monitoring"
 description: |-
   Reads a log alert rule.

@@ -1,5 +1,5 @@
 ---
-page_title: "axonops_cassandra_backup Data Source - axonops"
+page_title: "axonops_cassandra_backup Data Source - terraform-provider-axonops"
 subcategory: "Cassandra"
 description: |-
   Reads a Cassandra backup schedule.
@@ -7,7 +7,7 @@ description: |-
 
 # axonops_cassandra_backup (Data Source)
 
-Reads a Cassandra backup schedule. Use this data source to retrieve information about an existing backup configuration, including schedule, retention settings, and remote storage configuration.
+Reads a Cassandra backup schedule.
 
 ## Example Usage
 

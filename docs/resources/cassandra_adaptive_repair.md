@@ -1,5 +1,5 @@
 ---
-page_title: "axonops_cassandra_adaptive_repair Resource - axonops"
+page_title: "axonops_cassandra_adaptive_repair Resource - terraform-provider-axonops"
 subcategory: "Cassandra"
 description: |-
   Manages Cassandra adaptive repair settings for a cluster.
@@ -7,18 +7,18 @@ description: |-
 
 # axonops_cassandra_adaptive_repair (Resource)
 
-Manages Cassandra adaptive repair settings for a cluster. Adaptive repair automatically manages the repair process to ensure data consistency while minimizing impact on cluster performance.
+Manages Cassandra adaptive repair settings for a cluster.
 
 ## Example Usage
 
 ```terraform
-# Basic adaptive repair with defaults
+# Basic adaptive repair
 resource "axonops_cassandra_adaptive_repair" "basic" {
   cluster_name = "my-cassandra-cluster"
   active       = true
 }
 
-# Adaptive repair with custom parallelism and thresholds
+# Custom configuration
 resource "axonops_cassandra_adaptive_repair" "custom" {
   cluster_name       = "my-cassandra-cluster"
   active             = true
@@ -27,53 +27,15 @@ resource "axonops_cassandra_adaptive_repair" "custom" {
   segment_retries    = 5
 }
 
-# Adaptive repair excluding specific tables
+# With table exclusions
 resource "axonops_cassandra_adaptive_repair" "with_exclusions" {
-  cluster_name      = "my-cassandra-cluster"
-  active            = true
-  parallelism       = 8
+  cluster_name       = "my-cassandra-cluster"
+  active             = true
+  parallelism        = 8
+  filter_twcs_tables = true
   blacklisted_tables = [
     "my_keyspace.large_table",
     "analytics.raw_events",
-    "logging.audit_log",
-  ]
-  filter_twcs_tables = true
-}
-
-# Fine-tuned repair with segment configuration
-resource "axonops_cassandra_adaptive_repair" "fine_tuned" {
-  cluster_name         = "my-cassandra-cluster"
-  active               = true
-  parallelism          = 15
-  gc_grace_threshold   = 86400  # 24 hours
-  segment_retries      = 3
-  segments_per_vnode   = 2
-  segment_target_size_mb = 512
-  filter_twcs_tables   = true
-  blacklisted_tables   = []
-}
-
-# DSE cluster adaptive repair
-resource "axonops_cassandra_adaptive_repair" "dse" {
-  cluster_name       = "my-dse-cluster"
-  cluster_type       = "dse"
-  active             = true
-  parallelism        = 10
-  gc_grace_threshold = 86400
-}
-
-# Conservative repair for production (low parallelism, small segments)
-resource "axonops_cassandra_adaptive_repair" "production" {
-  cluster_name           = "production-cassandra"
-  active                 = true
-  parallelism            = 3
-  gc_grace_threshold     = 172800  # 48 hours
-  segment_retries        = 5
-  segments_per_vnode     = 1
-  segment_target_size_mb = 128
-  filter_twcs_tables     = true
-  blacklisted_tables = [
-    "system.large_partitions",
   ]
 }
 ```
@@ -104,7 +66,3 @@ Cassandra adaptive repair settings can be imported using the format `cluster_typ
 ```shell
 terraform import axonops_cassandra_adaptive_repair.example cassandra/my-cluster
 ```
-
-Where:
-- `cluster_type` - The type of cluster (cassandra or dse)
-- `cluster_name` - The name of the cluster

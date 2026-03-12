@@ -1,5 +1,5 @@
 ---
-page_title: "axonops_alert_route Resource - axonops"
+page_title: "axonops_alert_route Resource - terraform-provider-axonops"
 subcategory: "Monitoring"
 description: |-
   Manages an alert route to an integration (e.g., Slack, PagerDuty, email).

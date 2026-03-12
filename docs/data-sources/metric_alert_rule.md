@@ -1,5 +1,5 @@
 ---
-page_title: "axonops_metric_alert_rule Data Source - axonops"
+page_title: "axonops_metric_alert_rule Data Source - terraform-provider-axonops"
 subcategory: "Monitoring"
 description: |-
   Reads a metric alert rule.
@@ -7,7 +7,7 @@ description: |-
 
 # axonops_metric_alert_rule (Data Source)
 
-Reads a metric alert rule. Use this data source to retrieve information about an existing metric alert rule, including its thresholds, filters, and integration configuration.
+Reads a metric alert rule.
 
 ## Example Usage
 

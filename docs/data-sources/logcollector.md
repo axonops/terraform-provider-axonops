@@ -1,5 +1,5 @@
 ---
-page_title: "axonops_logcollector Data Source - axonops"
+page_title: "axonops_logcollector Data Source - terraform-provider-axonops"
 subcategory: "Log Collection"
 description: |-
   Reads a log collector configuration.
@@ -7,7 +7,7 @@ description: |-
 
 # axonops_logcollector (Data Source)
 
-Reads a log collector configuration. Use this data source to retrieve information about an existing log collector, including its file path, date format, and regex patterns.
+Reads a log collector configuration.
 
 ## Example Usage
 

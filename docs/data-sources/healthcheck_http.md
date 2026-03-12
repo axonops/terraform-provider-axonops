@@ -1,5 +1,5 @@
 ---
-page_title: "axonops_healthcheck_http Data Source - axonops"
+page_title: "axonops_healthcheck_http Data Source - terraform-provider-axonops"
 subcategory: "Health Checks"
 description: |-
   Reads an HTTP healthcheck configuration.
@@ -7,7 +7,7 @@ description: |-
 
 # axonops_healthcheck_http (Data Source)
 
-Reads an HTTP healthcheck configuration. Use this data source to retrieve information about an existing HTTP health check, including its URL, method, headers, and expected response.
+Reads an HTTP healthcheck configuration.
 
 ## Example Usage
 
