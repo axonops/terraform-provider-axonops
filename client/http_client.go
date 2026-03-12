@@ -14,13 +14,6 @@ import (
 
 var axonops_api_version = "api/v1"
 
-// debugLog prints debug information if AXONOPS_DEBUG environment variable is set
-func debugLog(format string, args ...interface{}) {
-	if os.Getenv("AXONOPS_DEBUG") != "" {
-		fmt.Printf("[AXONOPS DEBUG] "+format+"\n", args...)
-	}
-}
-
 // debugRequest logs request details for debugging
 func debugRequest(req *http.Request, body []byte) {
 	if os.Getenv("AXONOPS_DEBUG") == "" {
@@ -44,7 +37,7 @@ func debugRequest(req *http.Request, body []byte) {
 			}
 		}
 	}
-	if body != nil && len(body) > 0 {
+	if len(body) > 0 {
 		fmt.Printf("[AXONOPS DEBUG] Body: %s\n", string(body))
 	}
 }
@@ -62,7 +55,7 @@ func debugResponse(resp *http.Response, body []byte) {
 			fmt.Printf("[AXONOPS DEBUG]   %s: %s\n", key, value)
 		}
 	}
-	if body != nil && len(body) > 0 {
+	if len(body) > 0 {
 		// Truncate long responses
 		bodyStr := string(body)
 		if len(bodyStr) > 500 {
@@ -1199,7 +1192,7 @@ func (c *AxonopsHttpClient) GetCassandraBackups(clusterType, clusterName string)
 			// Try as a JSON string containing the array
 			var paramsStr string
 			if err2 := json.Unmarshal(snapshot.Params, &paramsStr); err2 == nil {
-				json.Unmarshal([]byte(paramsStr), &params)
+				_ = json.Unmarshal([]byte(paramsStr), &params)
 			}
 		}
 

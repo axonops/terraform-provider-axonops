@@ -1,0 +1,21 @@
+name: Dependency Security
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  security:
+    name: Check for Vulnerabilities
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+          cache: true
+      - name: Install gosec
+        run: go install github.com/securego/gosec/v2/cmd/gosec@latest
+      - name: Run gosec
+        run: gosec -exclude=G402 ./...

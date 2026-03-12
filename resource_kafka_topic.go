@@ -142,12 +142,12 @@ func (e *topicResource) Update(ctx context.Context, req resource.UpdateRequest, 
 	}
 
 	if planData.Partitions != stateData.Partitions {
-		resp.Diagnostics.AddError("Module Error", fmt.Sprintf("Changing of Partitions not supported yet"))
+		resp.Diagnostics.AddError("Module Error", "Changing of Partitions not supported yet")
 		return
 	}
 
 	if planData.ReplicationFactor != stateData.ReplicationFactor {
-		resp.Diagnostics.AddError("Module Error", fmt.Sprintf("Changing of Replication Factor not supported yet"))
+		resp.Diagnostics.AddError("Module Error", "Changing of Replication Factor not supported yet")
 		return
 	}
 

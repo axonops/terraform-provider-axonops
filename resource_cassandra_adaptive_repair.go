@@ -131,25 +131,6 @@ type cassandraAdaptiveRepairResourceData struct {
 	SegmentTargetSizeMB types.Int64  `tfsdk:"segment_target_size_mb"`
 }
 
-func (r *cassandraAdaptiveRepairResource) buildSettings(ctx context.Context, data *cassandraAdaptiveRepairResourceData, diags *[]interface{}) axonopsClient.AdaptiveRepairSettings {
-	var blacklisted []string
-	data.BlacklistedTables.ElementsAs(ctx, &blacklisted, false)
-	if blacklisted == nil {
-		blacklisted = []string{}
-	}
-
-	return axonopsClient.AdaptiveRepairSettings{
-		Active:              data.Active.ValueBool(),
-		GcGraceThreshold:    int(data.GcGraceThreshold.ValueInt64()),
-		TableParallelism:    int(data.Parallelism.ValueInt64()),
-		BlacklistedTables:   blacklisted,
-		FilterTWCSTables:    data.FilterTwcsTables.ValueBool(),
-		SegmentRetries:      int(data.SegmentRetries.ValueInt64()),
-		SegmentsPerVnode:    int(data.SegmentsPerVnode.ValueInt64()),
-		SegmentTargetSizeMB: int(data.SegmentTargetSizeMB.ValueInt64()),
-	}
-}
-
 func (r *cassandraAdaptiveRepairResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	var data cassandraAdaptiveRepairResourceData
 
