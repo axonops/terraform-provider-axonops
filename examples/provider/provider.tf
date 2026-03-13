@@ -7,6 +7,19 @@ provider "axonops" {
   api_key = "your-api-key-here"
 }
 
+# Provider Configuration for AxonOps SaaS with SAML
+# provider "axonops" {
+#   # Organization ID (required)
+#   org_id = "your-org-id"
+#
+#   # API key for authentication
+#   api_key = "your-api-key-here"
+#
+#   # Enable SAML authentication mode
+#   # Uses tenant-specific URL: https://{org_id}.axonops.cloud/dashboard
+#   use_saml = true
+# }
+
 # Provider Configuration for Self-Hosted AxonOps
 # provider "axonops" {
 #   # Organization ID (required)
@@ -26,4 +39,7 @@ provider "axonops" {
 #
 #   # Skip TLS certificate verification (for self-signed certificates)
 #   tls_skip_verify = false
+#
+#   # Enable SAML if using SAML authentication on self-hosted
+#   # use_saml = true
 # }

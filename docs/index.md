@@ -49,6 +49,29 @@ The provider supports API key authentication. You can configure credentials via 
 | `AXONOPS_PROTOCOL` | Protocol (http/https) |
 | `AXONOPS_TOKEN_TYPE` | Token type: 'Bearer' or 'AxonApi' |
 | `AXONOPS_TLS_SKIP_VERIFY` | Skip TLS certificate verification |
+| `AXONOPS_USE_SAML` | Enable SAML authentication mode |
+
+## SAML Authentication
+
+For organizations using SAML authentication with AxonOps SaaS, set `use_saml = true` in the provider configuration or set the `AXONOPS_USE_SAML=true` environment variable.
+
+When SAML is enabled:
+- The provider uses tenant-specific URL routing: `https://{org_id}.axonops.cloud/dashboard`
+- For on-premise deployments with SAML, the URL becomes: `https://{custom_host}/dashboard`
+
+When SAML is disabled (default):
+- Standard URL routing is used: `https://dash.axonops.cloud/{org_id}`
+- For on-premise deployments: `https://{custom_host}/{org_id}`
+
+### SAML Configuration Example
+
+```terraform
+provider "axonops" {
+  org_id   = "my-organization"
+  api_key  = var.axonops_api_key
+  use_saml = true
+}
+```
 
 ## Example Usage
 
@@ -61,6 +84,19 @@ provider "axonops" {
   # API key for authentication (required for SaaS)
   api_key = "your-api-key-here"
 }
+
+# Provider Configuration for AxonOps SaaS with SAML
+# provider "axonops" {
+#   # Organization ID (required)
+#   org_id = "your-org-id"
+#
+#   # API key for authentication
+#   api_key = "your-api-key-here"
+#
+#   # Enable SAML authentication mode
+#   # Uses tenant-specific URL: https://{org_id}.axonops.cloud/dashboard
+#   use_saml = true
+# }
 
 # Provider Configuration for Self-Hosted AxonOps
 # provider "axonops" {
@@ -81,6 +117,9 @@ provider "axonops" {
 #
 #   # Skip TLS certificate verification (for self-signed certificates)
 #   tls_skip_verify = false
+#
+#   # Enable SAML if using SAML authentication on self-hosted
+#   # use_saml = true
 # }
 ```
 
@@ -89,12 +128,13 @@ provider "axonops" {
 
 ### Required
 
-- `org_id` (String)
+- `org_id` (String) Organization ID for your AxonOps account.
 
 ### Optional
 
-- `api_key` (String)
-- `axonops_host` (String) AxonOps server hostname. Default: dash.axonops.cloud/<org_id>
-- `axonops_protocol` (String)
-- `tls_skip_verify` (Boolean) Skip TLS certificate verification. Default: false
-- `token_type` (String) Token type for Authorization header. Valid values: 'Bearer' (default) or 'AxonApi'
+- `api_key` (String) API key for authentication. Can also be set via AXONOPS_API_KEY environment variable.
+- `axonops_host` (String) AxonOps server hostname (without protocol). For SaaS, leave empty to use the default. For on-premise deployments, specify your server hostname. Can also be set via AXONOPS_HOST environment variable.
+- `axonops_protocol` (String) Protocol to use for API requests. Valid values: 'https' (default) or 'http'. Can also be set via AXONOPS_PROTOCOL environment variable.
+- `tls_skip_verify` (Boolean) Skip TLS certificate verification. Use with caution, only for self-signed certificates. Default: false. Can also be set via AXONOPS_TLS_SKIP_VERIFY environment variable.
+- `token_type` (String) Token type for Authorization header. Valid values: 'Bearer' (default for SaaS) or 'AxonApi' (for on-premise). Can also be set via AXONOPS_TOKEN_TYPE environment variable.
+- `use_saml` (Boolean) Enable SAML authentication mode. When enabled, uses tenant-specific URL routing ({org_id}.axonops.cloud/dashboard). Default: false. Can also be set via AXONOPS_USE_SAML environment variable.
