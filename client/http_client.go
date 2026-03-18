@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strings"
 	"time"
 )
 
@@ -138,7 +139,7 @@ func (c *AxonopsHttpClient) CreateTopic(topicName, clusterName string, partition
 
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(payloadJson))
 	if err != nil {
-		return fmt.Errorf("failed to create POST request: %w for url %v", err, url)
+		return fmt.Errorf("failed to create POST request for url %v: %w", url, err)
 	}
 
 	// Set headers
@@ -305,7 +306,7 @@ func (c *AxonopsHttpClient) DeleteTopic(topicName, clusterName string) error {
 
 	req, err := http.NewRequest("DELETE", url, nil)
 	if err != nil {
-		return fmt.Errorf("failed to create DELETE request: %w for url %v", err, url)
+		return fmt.Errorf("failed to create DELETE request for url %v: %w", url, err)
 	}
 
 	// Set headers
@@ -351,7 +352,7 @@ func (c *AxonopsHttpClient) UpdateTopicConfig(topicName, clusterName string, par
 
 	req, err := http.NewRequest("PUT", url, bytes.NewBuffer(payloadJson))
 	if err != nil {
-		return fmt.Errorf("failed to create PUT request: %w for url %v", err, url)
+		return fmt.Errorf("failed to create PUT request for url %v: %w", url, err)
 	}
 
 	// Set headers
@@ -441,7 +442,7 @@ func (c *AxonopsHttpClient) CreateACL(clusterName string, acl KafkaACL) error {
 
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(payloadJson))
 	if err != nil {
-		return fmt.Errorf("failed to create POST request: %w for url %v", err, url)
+		return fmt.Errorf("failed to create POST request for url %v: %w", url, err)
 	}
 
 	// Set headers
@@ -473,7 +474,7 @@ func (c *AxonopsHttpClient) DeleteACL(clusterName string, acl KafkaACL) error {
 
 	req, err := http.NewRequest("DELETE", url, bytes.NewBuffer(payloadJson))
 	if err != nil {
-		return fmt.Errorf("failed to create DELETE request: %w for url %v", err, url)
+		return fmt.Errorf("failed to create DELETE request for url %v: %w", url, err)
 	}
 
 	// Set headers
@@ -685,7 +686,7 @@ func (c *AxonopsHttpClient) DeleteConnector(clusterName, connectClusterName, con
 
 	req, err := http.NewRequest("DELETE", url, nil)
 	if err != nil {
-		return fmt.Errorf("failed to create DELETE request: %w for url %v", err, url)
+		return fmt.Errorf("failed to create DELETE request for url %v: %w", url, err)
 	}
 
 	// Set headers
@@ -812,7 +813,7 @@ func (c *AxonopsHttpClient) DeleteSchema(clusterName, subject string) error {
 
 	req, err := http.NewRequest("DELETE", url, nil)
 	if err != nil {
-		return fmt.Errorf("failed to create DELETE request: %w for url %v", err, url)
+		return fmt.Errorf("failed to create DELETE request for url %v: %w", url, err)
 	}
 
 	// Set headers
@@ -1086,7 +1087,7 @@ func (c *AxonopsHttpClient) UpdateCassandraAdaptiveRepair(clusterType, clusterNa
 
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(payloadJson))
 	if err != nil {
-		return fmt.Errorf("failed to create POST request: %w for url %v", err, url)
+		return fmt.Errorf("failed to create POST request for url %v: %w", url, err)
 	}
 
 	req.Header.Set("Content-Type", "application/json")
@@ -1225,7 +1226,7 @@ func (c *AxonopsHttpClient) CreateCassandraBackup(clusterType, clusterName strin
 
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(payloadJson))
 	if err != nil {
-		return fmt.Errorf("failed to create POST request: %w for url %v", err, url)
+		return fmt.Errorf("failed to create POST request for url %v: %w", url, err)
 	}
 
 	req.Header.Set("Content-Type", "application/json")
@@ -1261,7 +1262,7 @@ func (c *AxonopsHttpClient) DeleteCassandraBackup(clusterType, clusterName strin
 
 	req, err := http.NewRequest("DELETE", url, bytes.NewBuffer(payloadJson))
 	if err != nil {
-		return fmt.Errorf("failed to create DELETE request: %w for url %v", err, url)
+		return fmt.Errorf("failed to create DELETE request for url %v: %w", url, err)
 	}
 
 	req.Header.Set("Content-Type", "application/json")
@@ -1373,7 +1374,7 @@ func (c *AxonopsHttpClient) CreateOrUpdateAlertRule(clusterType, clusterName str
 
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(payloadJson))
 	if err != nil {
-		return fmt.Errorf("failed to create POST request: %w for url %v", err, url)
+		return fmt.Errorf("failed to create POST request for url %v: %w", url, err)
 	}
 
 	req.Header.Set("Content-Type", "application/json")
@@ -1404,7 +1405,7 @@ func (c *AxonopsHttpClient) DeleteAlertRule(clusterType, clusterName, alertID st
 
 	req, err := http.NewRequest("DELETE", url, nil)
 	if err != nil {
-		return fmt.Errorf("failed to create DELETE request: %w for url %v", err, url)
+		return fmt.Errorf("failed to create DELETE request for url %v: %w", url, err)
 	}
 
 	if c.apiKey != "" {
@@ -1605,7 +1606,7 @@ func (c *AxonopsHttpClient) SetIntegrationOverride(clusterType, clusterName, rou
 
 	req, err := http.NewRequest("PUT", url, bytes.NewBuffer(payloadJson))
 	if err != nil {
-		return fmt.Errorf("failed to create PUT request: %w for url %v", err, url)
+		return fmt.Errorf("failed to create PUT request for url %v: %w", url, err)
 	}
 
 	req.Header.Set("Content-Type", "application/json")
@@ -1636,7 +1637,7 @@ func (c *AxonopsHttpClient) AddIntegrationRoute(clusterType, clusterName, routeT
 
 	req, err := http.NewRequest("POST", url, nil)
 	if err != nil {
-		return fmt.Errorf("failed to create POST request: %w for url %v", err, url)
+		return fmt.Errorf("failed to create POST request for url %v: %w", url, err)
 	}
 
 	if c.apiKey != "" {
@@ -1666,7 +1667,7 @@ func (c *AxonopsHttpClient) RemoveIntegrationRoute(clusterType, clusterName, rou
 
 	req, err := http.NewRequest("DELETE", url, nil)
 	if err != nil {
-		return fmt.Errorf("failed to create DELETE request: %w for url %v", err, url)
+		return fmt.Errorf("failed to create DELETE request for url %v: %w", url, err)
 	}
 
 	if c.apiKey != "" {
@@ -1689,4 +1690,88 @@ func (c *AxonopsHttpClient) RemoveIntegrationRoute(clusterType, clusterName, rou
 	} else {
 		return fmt.Errorf("failed to remove integration route: status %d for url %v, body: %s", resp.StatusCode, url, string(bodyBytes))
 	}
+}
+
+// Integration definition CRUD methods
+
+type IntegrationPayload struct {
+	ID     string            `json:"id,omitempty"`
+	Type   string            `json:"type"`
+	Params map[string]string `json:"params"`
+}
+
+func (c *AxonopsHttpClient) CreateOrUpdateIntegration(clusterType, clusterName string, payload IntegrationPayload) error {
+	payloadJson, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("failed to encode JSON payload: %w", err)
+	}
+
+	url := fmt.Sprintf("%s://%s/%s/integrations/%s/%s/%s", c.protocol, c.axonopsHost, axonops_api_version, c.orgid, clusterType, clusterName)
+
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(payloadJson))
+	if err != nil {
+		return fmt.Errorf("failed to create POST request for url %v: %w", url, err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	if c.apiKey != "" {
+		req.Header.Set("Authorization", c.tokenType+" "+c.apiKey)
+	}
+
+	debugRequest(req, payloadJson)
+
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to send POST request: %w", err)
+	}
+	defer resp.Body.Close() //nolint:errcheck
+
+	bodyBytes, _ := io.ReadAll(resp.Body)
+	debugResponse(resp, bodyBytes)
+
+	if resp.StatusCode == 200 || resp.StatusCode == 201 || resp.StatusCode == 204 {
+		return nil
+	}
+	return fmt.Errorf("failed to create/update integration: status %d for url %v, body: %s", resp.StatusCode, url, string(bodyBytes))
+}
+
+func (c *AxonopsHttpClient) DeleteIntegration(clusterType, clusterName, integrationID string) error {
+	url := fmt.Sprintf("%s://%s/%s/integrations/%s/%s/%s/%s", c.protocol, c.axonopsHost, axonops_api_version, c.orgid, clusterType, clusterName, integrationID)
+
+	req, err := http.NewRequest("DELETE", url, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create DELETE request for url %v: %w", url, err)
+	}
+
+	if c.apiKey != "" {
+		req.Header.Set("Authorization", c.tokenType+" "+c.apiKey)
+	}
+
+	debugRequest(req, nil)
+
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to send DELETE request: %w", err)
+	}
+	defer resp.Body.Close() //nolint:errcheck
+
+	bodyBytes, _ := io.ReadAll(resp.Body)
+	debugResponse(resp, bodyBytes)
+
+	if resp.StatusCode == 200 || resp.StatusCode == 204 {
+		return nil
+	}
+	return fmt.Errorf("failed to delete integration: status %d for url %v, body: %s", resp.StatusCode, url, string(bodyBytes))
+}
+
+func FindIntegrationByNameAndType(integrations *IntegrationsResponse, name, intType string) *IntegrationDefinition {
+	if integrations == nil {
+		return nil
+	}
+	for i, def := range integrations.Definitions {
+		if strings.EqualFold(def.Type, intType) && strings.EqualFold(def.Params["name"], name) {
+			return &integrations.Definitions[i]
+		}
+	}
+	return nil
 }

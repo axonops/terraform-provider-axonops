@@ -151,6 +151,11 @@ func (p *axonopsProvider) DataSources(ctx context.Context) []func() datasource.D
 		NewCassandraBackupDataSource,
 		NewMetricAlertRuleDataSource,
 		NewLogAlertRuleDataSource,
+		NewSlackIntegrationDataSource,
+		NewTeamsIntegrationDataSource,
+		NewPagerDutyIntegrationDataSource,
+		NewOpsGenieIntegrationDataSource,
+		NewServiceNowIntegrationDataSource,
 	}
 }
 
@@ -169,6 +174,11 @@ func (p *axonopsProvider) Resources(ctx context.Context) []func() resource.Resou
 		NewMetricAlertRuleResource,
 		NewAlertRouteResource,
 		NewLogAlertRuleResource,
+		NewSlackIntegrationResource,
+		NewTeamsIntegrationResource,
+		NewPagerDutyIntegrationResource,
+		NewOpsGenieIntegrationResource,
+		NewServiceNowIntegrationResource,
 	}
 }
 

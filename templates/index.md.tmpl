@@ -28,6 +28,13 @@ This provider supports managing:
 - **Log Alert Rules** - Create log-based alerts with content matching and severity thresholds
 - **Alert Routes** - Route alerts to integrations (Slack, PagerDuty, email, Teams, ServiceNow, webhook, OpsGenie)
 
+### Integrations
+- **Slack** - Configure Slack incoming webhooks for alert delivery
+- **Microsoft Teams** - Configure Teams incoming webhooks for alert delivery
+- **PagerDuty** - Configure PagerDuty Events API v2 for incident creation
+- **OpsGenie** - Configure OpsGenie API for alert creation
+- **ServiceNow** - Configure ServiceNow credentials for incident creation
+
 ### Health Checks
 - **TCP Health Checks** - Monitor TCP connectivity
 - **HTTP Health Checks** - Monitor HTTP endpoints

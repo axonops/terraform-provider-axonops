@@ -1,0 +1,49 @@
+---
+page_title: "{{.Name}} {{.Type}} - {{.ProviderName}}"
+subcategory: "Integrations"
+description: |-
+{{ .Description | plainmarkdown | trimspace | prefixlines "  " }}
+---
+
+# {{.Name}} ({{.Type}})
+
+{{ .Description | trimspace }}
+
+Use this resource to configure a Slack webhook that AxonOps uses to deliver alert notifications to a Slack channel. Once configured, pair the integration with an `axonops_alert_route` resource to control which alert categories and severities are forwarded.
+
+## Example Usage
+
+```terraform
+resource "axonops_slack_integration" "ops_alerts" {
+  cluster_name = "production-cassandra"
+  cluster_type = "cassandra"
+  name         = "ops-slack-alerts"
+  webhook_url  = var.slack_webhook_url
+  channel      = "#ops-alerts"
+}
+
+# Route all error-level alerts to the Slack integration
+resource "axonops_alert_route" "slack_global" {
+  cluster_name     = axonops_slack_integration.ops_alerts.cluster_name
+  cluster_type     = axonops_slack_integration.ops_alerts.cluster_type
+  integration_name = axonops_slack_integration.ops_alerts.name
+  integration_type = "slack"
+  type             = "global"
+  severity         = "error"
+}
+```
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Import
+
+Slack integrations can be imported using the format `cluster_type/cluster_name/name`:
+
+```shell
+terraform import axonops_slack_integration.example cassandra/production-cassandra/ops-slack-alerts
+```
+
+Where:
+- `cluster_type` - The type of cluster (`cassandra`, `kafka`, or `dse`)
+- `cluster_name` - The name of the cluster
+- `name` - The name of the integration
