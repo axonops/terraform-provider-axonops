@@ -7,7 +7,9 @@ description: |-
 
 # axonops_teams_integration (Resource)
 
-Manages a Microsoft Teams integration for AxonOps alerting. Use this resource to configure a Microsoft Teams incoming webhook that AxonOps uses to deliver alert notifications to a Teams channel. Once configured, pair the integration with an `axonops_alert_route` resource to control which alert categories and severities are forwarded.
+Manages a Microsoft Teams integration for AxonOps alerting.
+
+Use this resource to configure a Microsoft Teams incoming webhook that AxonOps uses to deliver alert notifications to a Teams channel. Once configured, pair the integration with an `axonops_alert_route` resource to control which alert categories and severities are forwarded.
 
 ## Example Usage
 
@@ -36,13 +38,13 @@ resource "axonops_alert_route" "teams_backups" {
 ### Required
 
 - `cluster_name` (String) The name of the cluster.
-- `cluster_type` (String) The cluster type. Valid values: `cassandra`, `kafka`, `dse`.
-- `name` (String) The name of the integration. Must be unique within the cluster.
-- `webhook_url` (String, Sensitive) The Microsoft Teams incoming webhook URL. This value is stored as sensitive and will not appear in plan output.
+- `cluster_type` (String) The cluster type (cassandra, kafka, or dse).
+- `name` (String) The name of the integration.
+- `webhook_url` (String, Sensitive) The Microsoft Teams webhook URL.
 
 ### Read-Only
 
-- `id` (String) The integration ID assigned by AxonOps.
+- `id` (String) The integration ID.
 
 ## Import
 
@@ -56,5 +58,3 @@ Where:
 - `cluster_type` - The type of cluster (`cassandra`, `kafka`, or `dse`)
 - `cluster_name` - The name of the cluster
 - `name` - The name of the integration
-
-> **Note:** The `webhook_url` field is sensitive. After import, Terraform reads the value back from the AxonOps API and stores it in state. Treat the state file as a secret store accordingly.

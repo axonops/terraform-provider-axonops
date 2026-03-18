@@ -7,7 +7,9 @@ description: |-
 
 # axonops_pagerduty_integration (Resource)
 
-Manages a PagerDuty integration for AxonOps alerting. Use this resource to configure a PagerDuty Events API v2 integration key that AxonOps uses to create incidents when alerts fire. Once configured, pair the integration with an `axonops_alert_route` resource to control which alert categories and severities trigger PagerDuty incidents.
+Manages a PagerDuty integration for AxonOps alerting.
+
+Use this resource to configure a PagerDuty Events API v2 integration key that AxonOps uses to create incidents when alerts fire. Once configured, pair the integration with an `axonops_alert_route` resource to control which alert categories and severities trigger PagerDuty incidents.
 
 ## Example Usage
 
@@ -36,13 +38,13 @@ resource "axonops_alert_route" "pagerduty_global" {
 ### Required
 
 - `cluster_name` (String) The name of the cluster.
-- `cluster_type` (String) The cluster type. Valid values: `cassandra`, `kafka`, `dse`.
-- `name` (String) The name of the integration. Must be unique within the cluster.
-- `integration_key` (String, Sensitive) The PagerDuty Events API v2 integration key. This value is stored as sensitive and will not appear in plan output.
+- `cluster_type` (String) The cluster type (cassandra, kafka, or dse).
+- `integration_key` (String, Sensitive) The PagerDuty integration key.
+- `name` (String) The name of the integration.
 
 ### Read-Only
 
-- `id` (String) The integration ID assigned by AxonOps.
+- `id` (String) The integration ID.
 
 ## Import
 
@@ -56,5 +58,3 @@ Where:
 - `cluster_type` - The type of cluster (`cassandra`, `kafka`, or `dse`)
 - `cluster_name` - The name of the cluster
 - `name` - The name of the integration
-
-> **Note:** The `integration_key` field is sensitive. After import, Terraform reads the value back from the AxonOps API and stores it in state. Treat the state file as a secret store accordingly.

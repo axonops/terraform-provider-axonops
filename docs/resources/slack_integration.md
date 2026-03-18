@@ -7,7 +7,9 @@ description: |-
 
 # axonops_slack_integration (Resource)
 
-Manages a Slack integration for AxonOps alerting. Use this resource to configure a Slack webhook that AxonOps uses to deliver alert notifications to a Slack channel. Once configured, pair the integration with an `axonops_alert_route` resource to control which alert categories and severities are forwarded.
+Manages a Slack integration for AxonOps alerting.
+
+Use this resource to configure a Slack webhook that AxonOps uses to deliver alert notifications to a Slack channel. Once configured, pair the integration with an `axonops_alert_route` resource to control which alert categories and severities are forwarded.
 
 ## Example Usage
 
@@ -37,18 +39,18 @@ resource "axonops_alert_route" "slack_global" {
 ### Required
 
 - `cluster_name` (String) The name of the cluster.
-- `cluster_type` (String) The cluster type. Valid values: `cassandra`, `kafka`, `dse`.
-- `name` (String) The name of the integration. Must be unique within the cluster.
-- `webhook_url` (String, Sensitive) The Slack incoming webhook URL. This value is stored as sensitive and will not appear in plan output.
+- `cluster_type` (String) The cluster type (cassandra, kafka, or dse).
+- `name` (String) The name of the integration.
+- `webhook_url` (String, Sensitive) The Slack webhook URL.
 
 ### Optional
 
-- `channel` (String) The Slack channel name to post alerts to (e.g. `#ops-alerts`). Default: empty string. When empty, the channel configured on the Slack webhook itself is used.
-- `axonops_url` (String) Override URL for the AxonOps dashboard link included in alert messages. Default: empty string. When empty, the provider uses the default dashboard URL derived from the provider `org_id` configuration.
+- `axonops_url` (String) The AxonOps dashboard URL. If empty, the default dashboard URL is used.
+- `channel` (String) The Slack channel name. Default: empty.
 
 ### Read-Only
 
-- `id` (String) The integration ID assigned by AxonOps.
+- `id` (String) The integration ID.
 
 ## Import
 
@@ -62,5 +64,3 @@ Where:
 - `cluster_type` - The type of cluster (`cassandra`, `kafka`, or `dse`)
 - `cluster_name` - The name of the cluster
 - `name` - The name of the integration
-
-> **Note:** The `webhook_url` field is sensitive. After import, Terraform reads the value back from the AxonOps API and stores it in state. Treat the state file as a secret store accordingly.

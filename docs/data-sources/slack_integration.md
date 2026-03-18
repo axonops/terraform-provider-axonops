@@ -7,7 +7,9 @@ description: |-
 
 # axonops_slack_integration (Data Source)
 
-Reads an existing Slack integration from AxonOps. Use this data source to reference integration details — such as the integration name — when configuring `axonops_alert_route` resources that target an integration managed outside of the current Terraform root module.
+Reads a Slack integration.
+
+Use this data source to reference an existing Slack integration when configuring `axonops_alert_route` resources that target an integration managed outside of the current Terraform root module.
 
 ## Example Usage
 
@@ -33,12 +35,12 @@ output "slack_channel" {
 ### Required
 
 - `cluster_name` (String) The name of the cluster.
-- `cluster_type` (String) The cluster type. Valid values: `cassandra`, `kafka`, `dse`.
-- `name` (String) The name of the integration to look up.
+- `cluster_type` (String) The cluster type (cassandra, kafka, or dse).
+- `name` (String) The name of the integration.
 
 ### Read-Only
 
-- `id` (String) The integration ID assigned by AxonOps.
-- `webhook_url` (String, Sensitive) The Slack incoming webhook URL.
-- `channel` (String) The Slack channel name configured on the integration.
-- `axonops_url` (String) The AxonOps dashboard URL override configured on the integration.
+- `axonops_url` (String) The AxonOps dashboard URL.
+- `channel` (String) The Slack channel name.
+- `id` (String) The integration ID.
+- `webhook_url` (String, Sensitive) The Slack webhook URL.

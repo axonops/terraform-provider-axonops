@@ -7,7 +7,9 @@ description: |-
 
 # axonops_servicenow_integration (Resource)
 
-Manages a ServiceNow integration for AxonOps alerting. Use this resource to configure ServiceNow instance credentials that AxonOps uses to create incidents when alerts fire. Once configured, pair the integration with an `axonops_alert_route` resource to control which alert categories and severities open ServiceNow incidents.
+Manages a ServiceNow integration for AxonOps alerting.
+
+Use this resource to configure ServiceNow instance credentials that AxonOps uses to create incidents when alerts fire. Once configured, pair the integration with an `axonops_alert_route` resource to control which alert categories and severities open ServiceNow incidents.
 
 > **Warning:** The `password` field is stored as sensitive in Terraform state. Ensure your state backend is encrypted and access-controlled. MUST NOT use plaintext password values in version-controlled `.tf` files — reference a secret via a variable or a secrets manager data source instead.
 
@@ -40,15 +42,15 @@ resource "axonops_alert_route" "servicenow_global" {
 ### Required
 
 - `cluster_name` (String) The name of the cluster.
-- `cluster_type` (String) The cluster type. Valid values: `cassandra`, `kafka`, `dse`.
-- `name` (String) The name of the integration. Must be unique within the cluster.
-- `instance_name` (String) The ServiceNow instance name (the subdomain portion of `<instance_name>.service-now.com`).
-- `user` (String) The ServiceNow username used to authenticate API requests.
-- `password` (String, Sensitive) The ServiceNow password for the configured user. This value is stored as sensitive and will not appear in plan output.
+- `cluster_type` (String) The cluster type (cassandra, kafka, or dse).
+- `instance_name` (String) The ServiceNow instance name.
+- `name` (String) The name of the integration.
+- `password` (String, Sensitive) The ServiceNow password.
+- `user` (String) The ServiceNow username.
 
 ### Read-Only
 
-- `id` (String) The integration ID assigned by AxonOps.
+- `id` (String) The integration ID.
 
 ## Import
 
@@ -62,5 +64,3 @@ Where:
 - `cluster_type` - The type of cluster (`cassandra`, `kafka`, or `dse`)
 - `cluster_name` - The name of the cluster
 - `name` - The name of the integration
-
-> **Note:** The `password` field is sensitive. After import, Terraform reads the value back from the AxonOps API and stores it in state. Treat the state file as a secret store accordingly.

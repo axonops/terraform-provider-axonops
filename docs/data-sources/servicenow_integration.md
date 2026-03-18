@@ -7,7 +7,9 @@ description: |-
 
 # axonops_servicenow_integration (Data Source)
 
-Reads an existing ServiceNow integration from AxonOps. Use this data source to reference integration details when configuring `axonops_alert_route` resources that target an integration managed outside of the current Terraform root module.
+Reads a ServiceNow integration.
+
+Use this data source to reference an existing ServiceNow integration when configuring `axonops_alert_route` resources that target an integration managed outside of the current Terraform root module.
 
 ## Example Usage
 
@@ -33,12 +35,12 @@ output "servicenow_instance" {
 ### Required
 
 - `cluster_name` (String) The name of the cluster.
-- `cluster_type` (String) The cluster type. Valid values: `cassandra`, `kafka`, `dse`.
-- `name` (String) The name of the integration to look up.
+- `cluster_type` (String) The cluster type (cassandra, kafka, or dse).
+- `name` (String) The name of the integration.
 
 ### Read-Only
 
-- `id` (String) The integration ID assigned by AxonOps.
+- `id` (String) The integration ID.
 - `instance_name` (String) The ServiceNow instance name.
-- `user` (String) The ServiceNow username.
 - `password` (String, Sensitive) The ServiceNow password.
+- `user` (String) The ServiceNow username.

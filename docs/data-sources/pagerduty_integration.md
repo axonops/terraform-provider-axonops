@@ -7,7 +7,9 @@ description: |-
 
 # axonops_pagerduty_integration (Data Source)
 
-Reads an existing PagerDuty integration from AxonOps. Use this data source to reference integration details when configuring `axonops_alert_route` resources that target an integration managed outside of the current Terraform root module.
+Reads a PagerDuty integration.
+
+Use this data source to reference an existing PagerDuty integration when configuring `axonops_alert_route` resources that target an integration managed outside of the current Terraform root module.
 
 ## Example Usage
 
@@ -29,10 +31,10 @@ output "pagerduty_integration_id" {
 ### Required
 
 - `cluster_name` (String) The name of the cluster.
-- `cluster_type` (String) The cluster type. Valid values: `cassandra`, `kafka`, `dse`.
-- `name` (String) The name of the integration to look up.
+- `cluster_type` (String) The cluster type (cassandra, kafka, or dse).
+- `name` (String) The name of the integration.
 
 ### Read-Only
 
-- `id` (String) The integration ID assigned by AxonOps.
-- `integration_key` (String, Sensitive) The PagerDuty Events API v2 integration key.
+- `id` (String) The integration ID.
+- `integration_key` (String, Sensitive) The PagerDuty integration key.
