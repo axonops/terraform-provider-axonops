@@ -1788,12 +1788,21 @@ type ScheduledRepairParams struct {
 }
 
 type ScheduledRepairEntry struct {
-	ID     string                 `json:"ID"`
-	Params []ScheduledRepairParams `json:"Params"`
+	ID     string                  `json:"ID"`
+	Params []ScheduledRepairParams
+}
+
+type scheduledRepairEntryRaw struct {
+	ID     string          `json:"ID"`
+	Params json.RawMessage `json:"Params"`
 }
 
 type ScheduledRepairsResponse struct {
-	ScheduledRepairs []ScheduledRepairEntry `json:"ScheduledRepairs"`
+	ScheduledRepairs []ScheduledRepairEntry
+}
+
+type scheduledRepairsResponseRaw struct {
+	ScheduledRepairs []scheduledRepairEntryRaw `json:"ScheduledRepairs"`
 }
 
 func (c *AxonopsHttpClient) GetScheduledRepairs(clusterName string) (*ScheduledRepairsResponse, error) {
@@ -1822,14 +1831,35 @@ func (c *AxonopsHttpClient) GetScheduledRepairs(clusterName string) (*ScheduledR
 	}
 	debugResponse(resp, bodyBytes)
 
-	if resp.StatusCode == 200 {
-		var result ScheduledRepairsResponse
-		if err := json.Unmarshal(bodyBytes, &result); err != nil {
-			return nil, fmt.Errorf("failed to decode response: %w", err)
-		}
-		return &result, nil
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("failed to get scheduled repairs: status %d for url %v, body: %s", resp.StatusCode, reqURL, string(bodyBytes))
 	}
-	return nil, fmt.Errorf("failed to get scheduled repairs: status %d for url %v, body: %s", resp.StatusCode, reqURL, string(bodyBytes))
+
+	var raw scheduledRepairsResponseRaw
+	if err := json.Unmarshal(bodyBytes, &raw); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	result := &ScheduledRepairsResponse{}
+	for _, entry := range raw.ScheduledRepairs {
+		parsed := ScheduledRepairEntry{ID: entry.ID}
+
+		if len(entry.Params) > 0 {
+			// Params can be a JSON array or a JSON string containing an array
+			var params []ScheduledRepairParams
+			if err := json.Unmarshal(entry.Params, &params); err != nil {
+				var paramsStr string
+				if err2 := json.Unmarshal(entry.Params, &paramsStr); err2 == nil {
+					_ = json.Unmarshal([]byte(paramsStr), &params)
+				}
+			}
+			parsed.Params = params
+		}
+
+		result.ScheduledRepairs = append(result.ScheduledRepairs, parsed)
+	}
+
+	return result, nil
 }
 
 func (c *AxonopsHttpClient) CreateScheduledRepair(clusterName string, params ScheduledRepairParams) error {
