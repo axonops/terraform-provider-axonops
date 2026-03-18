@@ -1,0 +1,30 @@
+---
+page_title: "{{.Name}} {{.Type}} - {{.ProviderName}}"
+subcategory: "Cassandra"
+description: |-
+{{ .Description | plainmarkdown | trimspace | prefixlines "  " }}
+---
+
+# {{.Name}} ({{.Type}})
+
+{{ .Description | trimspace }}
+
+## Example Usage
+
+```terraform
+# Read an existing scheduled repair by tag
+data "axonops_cassandra_scheduled_repair" "existing" {
+  cluster_name = "my-cassandra-cluster"
+  tag          = "monthly-full-repair"
+}
+
+output "repair_schedule" {
+  value = data.axonops_cassandra_scheduled_repair.existing.schedule_expr
+}
+
+output "repair_parallelism" {
+  value = data.axonops_cassandra_scheduled_repair.existing.parallelism
+}
+```
+
+{{ .SchemaMarkdown | trimspace }}

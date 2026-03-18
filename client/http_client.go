@@ -1764,6 +1764,187 @@ func (c *AxonopsHttpClient) DeleteIntegration(clusterType, clusterName, integrat
 	return fmt.Errorf("failed to delete integration: status %d for url %v, body: %s", resp.StatusCode, url, string(bodyBytes))
 }
 
+// Scheduled Repair types and methods
+
+type ScheduledRepairParams struct {
+	Keyspace            string   `json:"keyspace"`
+	Tables              []string `json:"tables"`
+	BlacklistedTables   []string `json:"blacklistedTables"`
+	Nodes               []string `json:"nodes"`
+	SegmentsPerNode     int      `json:"segmentsPerNode"`
+	Segmented           bool     `json:"segmented"`
+	Incremental         bool     `json:"incremental"`
+	JobThreads          int      `json:"jobThreads"`
+	Schedule            bool     `json:"schedule"`
+	ScheduleExpr        string   `json:"scheduleExpr"`
+	PrimaryRange        bool     `json:"primaryRange"`
+	Parallelism         string   `json:"parallelism"`
+	OptimiseStreams     bool     `json:"optimiseStreams"`
+	SpecificDataCenters []string `json:"specificDataCenters"`
+	Tag                 string   `json:"tag"`
+	Paxos               string   `json:"paxos"`
+	SkipPaxos           bool     `json:"skipPaxos"`
+	PaxosOnly           bool     `json:"paxosOnly"`
+}
+
+type ScheduledRepairEntry struct {
+	ID     string `json:"ID"`
+	Params []ScheduledRepairParams
+}
+
+type scheduledRepairEntryRaw struct {
+	ID     string          `json:"ID"`
+	Params json.RawMessage `json:"Params"`
+}
+
+type ScheduledRepairsResponse struct {
+	ScheduledRepairs []ScheduledRepairEntry
+}
+
+type scheduledRepairsResponseRaw struct {
+	ScheduledRepairs []scheduledRepairEntryRaw `json:"ScheduledRepairs"`
+}
+
+func (c *AxonopsHttpClient) GetScheduledRepairs(clusterName string) (*ScheduledRepairsResponse, error) {
+	reqURL := fmt.Sprintf("%s://%s/%s/repair/%s/cassandra/%s", c.protocol, c.axonopsHost, axonops_api_version, c.orgid, clusterName)
+
+	req, err := http.NewRequest("GET", reqURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("creating GET request for %s: %w", reqURL, err)
+	}
+
+	if c.apiKey != "" {
+		req.Header.Set("Authorization", c.tokenType+" "+c.apiKey)
+	}
+
+	debugRequest(req, nil)
+
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to send GET request: %w", err)
+	}
+	defer resp.Body.Close() //nolint:errcheck
+
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("reading response body: %w", err)
+	}
+	debugResponse(resp, bodyBytes)
+
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("failed to get scheduled repairs: status %d for url %v, body: %s", resp.StatusCode, reqURL, string(bodyBytes))
+	}
+
+	var raw scheduledRepairsResponseRaw
+	if err := json.Unmarshal(bodyBytes, &raw); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	result := &ScheduledRepairsResponse{}
+	for _, entry := range raw.ScheduledRepairs {
+		parsed := ScheduledRepairEntry{ID: entry.ID}
+
+		if len(entry.Params) > 0 {
+			// Params can be a JSON array or a JSON string containing an array
+			var params []ScheduledRepairParams
+			if err := json.Unmarshal(entry.Params, &params); err != nil {
+				var paramsStr string
+				if err2 := json.Unmarshal(entry.Params, &paramsStr); err2 == nil {
+					_ = json.Unmarshal([]byte(paramsStr), &params)
+				}
+			}
+			parsed.Params = params
+		}
+
+		result.ScheduledRepairs = append(result.ScheduledRepairs, parsed)
+	}
+
+	return result, nil
+}
+
+func (c *AxonopsHttpClient) CreateScheduledRepair(clusterName string, params ScheduledRepairParams) error {
+	payloadJSON, err := json.Marshal(params)
+	if err != nil {
+		return fmt.Errorf("failed to encode JSON payload: %w", err)
+	}
+
+	reqURL := fmt.Sprintf("%s://%s/%s/addrepair/%s/cassandra/%s", c.protocol, c.axonopsHost, axonops_api_version, c.orgid, clusterName)
+
+	req, err := http.NewRequest("POST", reqURL, bytes.NewBuffer(payloadJSON))
+	if err != nil {
+		return fmt.Errorf("creating POST request for %s: %w", reqURL, err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	if c.apiKey != "" {
+		req.Header.Set("Authorization", c.tokenType+" "+c.apiKey)
+	}
+
+	debugRequest(req, payloadJSON)
+
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to send POST request: %w", err)
+	}
+	defer resp.Body.Close() //nolint:errcheck
+
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("reading response body: %w", err)
+	}
+	debugResponse(resp, bodyBytes)
+
+	if resp.StatusCode == 200 || resp.StatusCode == 201 {
+		return nil
+	}
+	return fmt.Errorf("failed to create scheduled repair: status %d for url %v, body: %s", resp.StatusCode, reqURL, string(bodyBytes))
+}
+
+func (c *AxonopsHttpClient) DeleteScheduledRepair(clusterName string, repairID string) error {
+	reqURL := fmt.Sprintf("%s://%s/%s/cassandrascheduledrepair/%s/cassandra/%s?id=%s",
+		c.protocol, c.axonopsHost, axonops_api_version, c.orgid, clusterName, url.QueryEscape(repairID))
+
+	req, err := http.NewRequest("DELETE", reqURL, nil)
+	if err != nil {
+		return fmt.Errorf("creating DELETE request for %s: %w", reqURL, err)
+	}
+
+	if c.apiKey != "" {
+		req.Header.Set("Authorization", c.tokenType+" "+c.apiKey)
+	}
+
+	debugRequest(req, nil)
+
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to send DELETE request: %w", err)
+	}
+	defer resp.Body.Close() //nolint:errcheck
+
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("reading response body: %w", err)
+	}
+	debugResponse(resp, bodyBytes)
+
+	if resp.StatusCode == 200 || resp.StatusCode == 204 {
+		return nil
+	}
+	return fmt.Errorf("failed to delete scheduled repair: status %d for url %v, body: %s", resp.StatusCode, reqURL, string(bodyBytes))
+}
+
+func FindScheduledRepairByTag(repairs *ScheduledRepairsResponse, tag string) *ScheduledRepairEntry {
+	if repairs == nil || repairs.ScheduledRepairs == nil {
+		return nil
+	}
+	for i, repair := range repairs.ScheduledRepairs {
+		if len(repair.Params) > 0 && repair.Params[0].Tag == tag {
+			return &repairs.ScheduledRepairs[i]
+		}
+	}
+	return nil
+}
+
 func FindIntegrationByNameAndType(integrations *IntegrationsResponse, name, intType string) *IntegrationDefinition {
 	if integrations == nil {
 		return nil
