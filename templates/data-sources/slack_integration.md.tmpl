@@ -1,0 +1,32 @@
+---
+page_title: "{{.Name}} {{.Type}} - {{.ProviderName}}"
+subcategory: "Integrations"
+description: |-
+{{ .Description | plainmarkdown | trimspace | prefixlines "  " }}
+---
+
+# {{.Name}} ({{.Type}})
+
+{{ .Description | trimspace }}
+
+Use this data source to reference an existing Slack integration when configuring `axonops_alert_route` resources that target an integration managed outside of the current Terraform root module.
+
+## Example Usage
+
+```terraform
+data "axonops_slack_integration" "existing" {
+  cluster_name = "production-cassandra"
+  cluster_type = "cassandra"
+  name         = "ops-slack-alerts"
+}
+
+output "slack_integration_id" {
+  value = data.axonops_slack_integration.existing.id
+}
+
+output "slack_channel" {
+  value = data.axonops_slack_integration.existing.channel
+}
+```
+
+{{ .SchemaMarkdown | trimspace }}

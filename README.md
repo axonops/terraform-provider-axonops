@@ -8,6 +8,8 @@ A Terraform provider for managing resources through the AxonOps platform. This p
 - **ACLs**: Manage Kafka Access Control Lists for fine-grained permissions
 - **Connectors**: Deploy and manage Kafka Connect connectors
 - **Schemas**: Register and version schemas in Schema Registry (AVRO, Protobuf, JSON)
+- **Integrations**: Configure Slack, Microsoft Teams, PagerDuty, OpsGenie, and ServiceNow alerting integrations
+- **Alert routes**: Route alerts by category and severity to any configured integration
 
 ## Requirements
 
@@ -163,6 +165,120 @@ resource "axonops_kafka_connect_connector" "example" {
 | `config` | map | Yes | Connector configuration |
 | `type` | string | Computed | Connector type (source/sink) |
 
+### axonops_slack_integration
+
+Manages a Slack alerting integration. AxonOps delivers alerts to the configured Slack channel via an incoming webhook.
+
+```hcl
+resource "axonops_slack_integration" "ops_alerts" {
+  cluster_name = "production-cassandra"
+  cluster_type = "cassandra"
+  name         = "ops-slack-alerts"
+  webhook_url  = var.slack_webhook_url
+  channel      = "#ops-alerts"
+}
+```
+
+| Attribute | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `cluster_name` | string | Yes | - | Name of the cluster |
+| `cluster_type` | string | Yes | - | Cluster type: `cassandra`, `kafka`, or `dse` |
+| `name` | string | Yes | - | Unique name for this integration |
+| `webhook_url` | string (sensitive) | Yes | - | Slack incoming webhook URL |
+| `channel` | string | No | `""` | Slack channel name (e.g. `#ops-alerts`). When empty, the channel on the webhook is used |
+| `axonops_url` | string | No | `""` | AxonOps dashboard URL override included in alert messages |
+| `id` | string | Computed | - | Integration ID assigned by AxonOps |
+
+### axonops_teams_integration
+
+Manages a Microsoft Teams alerting integration. AxonOps delivers alerts to the configured Teams channel via an incoming webhook.
+
+```hcl
+resource "axonops_teams_integration" "ops_alerts" {
+  cluster_name = "production-cassandra"
+  cluster_type = "cassandra"
+  name         = "ops-teams-alerts"
+  webhook_url  = var.teams_webhook_url
+}
+```
+
+| Attribute | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `cluster_name` | string | Yes | Name of the cluster |
+| `cluster_type` | string | Yes | Cluster type: `cassandra`, `kafka`, or `dse` |
+| `name` | string | Yes | Unique name for this integration |
+| `webhook_url` | string (sensitive) | Yes | Microsoft Teams incoming webhook URL |
+| `id` | string | Computed | Integration ID assigned by AxonOps |
+
+### axonops_pagerduty_integration
+
+Manages a PagerDuty alerting integration. AxonOps creates PagerDuty incidents via the Events API v2 when alerts fire.
+
+```hcl
+resource "axonops_pagerduty_integration" "oncall" {
+  cluster_name    = "production-kafka"
+  cluster_type    = "kafka"
+  name            = "pagerduty-oncall"
+  integration_key = var.pagerduty_integration_key
+}
+```
+
+| Attribute | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `cluster_name` | string | Yes | Name of the cluster |
+| `cluster_type` | string | Yes | Cluster type: `cassandra`, `kafka`, or `dse` |
+| `name` | string | Yes | Unique name for this integration |
+| `integration_key` | string (sensitive) | Yes | PagerDuty Events API v2 integration key |
+| `id` | string | Computed | Integration ID assigned by AxonOps |
+
+### axonops_opsgenie_integration
+
+Manages an OpsGenie alerting integration. AxonOps creates OpsGenie alerts using the configured API key.
+
+```hcl
+resource "axonops_opsgenie_integration" "oncall" {
+  cluster_name = "production-cassandra"
+  cluster_type = "cassandra"
+  name         = "opsgenie-oncall"
+  opsgenie_key = var.opsgenie_api_key
+}
+```
+
+| Attribute | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `cluster_name` | string | Yes | Name of the cluster |
+| `cluster_type` | string | Yes | Cluster type: `cassandra`, `kafka`, or `dse` |
+| `name` | string | Yes | Unique name for this integration |
+| `opsgenie_key` | string (sensitive) | Yes | OpsGenie API key |
+| `id` | string | Computed | Integration ID assigned by AxonOps |
+
+### axonops_servicenow_integration
+
+Manages a ServiceNow alerting integration. AxonOps creates ServiceNow incidents using the configured instance credentials.
+
+> **Warning:** Store `password` in a secrets manager and reference it via a Terraform variable. Do not commit plaintext passwords in `.tf` files.
+
+```hcl
+resource "axonops_servicenow_integration" "incidents" {
+  cluster_name  = "production-cassandra"
+  cluster_type  = "cassandra"
+  name          = "servicenow-incidents"
+  instance_name = "mycompany"
+  user          = "axonops-svc"
+  password      = var.servicenow_password
+}
+```
+
+| Attribute | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `cluster_name` | string | Yes | Name of the cluster |
+| `cluster_type` | string | Yes | Cluster type: `cassandra`, `kafka`, or `dse` |
+| `name` | string | Yes | Unique name for this integration |
+| `instance_name` | string | Yes | ServiceNow instance name (subdomain of `<instance>.service-now.com`) |
+| `user` | string | Yes | ServiceNow username |
+| `password` | string (sensitive) | Yes | ServiceNow password for the configured user |
+| `id` | string | Computed | Integration ID assigned by AxonOps |
+
 ### axonops_schema
 
 Manages Schema Registry schemas.
@@ -268,6 +384,11 @@ All resources support importing existing configurations into Terraform state.
 | `axonops_healthcheck_tcp` | `cluster_name/healthcheck_name` |
 | `axonops_healthcheck_http` | `cluster_name/healthcheck_name` |
 | `axonops_healthcheck_shell` | `cluster_name/healthcheck_name` |
+| `axonops_slack_integration` | `cluster_type/cluster_name/name` |
+| `axonops_teams_integration` | `cluster_type/cluster_name/name` |
+| `axonops_pagerduty_integration` | `cluster_type/cluster_name/name` |
+| `axonops_opsgenie_integration` | `cluster_type/cluster_name/name` |
+| `axonops_servicenow_integration` | `cluster_type/cluster_name/name` |
 
 ### Import Examples
 
@@ -291,6 +412,13 @@ terraform import axonops_logcollector.my_logs "my-cluster/My Log Collector"
 terraform import axonops_healthcheck_tcp.my_check "my-cluster/My TCP Check"
 terraform import axonops_healthcheck_http.my_http "my-cluster/My HTTP Check"
 terraform import axonops_healthcheck_shell.my_shell "my-cluster/My Shell Check"
+
+# Import integrations (format: cluster_type/cluster_name/name)
+terraform import axonops_slack_integration.my_slack "cassandra/my-cluster/ops-slack-alerts"
+terraform import axonops_teams_integration.my_teams "cassandra/my-cluster/ops-teams-alerts"
+terraform import axonops_pagerduty_integration.my_pagerduty "kafka/my-cluster/pagerduty-oncall"
+terraform import axonops_opsgenie_integration.my_opsgenie "cassandra/my-cluster/opsgenie-oncall"
+terraform import axonops_servicenow_integration.my_servicenow "cassandra/my-cluster/servicenow-incidents"
 ```
 
 ### Bulk Import Script
