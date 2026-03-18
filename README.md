@@ -309,6 +309,41 @@ resource "axonops_schema" "example" {
 | `schema_id` | int | Computed | Schema ID from registry |
 | `version` | int | Computed | Schema version number |
 
+### axonops_cassandra_scheduled_repair
+
+Manages Cassandra scheduled repair configuration. Updates are performed as delete-then-create since the API does not support in-place updates.
+
+```hcl
+resource "axonops_cassandra_scheduled_repair" "weekly" {
+  cluster_name  = "my-cassandra-cluster"
+  tag           = "weekly-repair"
+  schedule_expr = "0 2 * * 0"
+  parallelism   = "DC-Aware"
+  incremental   = true
+}
+```
+
+| Attribute | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `cluster_name` | string | Yes | - | Cassandra cluster name |
+| `tag` | string | Yes | - | Unique tag to identify this repair |
+| `schedule_expr` | string | Yes | - | Cron expression for the schedule |
+| `keyspace` | string | No | `""` | Keyspace to repair (empty = all) |
+| `tables` | list | No | `[]` | Tables to repair (empty = all) |
+| `blacklisted_tables` | list | No | `[]` | Tables to exclude |
+| `nodes` | list | No | `[]` | Specific nodes to repair |
+| `segments_per_node` | int | No | `1` | Segments per node |
+| `segmented` | bool | No | `false` | Use segmented repair |
+| `incremental` | bool | No | `false` | Use incremental repair |
+| `job_threads` | int | No | `1` | Number of job threads |
+| `primary_range` | bool | No | `false` | Use primary range repair |
+| `parallelism` | string | No | `Parallel` | Parallel, Sequential, or DC-Aware |
+| `optimise_streams` | bool | No | `false` | Optimise repair streams |
+| `specific_data_centers` | list | No | `[]` | Specific data centers to repair |
+| `skip_paxos` | bool | No | `false` | Skip Paxos repair |
+| `paxos_only` | bool | No | `false` | Only run Paxos repair |
+| `repair_id` | string | Computed | - | Repair ID assigned by AxonOps |
+
 ## Example Usage
 
 ```hcl
@@ -389,6 +424,7 @@ All resources support importing existing configurations into Terraform state.
 | `axonops_pagerduty_integration` | `cluster_type/cluster_name/name` |
 | `axonops_opsgenie_integration` | `cluster_type/cluster_name/name` |
 | `axonops_servicenow_integration` | `cluster_type/cluster_name/name` |
+| `axonops_cassandra_scheduled_repair` | `cluster_name/tag` |
 
 ### Import Examples
 
@@ -419,6 +455,9 @@ terraform import axonops_teams_integration.my_teams "cassandra/my-cluster/ops-te
 terraform import axonops_pagerduty_integration.my_pagerduty "kafka/my-cluster/pagerduty-oncall"
 terraform import axonops_opsgenie_integration.my_opsgenie "cassandra/my-cluster/opsgenie-oncall"
 terraform import axonops_servicenow_integration.my_servicenow "cassandra/my-cluster/servicenow-incidents"
+
+# Import a scheduled repair
+terraform import axonops_cassandra_scheduled_repair.my_repair "my-cluster/weekly-repair"
 ```
 
 ### Bulk Import Script

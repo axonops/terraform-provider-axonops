@@ -75,11 +75,11 @@ func (p *axonopsProvider) Configure(ctx context.Context, req provider.ConfigureR
 		useSaml = config.UseSaml.ValueBool()
 	}
 
-	// Construct axonops_host based on SAML configuration
-	// SAML enabled: {org_id}.axonops.cloud/dashboard
-	// SAML disabled: dash.axonops.cloud/{org_id}
-	// Custom host with SAML: {custom_host}/dashboard
-	// Custom host without SAML: {custom_host}/{org_id}
+	// Construct axonops_host based on configuration:
+	// No custom host + SAML: {org_id}.axonops.cloud/dashboard
+	// No custom host + no SAML: dash.axonops.cloud/{org_id}
+	// Custom host + SAML: {custom_host}/dashboard
+	// Custom host + no SAML: {custom_host} (standalone axon-server doesn't need org in host path)
 	if axonopsHost == "" {
 		if useSaml {
 			axonopsHost = config.OrgId.ValueString() + ".axonops.cloud/dashboard"
@@ -87,11 +87,11 @@ func (p *axonopsProvider) Configure(ctx context.Context, req provider.ConfigureR
 			axonopsHost = "dash.axonops.cloud/" + config.OrgId.ValueString()
 		}
 	} else {
-		// Custom host provided
+		// Custom host provided (standalone axon-server)
+		// The org_id is already included in each API endpoint path,
+		// so it should not be appended to the host.
 		if useSaml {
 			axonopsHost = axonopsHost + "/dashboard"
-		} else {
-			axonopsHost = axonopsHost + "/" + config.OrgId.ValueString()
 		}
 	}
 
@@ -156,6 +156,7 @@ func (p *axonopsProvider) DataSources(ctx context.Context) []func() datasource.D
 		NewPagerDutyIntegrationDataSource,
 		NewOpsGenieIntegrationDataSource,
 		NewServiceNowIntegrationDataSource,
+		NewCassandraScheduledRepairDataSource,
 	}
 }
 
@@ -179,6 +180,7 @@ func (p *axonopsProvider) Resources(ctx context.Context) []func() resource.Resou
 		NewPagerDutyIntegrationResource,
 		NewOpsGenieIntegrationResource,
 		NewServiceNowIntegrationResource,
+		NewCassandraScheduledRepairResource,
 	}
 }
 
