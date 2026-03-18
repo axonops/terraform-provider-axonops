@@ -1767,28 +1767,28 @@ func (c *AxonopsHttpClient) DeleteIntegration(clusterType, clusterName, integrat
 // Scheduled Repair types and methods
 
 type ScheduledRepairParams struct {
-	Keyspace              string   `json:"keyspace"`
-	Tables                []string `json:"tables"`
-	BlacklistedTables     []string `json:"blacklistedTables"`
-	Nodes                 []string `json:"nodes"`
-	SegmentsPerNode       int      `json:"segmentsPerNode"`
-	Segmented             bool     `json:"segmented"`
-	Incremental           bool     `json:"incremental"`
-	JobThreads            int      `json:"jobThreads"`
-	Schedule              bool     `json:"schedule"`
-	ScheduleExpr          string   `json:"scheduleExpr"`
-	PrimaryRange          bool     `json:"primaryRange"`
-	Parallelism           string   `json:"parallelism"`
-	OptimiseStreams        bool     `json:"optimiseStreams"`
-	SpecificDataCenters   []string `json:"specificDataCenters"`
-	Tag                   string   `json:"tag"`
-	Paxos                 string   `json:"paxos"`
-	SkipPaxos             bool     `json:"skipPaxos"`
-	PaxosOnly             bool     `json:"paxosOnly"`
+	Keyspace            string   `json:"keyspace"`
+	Tables              []string `json:"tables"`
+	BlacklistedTables   []string `json:"blacklistedTables"`
+	Nodes               []string `json:"nodes"`
+	SegmentsPerNode     int      `json:"segmentsPerNode"`
+	Segmented           bool     `json:"segmented"`
+	Incremental         bool     `json:"incremental"`
+	JobThreads          int      `json:"jobThreads"`
+	Schedule            bool     `json:"schedule"`
+	ScheduleExpr        string   `json:"scheduleExpr"`
+	PrimaryRange        bool     `json:"primaryRange"`
+	Parallelism         string   `json:"parallelism"`
+	OptimiseStreams     bool     `json:"optimiseStreams"`
+	SpecificDataCenters []string `json:"specificDataCenters"`
+	Tag                 string   `json:"tag"`
+	Paxos               string   `json:"paxos"`
+	SkipPaxos           bool     `json:"skipPaxos"`
+	PaxosOnly           bool     `json:"paxosOnly"`
 }
 
 type ScheduledRepairEntry struct {
-	ID     string                  `json:"ID"`
+	ID     string `json:"ID"`
 	Params []ScheduledRepairParams
 }
 

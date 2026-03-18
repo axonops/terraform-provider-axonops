@@ -178,7 +178,7 @@ type cassandraScheduledRepairResourceData struct {
 	ScheduleExpr        types.String `tfsdk:"schedule_expr"`
 	PrimaryRange        types.Bool   `tfsdk:"primary_range"`
 	Parallelism         types.String `tfsdk:"parallelism"`
-	OptimiseStreams      types.Bool   `tfsdk:"optimise_streams"`
+	OptimiseStreams     types.Bool   `tfsdk:"optimise_streams"`
 	SpecificDataCenters types.List   `tfsdk:"specific_data_centers"`
 	SkipPaxos           types.Bool   `tfsdk:"skip_paxos"`
 	PaxosOnly           types.Bool   `tfsdk:"paxos_only"`
@@ -239,7 +239,7 @@ func (r *cassandraScheduledRepairResource) buildParams(ctx context.Context, data
 		ScheduleExpr:        data.ScheduleExpr.ValueString(),
 		PrimaryRange:        data.PrimaryRange.ValueBool(),
 		Parallelism:         data.Parallelism.ValueString(),
-		OptimiseStreams:      data.OptimiseStreams.ValueBool(),
+		OptimiseStreams:     data.OptimiseStreams.ValueBool(),
 		SpecificDataCenters: datacenters,
 		Tag:                 data.Tag.ValueString(),
 		Paxos:               paxos,

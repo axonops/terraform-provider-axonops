@@ -142,7 +142,7 @@ type cassandraScheduledRepairDataSourceData struct {
 	ScheduleExpr        types.String `tfsdk:"schedule_expr"`
 	PrimaryRange        types.Bool   `tfsdk:"primary_range"`
 	Parallelism         types.String `tfsdk:"parallelism"`
-	OptimiseStreams      types.Bool   `tfsdk:"optimise_streams"`
+	OptimiseStreams     types.Bool   `tfsdk:"optimise_streams"`
 	SpecificDataCenters types.List   `tfsdk:"specific_data_centers"`
 	SkipPaxos           types.Bool   `tfsdk:"skip_paxos"`
 	PaxosOnly           types.Bool   `tfsdk:"paxos_only"`
