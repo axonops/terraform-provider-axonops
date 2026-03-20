@@ -157,6 +157,7 @@ func (p *axonopsProvider) DataSources(ctx context.Context) []func() datasource.D
 		NewOpsGenieIntegrationDataSource,
 		NewServiceNowIntegrationDataSource,
 		NewCassandraScheduledRepairDataSource,
+		NewSilenceDataSource,
 	}
 }
 
@@ -181,6 +182,7 @@ func (p *axonopsProvider) Resources(ctx context.Context) []func() resource.Resou
 		NewOpsGenieIntegrationResource,
 		NewServiceNowIntegrationResource,
 		NewCassandraScheduledRepairResource,
+		NewSilenceResource,
 	}
 }
 

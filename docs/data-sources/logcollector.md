@@ -45,7 +45,8 @@ output "logcollector_error_threshold" {
 
 ### Required
 
-- `cluster_name` (String) The name of the Kafka cluster.
+- `cluster_name` (String) The name of the cluster.
+- `cluster_type` (String) The type of cluster (e.g., cassandra, kafka, dse).
 - `name` (String) The name of the log collector.
 
 ### Read-Only
@@ -56,6 +57,9 @@ output "logcollector_error_threshold" {
 - `error_regex` (String) Regex pattern for ERROR level log entries.
 - `filename` (String) The log file path.
 - `info_regex` (String) Regex pattern for INFO level log entries.
+- `interval` (String) Interval for log collection.
+- `readonly` (Boolean) Whether the log collector is read-only.
 - `supported_agent_types` (List of String) List of agent types this collector supports.
+- `timeout` (String) Timeout for log collection.
 - `uuid` (String) The unique identifier for the log collector.
 - `warning_regex` (String) Regex pattern for WARNING level log entries.
