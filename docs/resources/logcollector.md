@@ -7,6 +7,8 @@ description: |-
 
 # axonops_logcollector (Resource)
 
+~> **Note:** Log collectors are only supported on **on-prem** deployments. This resource is not available when using AxonOps SaaS.
+
 Manages a log collector configuration for a cluster.
 
 ## Example Usage

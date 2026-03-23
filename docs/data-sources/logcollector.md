@@ -7,6 +7,8 @@ description: |-
 
 # axonops_logcollector (Data Source)
 
+~> **Note:** Log collectors are only supported on **on-prem** deployments. This data source is not available when using AxonOps SaaS.
+
 Reads a log collector configuration.
 
 ## Example Usage
