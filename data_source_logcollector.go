@@ -49,7 +49,11 @@ func (d *logCollectorDataSource) Schema(ctx context.Context, req datasource.Sche
 		Attributes: map[string]schema.Attribute{
 			"cluster_name": schema.StringAttribute{
 				Required:    true,
-				Description: "The name of the Kafka cluster.",
+				Description: "The name of the cluster.",
+			},
+			"cluster_type": schema.StringAttribute{
+				Required:    true,
+				Description: "The type of cluster (e.g., cassandra, kafka, dse).",
 			},
 			"name": schema.StringAttribute{
 				Required:    true,
@@ -92,12 +96,25 @@ func (d *logCollectorDataSource) Schema(ctx context.Context, req datasource.Sche
 				Computed:    true,
 				Description: "Threshold for error alerts.",
 			},
+			"interval": schema.StringAttribute{
+				Computed:    true,
+				Description: "Interval for log collection.",
+			},
+			"timeout": schema.StringAttribute{
+				Computed:    true,
+				Description: "Timeout for log collection.",
+			},
+			"readonly": schema.BoolAttribute{
+				Computed:    true,
+				Description: "Whether the log collector is read-only.",
+			},
 		},
 	}
 }
 
 type logCollectorDataSourceData struct {
 	ClusterName         types.String `tfsdk:"cluster_name"`
+	ClusterType         types.String `tfsdk:"cluster_type"`
 	Name                types.String `tfsdk:"name"`
 	UUID                types.String `tfsdk:"uuid"`
 	Filename            types.String `tfsdk:"filename"`
@@ -108,6 +125,9 @@ type logCollectorDataSourceData struct {
 	DebugRegex          types.String `tfsdk:"debug_regex"`
 	SupportedAgentTypes types.List   `tfsdk:"supported_agent_types"`
 	ErrorAlertThreshold types.Int64  `tfsdk:"error_alert_threshold"`
+	Interval            types.String `tfsdk:"interval"`
+	Timeout             types.String `tfsdk:"timeout"`
+	Readonly            types.Bool   `tfsdk:"readonly"`
 }
 
 func (d *logCollectorDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
@@ -119,7 +139,7 @@ func (d *logCollectorDataSource) Read(ctx context.Context, req datasource.ReadRe
 		return
 	}
 
-	collectors, err := d.client.GetLogCollectors(data.ClusterName.ValueString())
+	collectors, err := d.client.GetLogCollectors(data.ClusterType.ValueString(), data.ClusterName.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read log collectors: %s", err))
 		return
@@ -146,8 +166,26 @@ func (d *logCollectorDataSource) Read(ctx context.Context, req datasource.ReadRe
 	data.ErrorRegex = types.StringValue(found.ErrorRegex)
 	data.DebugRegex = types.StringValue(found.DebugRegex)
 	data.ErrorAlertThreshold = types.Int64Value(int64(found.ErrorAlertThreshold))
+	data.Readonly = types.BoolValue(found.Readonly)
 
-	data.SupportedAgentTypes, diags = types.ListValueFrom(ctx, types.StringType, found.SupportedAgentType)
+	// Handle optional fields that might be empty
+	if found.Interval != "" {
+		data.Interval = types.StringValue(found.Interval)
+	} else {
+		data.Interval = types.StringValue("5s")
+	}
+	if found.Timeout != "" {
+		data.Timeout = types.StringValue(found.Timeout)
+	} else {
+		data.Timeout = types.StringValue("1m")
+	}
+
+	// Use schema default if nil
+	agentTypes := found.SupportedAgentType
+	if agentTypes == nil {
+		agentTypes = []string{"all"}
+	}
+	data.SupportedAgentTypes, diags = types.ListValueFrom(ctx, types.StringType, agentTypes)
 	resp.Diagnostics.Append(diags...)
 
 	diags = resp.State.Set(ctx, &data)

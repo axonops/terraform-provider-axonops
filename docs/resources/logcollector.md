@@ -2,12 +2,14 @@
 page_title: "axonops_logcollector Resource - axonops"
 subcategory: "Log Collection"
 description: |-
-  Manages a log collector configuration for a Kafka cluster.
+  Manages a log collector configuration for a cluster.
 ---
 
 # axonops_logcollector (Resource)
 
-Manages a log collector configuration for a Kafka cluster.
+~> **Note:** Log collectors are only supported on **on-prem** deployments. This resource is not available when using AxonOps SaaS.
+
+Manages a log collector configuration for a cluster.
 
 ## Example Usage
 
@@ -86,7 +88,8 @@ resource "axonops_logcollector" "gc_log" {
 
 ### Required
 
-- `cluster_name` (String) The name of the Kafka cluster.
+- `cluster_name` (String) The name of the cluster.
+- `cluster_type` (String) The type of cluster (e.g., cassandra, kafka, dse).
 - `filename` (String) The log file path. Supports Go templating (e.g., {{index . "comp_jvm_kafka.logs.dir"}}/server.log).
 - `name` (String) The name of the log collector.
 
@@ -97,7 +100,10 @@ resource "axonops_logcollector" "gc_log" {
 - `error_alert_threshold` (Number) Threshold for error alerts. Default: 0
 - `error_regex` (String) Regex pattern for ERROR level log entries.
 - `info_regex` (String) Regex pattern for INFO level log entries.
+- `interval` (String) Interval for log collection. Default: 5s
+- `readonly` (Boolean) Whether the log collector is read-only. Default: false
 - `supported_agent_types` (List of String) List of agent types this collector supports (e.g., all, broker, kraft-broker, kraft-controller, zookeeper, schema-registry).
+- `timeout` (String) Timeout for log collection. Default: 1m
 - `warning_regex` (String) Regex pattern for WARNING level log entries.
 
 ### Read-Only

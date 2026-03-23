@@ -847,10 +847,13 @@ type LogCollectorConfig struct {
 	DebugRegex          string   `json:"debugRegex"`
 	SupportedAgentType  []string `json:"supportedAgentType"`
 	ErrorAlertThreshold int      `json:"errorAlertThreshold,omitempty"`
+	Interval            string   `json:"interval,omitempty"`
+	Timeout             string   `json:"timeout,omitempty"`
+	Readonly            bool     `json:"readonly,omitempty"`
 }
 
-func (c *AxonopsHttpClient) GetLogCollectors(clusterName string) ([]LogCollectorConfig, error) {
-	url := fmt.Sprintf("%s://%s/api/v1/logcollectors/%s/kafka/%s", c.protocol, c.axonopsHost, c.orgid, clusterName)
+func (c *AxonopsHttpClient) GetLogCollectors(clusterType, clusterName string) ([]LogCollectorConfig, error) {
+	url := fmt.Sprintf("%s://%s/api/v1/logcollectors/%s/%s/%s", c.protocol, c.axonopsHost, c.orgid, clusterType, clusterName)
 
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
@@ -879,13 +882,13 @@ func (c *AxonopsHttpClient) GetLogCollectors(clusterName string) ([]LogCollector
 	}
 }
 
-func (c *AxonopsHttpClient) UpdateLogCollectors(clusterName string, collectors []LogCollectorConfig) error {
+func (c *AxonopsHttpClient) UpdateLogCollectors(clusterType, clusterName string, collectors []LogCollectorConfig) error {
 	collectorsJson, err := json.Marshal(collectors)
 	if err != nil {
 		return fmt.Errorf("failed to encode JSON payload: %w", err)
 	}
 
-	reqUrl := fmt.Sprintf("%s://%s/api/v1/logcollectors/%s/kafka/%s", c.protocol, c.axonopsHost, c.orgid, clusterName)
+	reqUrl := fmt.Sprintf("%s://%s/api/v1/logcollectors/%s/%s/%s", c.protocol, c.axonopsHost, c.orgid, clusterType, clusterName)
 
 	// The API expects form-urlencoded data with addlogs parameter
 	// URL-encode the JSON to properly handle special characters
@@ -1952,6 +1955,141 @@ func FindIntegrationByNameAndType(integrations *IntegrationsResponse, name, intT
 	for i, def := range integrations.Definitions {
 		if strings.EqualFold(def.Type, intType) && strings.EqualFold(def.Params["name"], name) {
 			return &integrations.Definitions[i]
+		}
+	}
+	return nil
+}
+
+// Silence Window types and methods
+
+type SilenceWindow struct {
+	ID          string   `json:"ID"`
+	Active      bool     `json:"Active"`
+	CronExpr    string   `json:"CronExpr"`
+	IsRecurring bool     `json:"IsRecurring"`
+	Duration    string   `json:"Duration"`
+	DCs         []string `json:"DCs"`
+}
+
+func (c *AxonopsHttpClient) GetSilenceWindows(clusterType, clusterName string) ([]SilenceWindow, error) {
+	reqURL := fmt.Sprintf("%s://%s/%s/silenceWindow/%s/%s/%s", c.protocol, c.axonopsHost, axonops_api_version, c.orgid, clusterType, clusterName)
+
+	req, err := http.NewRequest("GET", reqURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create GET request: %w for url %v", err, reqURL)
+	}
+
+	if c.apiKey != "" {
+		req.Header.Set("Authorization", c.tokenType+" "+c.apiKey)
+	}
+
+	debugRequest(req, nil)
+
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to send GET request: %w", err)
+	}
+	defer resp.Body.Close() //nolint:errcheck
+
+	bodyBytes, _ := io.ReadAll(resp.Body)
+	debugResponse(resp, bodyBytes)
+
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("failed to get silence windows: status %d for url %v, body: %s", resp.StatusCode, reqURL, string(bodyBytes))
+	}
+
+	var result []SilenceWindow
+	if err := json.Unmarshal(bodyBytes, &result); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return result, nil
+}
+
+func (c *AxonopsHttpClient) CreateSilenceWindow(clusterType, clusterName string, silence SilenceWindow) error {
+	payloadJSON, err := json.Marshal(silence)
+	if err != nil {
+		return fmt.Errorf("failed to encode JSON payload: %w", err)
+	}
+
+	reqURL := fmt.Sprintf("%s://%s/%s/silenceWindow/%s/%s/%s", c.protocol, c.axonopsHost, axonops_api_version, c.orgid, clusterType, clusterName)
+
+	req, err := http.NewRequest("POST", reqURL, bytes.NewBuffer(payloadJSON))
+	if err != nil {
+		return fmt.Errorf("failed to create POST request for url %v: %w", reqURL, err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	if c.apiKey != "" {
+		req.Header.Set("Authorization", c.tokenType+" "+c.apiKey)
+	}
+
+	debugRequest(req, payloadJSON)
+
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to send POST request: %w", err)
+	}
+	defer resp.Body.Close() //nolint:errcheck
+
+	bodyBytes, _ := io.ReadAll(resp.Body)
+	debugResponse(resp, bodyBytes)
+
+	if resp.StatusCode == 200 || resp.StatusCode == 201 || resp.StatusCode == 204 {
+		return nil
+	}
+	return fmt.Errorf("failed to create silence window: status %d for url %v, body: %s", resp.StatusCode, reqURL, string(bodyBytes))
+}
+
+func (c *AxonopsHttpClient) DeleteSilenceWindow(clusterType, clusterName, silenceID string) error {
+	reqURL := fmt.Sprintf("%s://%s/%s/silenceWindow/%s/%s/%s/%s", c.protocol, c.axonopsHost, axonops_api_version, c.orgid, clusterType, clusterName, silenceID)
+
+	// The API expects the ID in the body as an array
+	payloadJSON, err := json.Marshal([]string{silenceID})
+	if err != nil {
+		return fmt.Errorf("failed to encode JSON payload: %w", err)
+	}
+
+	req, err := http.NewRequest("DELETE", reqURL, bytes.NewBuffer(payloadJSON))
+	if err != nil {
+		return fmt.Errorf("failed to create DELETE request for url %v: %w", reqURL, err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	if c.apiKey != "" {
+		req.Header.Set("Authorization", c.tokenType+" "+c.apiKey)
+	}
+
+	debugRequest(req, payloadJSON)
+
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to send DELETE request: %w", err)
+	}
+	defer resp.Body.Close() //nolint:errcheck
+
+	bodyBytes, _ := io.ReadAll(resp.Body)
+	debugResponse(resp, bodyBytes)
+
+	if resp.StatusCode == 200 || resp.StatusCode == 204 {
+		return nil
+	}
+	return fmt.Errorf("failed to delete silence window: status %d for url %v, body: %s", resp.StatusCode, reqURL, string(bodyBytes))
+}
+
+func FindSilenceWindowByID(silences []SilenceWindow, id string) *SilenceWindow {
+	for i, silence := range silences {
+		if silence.ID == id {
+			return &silences[i]
+		}
+	}
+	return nil
+}
+
+func FindSilenceWindowByCronExpr(silences []SilenceWindow, cronExpr string) *SilenceWindow {
+	for i, silence := range silences {
+		if silence.CronExpr == cronExpr {
+			return &silences[i]
 		}
 	}
 	return nil
