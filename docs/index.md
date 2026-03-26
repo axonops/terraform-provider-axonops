@@ -140,8 +140,7 @@ provider "axonops" {
 ### Optional
 
 - `api_key` (String) API key for authentication. Can also be set via AXONOPS_API_KEY environment variable.
-- `axonops_host` (String) AxonOps server hostname (without protocol). For SaaS, leave empty to use the default. For on-premise deployments, specify your server hostname. Can also be set via AXONOPS_HOST environment variable.
+- `axonops_host` (String) AxonOps server hostname (without protocol). For SaaS, leave empty to auto-detect the correct URL. For on-premise deployments, specify your server hostname. Can also be set via AXONOPS_HOST environment variable.
 - `axonops_protocol` (String) Protocol to use for API requests. Valid values: 'https' (default) or 'http'. Can also be set via AXONOPS_PROTOCOL environment variable.
 - `tls_skip_verify` (Boolean) Skip TLS certificate verification. Use with caution, only for self-signed certificates. Default: false. Can also be set via AXONOPS_TLS_SKIP_VERIFY environment variable.
 - `token_type` (String) Token type for Authorization header. Valid values: 'Bearer' (default for SaaS) or 'AxonApi' (for on-premise). Can also be set via AXONOPS_TOKEN_TYPE environment variable.
-- `use_saml` (Boolean) Enable SAML authentication mode. When enabled, uses tenant-specific URL routing ({org_id}.axonops.cloud/dashboard). Default: false. Can also be set via AXONOPS_USE_SAML environment variable.
