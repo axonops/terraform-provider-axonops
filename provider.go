@@ -85,7 +85,7 @@ func detectSAML(protocol, host string, tlsSkipVerify bool) bool {
 		resp.StatusCode != http.StatusNotFound &&
 		strings.Contains(resp.Header.Get("Content-Type"), "application/json")
 	if resp != nil {
-		resp.Body.Close()
+		resp.Body.Close() // #nosec G104 -- error from Body.Close is intentionally ignored
 	}
 
 	if os.Getenv("AXONOPS_DEBUG") != "" {
