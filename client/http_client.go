@@ -1320,12 +1320,27 @@ type MetricAlertFilter struct {
 	Value []string `json:"Value"`
 }
 
+// flexibleStringSlice unmarshals a JSON array of strings or objects into a
+// []string. If the API returns objects instead of strings (as SaaS does), it
+// falls back to an empty slice so decoding never fails.
+type flexibleStringSlice []string
+
+func (f *flexibleStringSlice) UnmarshalJSON(data []byte) error {
+	var ss []string
+	if err := json.Unmarshal(data, &ss); err == nil {
+		*f = ss
+		return nil
+	}
+	*f = []string{}
+	return nil
+}
+
 type MetricAlertIntegrations struct {
-	Type            string   `json:"Type"`
-	Routing         []string `json:"Routing"`
-	OverrideInfo    bool     `json:"OverrideInfo"`
-	OverrideWarning bool     `json:"OverrideWarning"`
-	OverrideError   bool     `json:"OverrideError"`
+	Type            string              `json:"Type"`
+	Routing         flexibleStringSlice `json:"Routing"`
+	OverrideInfo    bool                `json:"OverrideInfo"`
+	OverrideWarning bool                `json:"OverrideWarning"`
+	OverrideError   bool                `json:"OverrideError"`
 }
 
 type AlertRulesResponse struct {

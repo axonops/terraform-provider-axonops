@@ -2,7 +2,13 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
+	"fmt"
+	"net/http"
 	"os"
+	"strings"
+	"sync"
+	"time"
 
 	axonopsClient "terraform-provider-axonops/client"
 
@@ -28,7 +34,75 @@ type axonopsProviderModel struct {
 	TlsSkipVerify   types.Bool   `tfsdk:"tls_skip_verify"`
 	OrgId           types.String `tfsdk:"org_id"`
 	TokenType       types.String `tfsdk:"token_type"`
-	UseSaml         types.Bool   `tfsdk:"use_saml"`
+}
+
+// samlCache stores per-org SAML detection results to avoid repeated probes
+// within the same provider process (e.g. across plan and apply).
+var (
+	samlCache   = map[string]bool{}
+	samlCacheMu sync.RWMutex
+)
+
+// detectSAML probes {protocol}://{host}/dashboard/ to determine whether the
+// host is a SAML-enabled AxonOps deployment. It returns true if the server
+// responds with any HTTP status (including 401/403/302), and false if the
+// connection fails or returns 404. Results are cached by host so the probe
+// is only made once per host per process.
+func detectSAML(protocol, host string, tlsSkipVerify bool) bool {
+	cacheKey := protocol + ":" + host
+
+	samlCacheMu.RLock()
+	if cached, ok := samlCache[cacheKey]; ok {
+		samlCacheMu.RUnlock()
+		if os.Getenv("AXONOPS_DEBUG") != "" {
+			fmt.Printf("[AXONOPS DEBUG] SAML detection for host %q: cached=%v\n", host, cached)
+		}
+		return cached
+	}
+	samlCacheMu.RUnlock()
+
+	probeURL := fmt.Sprintf("%s://%s/dashboard/", protocol, host)
+	if os.Getenv("AXONOPS_DEBUG") != "" {
+		fmt.Printf("[AXONOPS DEBUG] SAML detection: probing %s\n", probeURL)
+	}
+
+	tr := &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: tlsSkipVerify},
+	}
+	c := &http.Client{
+		Timeout:   5 * time.Second,
+		Transport: tr,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+
+	resp, err := c.Get(probeURL)
+	// SAML /dashboard/ returns JSON (IDP redirect payload).
+	// On-prem servers serve the SPA as HTML at that path.
+	// So we only consider it SAML if the response is JSON.
+	isSAML := err == nil && resp != nil &&
+		resp.StatusCode != http.StatusNotFound &&
+		strings.Contains(resp.Header.Get("Content-Type"), "application/json")
+	if resp != nil {
+		resp.Body.Close()
+	}
+
+	if os.Getenv("AXONOPS_DEBUG") != "" {
+		statusCode := 0
+		contentType := ""
+		if resp != nil {
+			statusCode = resp.StatusCode
+			contentType = resp.Header.Get("Content-Type")
+		}
+		fmt.Printf("[AXONOPS DEBUG] SAML detection for host %q: isSAML=%v (status=%d, content-type=%q, err=%v)\n", host, isSAML, statusCode, contentType, err)
+	}
+
+	samlCacheMu.Lock()
+	samlCache[cacheKey] = isSAML
+	samlCacheMu.Unlock()
+
+	return isSAML
 }
 
 func New() func() provider.Provider {
@@ -57,7 +131,6 @@ func (p *axonopsProvider) Configure(ctx context.Context, req provider.ConfigureR
 	var apiKey = getEnvOrDefault("AXONOPS_API_KEY", "")
 	var tokenType = getEnvOrDefault("AXONOPS_TOKEN_TYPE", "Bearer")
 	var tlsSkipVerify = getEnvOrDefault("AXONOPS_TLS_SKIP_VERIFY", "false") == "true"
-	var useSaml = getEnvOrDefault("AXONOPS_USE_SAML", "false") == "true"
 
 	if !config.AxonopsProtocol.IsNull() {
 		protocol = config.AxonopsProtocol.ValueString()
@@ -71,26 +144,25 @@ func (p *axonopsProvider) Configure(ctx context.Context, req provider.ConfigureR
 		tlsSkipVerify = config.TlsSkipVerify.ValueBool()
 	}
 
-	if !config.UseSaml.IsNull() {
-		useSaml = config.UseSaml.ValueBool()
-	}
-
-	// Construct axonops_host based on configuration:
-	// No custom host + SAML: {org_id}.axonops.cloud/dashboard
-	// No custom host + no SAML: dash.axonops.cloud/{org_id}
-	// Custom host + SAML: {custom_host}/dashboard
-	// Custom host + no SAML: {custom_host} (standalone axon-server doesn't need org in host path)
+	// Construct axonops_host based on configuration. SAML is auto-detected
+	// in both cases by probing {host}/dashboard/.
+	//
+	// No custom host:
+	//   SAML org:     {org_id}.axonops.cloud/dashboard
+	//   Non-SAML org: dash.axonops.cloud/{org_id}
+	// Custom host:
+	//   SAML:         {custom_host}/dashboard
+	//   Non-SAML:     {custom_host}
 	if axonopsHost == "" {
-		if useSaml {
-			axonopsHost = config.OrgId.ValueString() + ".axonops.cloud/dashboard"
+		orgId := config.OrgId.ValueString()
+		samlHost := orgId + ".axonops.cloud"
+		if detectSAML(protocol, samlHost, tlsSkipVerify) {
+			axonopsHost = samlHost + "/dashboard"
 		} else {
-			axonopsHost = "dash.axonops.cloud/" + config.OrgId.ValueString()
+			axonopsHost = "dash.axonops.cloud/" + orgId
 		}
 	} else {
-		// Custom host provided (standalone axon-server)
-		// The org_id is already included in each API endpoint path,
-		// so it should not be appended to the host.
-		if useSaml {
+		if detectSAML(protocol, axonopsHost, tlsSkipVerify) {
 			axonopsHost = axonopsHost + "/dashboard"
 		}
 	}
@@ -195,7 +267,7 @@ func (p *axonopsProvider) Schema(ctx context.Context, req provider.SchemaRequest
 			},
 			"axonops_host": schema.StringAttribute{
 				Optional:    true,
-				Description: "AxonOps server hostname (without protocol). For SaaS, leave empty to use the default. For on-premise deployments, specify your server hostname. Can also be set via AXONOPS_HOST environment variable.",
+				Description: "AxonOps server hostname (without protocol). For SaaS, leave empty to auto-detect the correct URL. For on-premise deployments, specify your server hostname. Can also be set via AXONOPS_HOST environment variable.",
 			},
 			"axonops_protocol": schema.StringAttribute{
 				Optional:    true,
@@ -212,10 +284,6 @@ func (p *axonopsProvider) Schema(ctx context.Context, req provider.SchemaRequest
 			"token_type": schema.StringAttribute{
 				Optional:    true,
 				Description: "Token type for Authorization header. Valid values: 'Bearer' (default for SaaS) or 'AxonApi' (for on-premise). Can also be set via AXONOPS_TOKEN_TYPE environment variable.",
-			},
-			"use_saml": schema.BoolAttribute{
-				Optional:    true,
-				Description: "Enable SAML authentication mode. When enabled, uses tenant-specific URL routing ({org_id}.axonops.cloud/dashboard). Default: false. Can also be set via AXONOPS_USE_SAML environment variable.",
 			},
 		},
 	}
