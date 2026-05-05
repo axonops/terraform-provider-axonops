@@ -5,8 +5,8 @@ provider "axonops" {
   # API key for authentication (required for SaaS, optional for self-hosted)
   api_key = "your-api-key-here"
 
-  # AxonOps server hostname
-  axonops_host = "your-axonops-host.com"
+  # AxonOps server hostname (default: dash.axonops.cloud)
+  axonops_host = "dash.axonops.cloud"
 
   # Protocol (http or https)
   axonops_protocol = "https"

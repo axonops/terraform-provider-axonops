@@ -24,7 +24,7 @@ variable "axonops_api_key" {
 variable "axonops_host" {
   description = "AxonOps server hostname"
   type        = string
-  default     = "axonops.com"
+  default     = "dash.axonops.cloud"
 }
 
 variable "org_id" {

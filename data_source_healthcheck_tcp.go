@@ -49,7 +49,11 @@ func (d *tcpHealthcheckDataSource) Schema(ctx context.Context, req datasource.Sc
 		Attributes: map[string]schema.Attribute{
 			"cluster_name": schema.StringAttribute{
 				Required:    true,
-				Description: "The name of the Kafka cluster.",
+				Description: "The name of the cluster.",
+			},
+			"cluster_type": schema.StringAttribute{
+				Optional:    true,
+				Description: "The cluster type (e.g. cassandra, kafka). Defaults to cassandra.",
 			},
 			"name": schema.StringAttribute{
 				Required:    true,
@@ -86,6 +90,7 @@ func (d *tcpHealthcheckDataSource) Schema(ctx context.Context, req datasource.Sc
 
 type tcpHealthcheckDataSourceData struct {
 	ClusterName         types.String `tfsdk:"cluster_name"`
+	ClusterType         types.String `tfsdk:"cluster_type"`
 	Name                types.String `tfsdk:"name"`
 	ID                  types.String `tfsdk:"id"`
 	TCP                 types.String `tfsdk:"tcp"`
@@ -104,7 +109,7 @@ func (d *tcpHealthcheckDataSource) Read(ctx context.Context, req datasource.Read
 		return
 	}
 
-	healthchecks, err := d.client.GetHealthchecks(data.ClusterName.ValueString())
+	healthchecks, err := d.client.GetHealthchecks(data.ClusterType.ValueString(), data.ClusterName.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read healthchecks: %s", err))
 		return

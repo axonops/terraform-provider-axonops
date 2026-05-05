@@ -2,12 +2,12 @@
 page_title: "axonops_healthcheck_tcp Resource - axonops"
 subcategory: "Health Checks"
 description: |-
-  Manages a TCP healthcheck configuration for a Kafka cluster.
+  Manages a TCP healthcheck configuration for a cluster.
 ---
 
 # axonops_healthcheck_tcp (Resource)
 
-Manages a TCP healthcheck configuration for a Kafka cluster.
+Manages a TCP healthcheck configuration for a cluster.
 
 ## Example Usage
 
@@ -68,12 +68,13 @@ resource "axonops_healthcheck_tcp" "zookeeper" {
 
 ### Required
 
-- `cluster_name` (String) The name of the Kafka cluster.
+- `cluster_name` (String) The name of the cluster.
 - `name` (String) The name of the healthcheck.
 - `tcp` (String) The TCP address to check (e.g., 0.0.0.0:9092).
 
 ### Optional
 
+- `cluster_type` (String) The cluster type (e.g. cassandra, kafka). Defaults to cassandra.
 - `interval` (String) The interval between checks (e.g., 1m, 30s). Default: 1m
 - `readonly` (Boolean) Whether the healthcheck is read-only. Default: false
 - `supported_agent_types` (List of String) List of agent types this healthcheck applies to (e.g., all, broker, kraft-broker, kraft-controller, zookeeper).
@@ -85,12 +86,13 @@ resource "axonops_healthcheck_tcp" "zookeeper" {
 
 ## Import
 
-TCP healthchecks can be imported using the format `cluster_name/healthcheck_name`:
+TCP healthchecks can be imported using the format `cluster_type/cluster_name/healthcheck_name`:
 
 ```shell
-terraform import axonops_healthcheck_tcp.example my-kafka-cluster/Kafka%20Broker%20Port
+terraform import axonops_healthcheck_tcp.example kafka/my-kafka-cluster/Kafka%20Broker%20Port
 ```
 
 Where:
+- `cluster_type` - The cluster type (e.g. cassandra, kafka)
 - `cluster_name` - The name of the cluster
 - `healthcheck_name` - The name of the healthcheck (URL-encoded if it contains spaces)

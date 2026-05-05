@@ -41,8 +41,12 @@ output "healthcheck_agent_types" {
 
 ### Required
 
-- `cluster_name` (String) The name of the Kafka cluster.
+- `cluster_name` (String) The name of the cluster.
 - `name` (String) The name of the healthcheck.
+
+### Optional
+
+- `cluster_type` (String) The cluster type (e.g. cassandra, kafka). Defaults to cassandra.
 
 ### Read-Only
 
