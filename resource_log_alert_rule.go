@@ -18,20 +18,36 @@ import (
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
-// simpleQueryStringOperators are simple_query_string special characters. If any
-// appear in content, the user is assumed to know the query DSL and the value
-// is passed through unchanged.
-const simpleQueryStringOperators = `+-|*()~"`
+// hasExplicitBooleanOperator reports whether the content already uses
+// simple_query_string boolean operators that would conflict with a blanket
+// `+term` rewrite. We deliberately ignore characters that appear naturally in
+// log messages but only have meaning in specific positions (parentheses,
+// wildcards, fuzzy `~`) so that messages like "Unable to lock JVM memory
+// (ENOMEM)" are still AND-normalised.
+func hasExplicitBooleanOperator(content string) bool {
+	if strings.Contains(content, `"`) {
+		return true
+	}
+	for tok := range strings.FieldsSeq(content) {
+		if tok == "|" || tok == "||" {
+			return true
+		}
+		if len(tok) > 0 && (tok[0] == '+' || tok[0] == '-') {
+			return true
+		}
+	}
+	return false
+}
 
 // normaliseLogContent rewrites a multi-word content value so Elasticsearch's
 // simple_query_string performs an AND match across every term. Single words,
-// empty values, and strings already containing query operators are returned
-// unchanged.
+// empty values, and strings already using simple_query_string boolean
+// operators are returned unchanged.
 func normaliseLogContent(content string) string {
 	if content == "" {
 		return content
 	}
-	if strings.ContainsAny(content, simpleQueryStringOperators) {
+	if hasExplicitBooleanOperator(content) {
 		return content
 	}
 	parts := strings.Fields(content)
@@ -103,9 +119,9 @@ func (r *logAlertRuleResource) Schema(ctx context.Context, req resource.SchemaRe
 				Default:  stringdefault.StaticString(""),
 				Description: "The log content/phrase to search for. Multi-word values are " +
 					"automatically rewritten as a simple_query_string AND match (e.g. " +
-					"`is now DOWN` is sent as `+is +now +DOWN`). To opt out, include any " +
-					"simple_query_string operator (`+`, `-`, `|`, `*`, `(`, `)`, `~`, `\"`) " +
-					"and the value is passed through unchanged.",
+					"`is now DOWN` is sent as `+is +now +DOWN`). To opt out, prefix any " +
+					"term with `+` or `-`, use `|` between terms for an OR match, or wrap " +
+					"the value in double quotes — the string is then passed through unchanged.",
 			},
 			"description": schema.StringAttribute{
 				Optional:    true,

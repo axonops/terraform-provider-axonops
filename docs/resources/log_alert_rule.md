@@ -78,16 +78,21 @@ query. By default, multi-word values match any term (logical OR), which often
 produces noisy false positives. To make alerts AND-match every term, the
 provider rewrites multi-word `content` values automatically:
 
-| User-supplied `content` | Sent to API     |
-|-------------------------|-----------------|
-| `DOWN`                  | `DOWN`          |
-| `is now DOWN`           | `+is +now +DOWN`|
-| `+is +now +DOWN`        | `+is +now +DOWN`|
-| `"is now DOWN"`         | `"is now DOWN"` |
+| User-supplied `content`                  | Sent to API                                    |
+|------------------------------------------|------------------------------------------------|
+| `DOWN`                                   | `DOWN`                                         |
+| `is now DOWN`                            | `+is +now +DOWN`                               |
+| `Unable to lock JVM memory (ENOMEM)`     | `+Unable +to +lock +JVM +memory +(ENOMEM)`     |
+| `+is +now +DOWN`                         | `+is +now +DOWN`                               |
+| `error | warn`                           | `error | warn`                                 |
+| `"is now DOWN"`                          | `"is now DOWN"`                                |
 
-To opt out of normalisation, include any `simple_query_string` operator
-(`+`, `-`, `|`, `*`, `(`, `)`, `~`, `"`) anywhere in the value and the string
-is passed through verbatim.
+To opt out of normalisation, prefix any term with `+` or `-`, place a `|`
+between terms for an OR match, or wrap the value in double quotes — the
+string is then passed through verbatim. Characters such as `(`, `)`, `*`,
+and `~` do not trigger opt-out, because they appear naturally in log
+messages and are still interpreted correctly by `simple_query_string`
+when wrapped with the auto-inserted `+` prefixes.
 
 The provider preserves the natural-language form in Terraform state, so
 `terraform plan` will not show a perpetual diff between, for example, the
@@ -108,7 +113,7 @@ held in the AxonOps backend.
 
 ### Optional
 
-- `content` (String) The log content/phrase to search for. Multi-word values are automatically rewritten as a simple_query_string AND match (e.g. `is now DOWN` is sent as `+is +now +DOWN`). To opt out, include any simple_query_string operator (`+`, `-`, `|`, `*`, `(`, `)`, `~`, `"`) and the value is passed through unchanged.
+- `content` (String) The log content/phrase to search for. Multi-word values are automatically rewritten as a simple_query_string AND match (e.g. `is now DOWN` is sent as `+is +now +DOWN`). To opt out, prefix any term with `+` or `-`, use `|` between terms for an OR match, or wrap the value in double quotes — the string is then passed through unchanged.
 - `description` (String) Description of the log alert rule.
 - `level` (String) Log level filter (debug, error, warning, info). Comma-separated for multiple.
 - `log_type` (String) Log type filter. Comma-separated for multiple.
