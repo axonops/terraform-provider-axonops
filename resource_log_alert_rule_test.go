@@ -17,7 +17,7 @@ func TestNormaliseLogContent(t *testing.T) {
 		{"double pipe operator", "foo || bar", "foo || bar"},
 		{"quoted phrase", `"is now DOWN"`, `"is now DOWN"`},
 		{"parens get normalised", "Unable to lock JVM memory (ENOMEM)",
-			"+Unable +to +lock +JVM +memory +(ENOMEM)"},
+			"+Unable +to +lock +JVM +memory"},
 		{"wildcard token gets normalised", "error foo*", "+error +foo*"},
 		{"tilde token gets normalised", "foo~2 bar", "+foo~2 +bar"},
 		{"single word with wildcard", "foo*", "foo*"},

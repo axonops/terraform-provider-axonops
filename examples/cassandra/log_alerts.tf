@@ -161,7 +161,7 @@ resource "axonops_log_alert_rule" "cassandra_jvm_memory_lock_enomem" {
   cluster_name   = var.cluster_name
   cluster_type   = "cassandra"
   name           = "Unable to lock JVM memory (ENOMEM)"
-  content        = "Unable to lock JVM memory (ENOMEM)"
+  content        = "Unable to lock JVM memory"
   source         = "/var/log/cassandra/system.log"
   operator       = ">="
   warning_value  = 1

@@ -39,10 +39,18 @@ func hasExplicitBooleanOperator(content string) bool {
 	return false
 }
 
+// isAlphanumeric reports whether b is an ASCII letter or digit.
+func isAlphanumeric(b byte) bool {
+	return (b >= 'a' && b <= 'z') || (b >= 'A' && b <= 'Z') || (b >= '0' && b <= '9')
+}
+
 // normaliseLogContent rewrites a multi-word content value so Elasticsearch's
 // simple_query_string performs an AND match across every term. Single words,
 // empty values, and strings already using simple_query_string boolean
-// operators are returned unchanged.
+// operators are returned unchanged. Tokens that do not start with an
+// alphanumeric character are dropped — they are typically punctuation-wrapped
+// fragments (e.g. `(ENOMEM)` in "Unable to lock JVM memory (ENOMEM)") that
+// would either be ignored or misinterpreted by simple_query_string.
 func normaliseLogContent(content string) string {
 	if content == "" {
 		return content
@@ -54,9 +62,15 @@ func normaliseLogContent(content string) string {
 	if len(parts) <= 1 {
 		return content
 	}
-	out := make([]string, len(parts))
-	for i, p := range parts {
-		out[i] = "+" + p
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		if !isAlphanumeric(p[0]) {
+			continue
+		}
+		out = append(out, "+"+p)
+	}
+	if len(out) == 0 {
+		return content
 	}
 	return strings.Join(out, " ")
 }
