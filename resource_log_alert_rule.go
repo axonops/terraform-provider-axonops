@@ -8,7 +8,6 @@ import (
 
 	axonopsClient "terraform-provider-axonops/client"
 
-	"github.com/google/uuid"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -120,8 +119,11 @@ func (r *logAlertRuleResource) Schema(ctx context.Context, req resource.SchemaRe
 				Description: "The cluster type (cassandra, kafka, or dse).",
 			},
 			"id": schema.StringAttribute{
-				Computed:    true,
-				Description: "The unique identifier for the log alert rule (auto-generated).",
+				Computed: true,
+				Description: "Unique identifier for the alert rule. Derived deterministically from " +
+					"org, cluster type, cluster name, rule name, and rule type — the same configuration " +
+					"always produces the same ID, which makes Create idempotent across state loss and " +
+					"transient API retries.",
 			},
 			"name": schema.StringAttribute{
 				Required:    true,
@@ -296,7 +298,13 @@ func (r *logAlertRuleResource) Create(ctx context.Context, req resource.CreateRe
 		return
 	}
 
-	data.ID = types.StringValue(uuid.New().String())
+	data.ID = types.StringValue(deterministicAlertRuleID(
+		r.client.OrgId(),
+		data.ClusterType.ValueString(),
+		data.ClusterName.ValueString(),
+		data.Name.ValueString(),
+		"log",
+	))
 
 	rule := r.buildRule(&data)
 

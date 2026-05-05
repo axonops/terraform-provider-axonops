@@ -314,17 +314,16 @@ func (c *AxonopsHttpClient) DeleteTopic(topicName, clusterName string) error {
 		req.Header.Set("Authorization", c.tokenType+" "+c.apiKey)
 	}
 
-	resp, err := c.client.Do(req)
+	resp, err := c.doDeleteWithRetry(req, nil)
 	if err != nil {
 		return fmt.Errorf("failed to send DELETE request: %w", err)
 	}
 	defer resp.Body.Close() //nolint:errcheck
 
-	if resp.StatusCode == 204 {
+	if isDeleteSuccess(resp.StatusCode) {
 		return nil
-	} else {
-		return fmt.Errorf("failed to send DELETE request: status %d for url %v with topicName:%v", resp.StatusCode, url, topicName)
 	}
+	return fmt.Errorf("failed to send DELETE request: status %d for url %v with topicName:%v", resp.StatusCode, url, topicName)
 }
 
 type ConfigsWrapper struct {
@@ -483,17 +482,16 @@ func (c *AxonopsHttpClient) DeleteACL(clusterName string, acl KafkaACL) error {
 		req.Header.Set("Authorization", c.tokenType+" "+c.apiKey)
 	}
 
-	resp, err := c.client.Do(req)
+	resp, err := c.doDeleteWithRetry(req, payloadJson)
 	if err != nil {
 		return fmt.Errorf("failed to send DELETE request: %w", err)
 	}
 	defer resp.Body.Close() //nolint:errcheck
 
-	if resp.StatusCode == 204 {
+	if isDeleteSuccess(resp.StatusCode) {
 		return nil
-	} else {
-		return fmt.Errorf("failed to delete ACL: status %d for url %v with acl:%+v", resp.StatusCode, url, acl)
 	}
+	return fmt.Errorf("failed to delete ACL: status %d for url %v with acl:%+v", resp.StatusCode, url, acl)
 }
 
 // Kafka Connect Connector types and methods
@@ -696,7 +694,7 @@ func (c *AxonopsHttpClient) DeleteConnector(clusterName, connectClusterName, con
 
 	debugRequest(req, nil)
 
-	resp, err := c.client.Do(req)
+	resp, err := c.doDeleteWithRetry(req, nil)
 	if err != nil {
 		return fmt.Errorf("failed to send DELETE request: %w", err)
 	}
@@ -705,11 +703,10 @@ func (c *AxonopsHttpClient) DeleteConnector(clusterName, connectClusterName, con
 	bodyBytes, _ := io.ReadAll(resp.Body)
 	debugResponse(resp, bodyBytes)
 
-	if resp.StatusCode == 204 || resp.StatusCode == 200 {
+	if isDeleteSuccess(resp.StatusCode) {
 		return nil
-	} else {
-		return fmt.Errorf("failed to delete connector: status %d for url %v, body: %s", resp.StatusCode, url, string(bodyBytes))
 	}
+	return fmt.Errorf("failed to delete connector: status %d for url %v, body: %s", resp.StatusCode, url, string(bodyBytes))
 }
 
 // Schema Registry types and methods
@@ -821,17 +818,16 @@ func (c *AxonopsHttpClient) DeleteSchema(clusterName, subject string) error {
 		req.Header.Set("Authorization", c.tokenType+" "+c.apiKey)
 	}
 
-	resp, err := c.client.Do(req)
+	resp, err := c.doDeleteWithRetry(req, nil)
 	if err != nil {
 		return fmt.Errorf("failed to send DELETE request: %w", err)
 	}
 	defer resp.Body.Close() //nolint:errcheck
 
-	if resp.StatusCode == 200 || resp.StatusCode == 204 {
+	if isDeleteSuccess(resp.StatusCode) {
 		return nil
-	} else {
-		return fmt.Errorf("failed to delete schema: status %d for url %v", resp.StatusCode, url)
 	}
+	return fmt.Errorf("failed to delete schema: status %d for url %v", resp.StatusCode, url)
 }
 
 // Log Collector types and methods
@@ -1281,7 +1277,7 @@ func (c *AxonopsHttpClient) DeleteCassandraBackup(clusterType, clusterName strin
 
 	debugRequest(req, payloadJson)
 
-	resp, err := c.client.Do(req)
+	resp, err := c.doDeleteWithRetry(req, payloadJson)
 	if err != nil {
 		return fmt.Errorf("failed to send DELETE request: %w", err)
 	}
@@ -1290,11 +1286,10 @@ func (c *AxonopsHttpClient) DeleteCassandraBackup(clusterType, clusterName strin
 	bodyBytes, _ := io.ReadAll(resp.Body)
 	debugResponse(resp, bodyBytes)
 
-	if resp.StatusCode == 204 || resp.StatusCode == 200 {
+	if isDeleteSuccess(resp.StatusCode) {
 		return nil
-	} else {
-		return fmt.Errorf("failed to delete cassandra backup: status %d for url %v, body: %s", resp.StatusCode, url, string(bodyBytes))
 	}
+	return fmt.Errorf("failed to delete cassandra backup: status %d for url %v, body: %s", resp.StatusCode, url, string(bodyBytes))
 }
 
 // Metric Alert Rule types and methods
@@ -1438,7 +1433,7 @@ func (c *AxonopsHttpClient) DeleteAlertRule(clusterType, clusterName, alertID st
 
 	debugRequest(req, nil)
 
-	resp, err := c.client.Do(req)
+	resp, err := c.doDeleteWithRetry(req, nil)
 	if err != nil {
 		return fmt.Errorf("failed to send DELETE request: %w", err)
 	}
@@ -1447,11 +1442,10 @@ func (c *AxonopsHttpClient) DeleteAlertRule(clusterType, clusterName, alertID st
 	bodyBytes, _ := io.ReadAll(resp.Body)
 	debugResponse(resp, bodyBytes)
 
-	if resp.StatusCode == 204 || resp.StatusCode == 200 {
+	if isDeleteSuccess(resp.StatusCode) {
 		return nil
-	} else {
-		return fmt.Errorf("failed to delete alert rule: status %d for url %v, body: %s", resp.StatusCode, url, string(bodyBytes))
 	}
+	return fmt.Errorf("failed to delete alert rule: status %d for url %v, body: %s", resp.StatusCode, url, string(bodyBytes))
 }
 
 // Dashboard Template types and methods
@@ -1773,7 +1767,7 @@ func (c *AxonopsHttpClient) DeleteIntegration(clusterType, clusterName, integrat
 
 	debugRequest(req, nil)
 
-	resp, err := c.client.Do(req)
+	resp, err := c.doDeleteWithRetry(req, nil)
 	if err != nil {
 		return fmt.Errorf("failed to send DELETE request: %w", err)
 	}
@@ -1782,7 +1776,7 @@ func (c *AxonopsHttpClient) DeleteIntegration(clusterType, clusterName, integrat
 	bodyBytes, _ := io.ReadAll(resp.Body)
 	debugResponse(resp, bodyBytes)
 
-	if resp.StatusCode == 200 || resp.StatusCode == 204 {
+	if isDeleteSuccess(resp.StatusCode) {
 		return nil
 	}
 	return fmt.Errorf("failed to delete integration: status %d for url %v, body: %s", resp.StatusCode, url, string(bodyBytes))
@@ -1939,7 +1933,7 @@ func (c *AxonopsHttpClient) DeleteScheduledRepair(clusterName string, repairID s
 
 	debugRequest(req, nil)
 
-	resp, err := c.client.Do(req)
+	resp, err := c.doDeleteWithRetry(req, nil)
 	if err != nil {
 		return fmt.Errorf("failed to send DELETE request: %w", err)
 	}
@@ -1951,7 +1945,7 @@ func (c *AxonopsHttpClient) DeleteScheduledRepair(clusterName string, repairID s
 	}
 	debugResponse(resp, bodyBytes)
 
-	if resp.StatusCode == 200 || resp.StatusCode == 204 {
+	if isDeleteSuccess(resp.StatusCode) {
 		return nil
 	}
 	return fmt.Errorf("failed to delete scheduled repair: status %d for url %v, body: %s", resp.StatusCode, reqURL, string(bodyBytes))
@@ -2083,7 +2077,7 @@ func (c *AxonopsHttpClient) DeleteSilenceWindow(clusterType, clusterName, silenc
 
 	debugRequest(req, payloadJSON)
 
-	resp, err := c.client.Do(req)
+	resp, err := c.doDeleteWithRetry(req, payloadJSON)
 	if err != nil {
 		return fmt.Errorf("failed to send DELETE request: %w", err)
 	}
@@ -2092,7 +2086,7 @@ func (c *AxonopsHttpClient) DeleteSilenceWindow(clusterType, clusterName, silenc
 	bodyBytes, _ := io.ReadAll(resp.Body)
 	debugResponse(resp, bodyBytes)
 
-	if resp.StatusCode == 200 || resp.StatusCode == 204 {
+	if isDeleteSuccess(resp.StatusCode) {
 		return nil
 	}
 	return fmt.Errorf("failed to delete silence window: status %d for url %v, body: %s", resp.StatusCode, reqURL, string(bodyBytes))

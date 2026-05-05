@@ -9,7 +9,6 @@ import (
 
 	axonopsClient "terraform-provider-axonops/client"
 
-	"github.com/google/uuid"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -126,8 +125,11 @@ func (r *metricAlertRuleResource) Schema(ctx context.Context, req resource.Schem
 				Description: "The cluster type (cassandra, kafka, or dse).",
 			},
 			"id": schema.StringAttribute{
-				Computed:    true,
-				Description: "The unique identifier for the alert rule (auto-generated).",
+				Computed: true,
+				Description: "Unique identifier for the alert rule. Derived deterministically from " +
+					"org, cluster type, cluster name, rule name, and rule type — the same configuration " +
+					"always produces the same ID, which makes Create idempotent across state loss and " +
+					"transient API retries.",
 			},
 			"name": schema.StringAttribute{
 				Required:    true,
@@ -510,8 +512,13 @@ func (r *metricAlertRuleResource) Create(ctx context.Context, req resource.Creat
 		return
 	}
 
-	newID := uuid.New().String()
-	data.ID = types.StringValue(newID)
+	data.ID = types.StringValue(deterministicAlertRuleID(
+		r.client.OrgId(),
+		data.ClusterType.ValueString(),
+		data.ClusterName.ValueString(),
+		data.Name.ValueString(),
+		"metric",
+	))
 
 	// Resolve dashboard/chart names to UUIDs
 	resolved, err := r.resolveDashboardChart(
