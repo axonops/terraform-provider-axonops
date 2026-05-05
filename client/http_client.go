@@ -971,8 +971,11 @@ type HealthchecksResponse struct {
 	TCPChecks   []TCPHealthcheck   `json:"tcpchecks"`
 }
 
-func (c *AxonopsHttpClient) GetHealthchecks(clusterName string) (*HealthchecksResponse, error) {
-	url := fmt.Sprintf("%s://%s/api/v1/healthchecks/%s/kafka/%s", c.protocol, c.axonopsHost, c.orgid, clusterName)
+func (c *AxonopsHttpClient) GetHealthchecks(clusterType, clusterName string) (*HealthchecksResponse, error) {
+	if clusterType == "" {
+		clusterType = "cassandra"
+	}
+	url := fmt.Sprintf("%s://%s/api/v1/healthchecks/%s/%s/%s", c.protocol, c.axonopsHost, c.orgid, clusterType, clusterName)
 
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
@@ -1001,13 +1004,16 @@ func (c *AxonopsHttpClient) GetHealthchecks(clusterName string) (*HealthchecksRe
 	}
 }
 
-func (c *AxonopsHttpClient) UpdateHealthchecks(clusterName string, healthchecks HealthchecksResponse) error {
+func (c *AxonopsHttpClient) UpdateHealthchecks(clusterType, clusterName string, healthchecks HealthchecksResponse) error {
+	if clusterType == "" {
+		clusterType = "cassandra"
+	}
 	payloadJson, err := json.Marshal(healthchecks)
 	if err != nil {
 		return fmt.Errorf("failed to encode JSON payload: %w", err)
 	}
 
-	reqUrl := fmt.Sprintf("%s://%s/api/v1/healthchecks/%s/kafka/%s", c.protocol, c.axonopsHost, c.orgid, clusterName)
+	reqUrl := fmt.Sprintf("%s://%s/api/v1/healthchecks/%s/%s/%s", c.protocol, c.axonopsHost, c.orgid, clusterType, clusterName)
 
 	req, err := http.NewRequest("PUT", reqUrl, bytes.NewBuffer(payloadJson))
 	if err != nil {

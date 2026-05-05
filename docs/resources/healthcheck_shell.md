@@ -2,12 +2,12 @@
 page_title: "axonops_healthcheck_shell Resource - axonops"
 subcategory: "Health Checks"
 description: |-
-  Manages a shell healthcheck configuration for a Kafka cluster.
+  Manages a shell healthcheck configuration for a cluster.
 ---
 
 # axonops_healthcheck_shell (Resource)
 
-Manages a shell healthcheck configuration for a Kafka cluster.
+Manages a shell healthcheck configuration for a cluster.
 
 ## Example Usage
 
@@ -75,12 +75,13 @@ resource "axonops_healthcheck_shell" "custom_monitor" {
 
 ### Required
 
-- `cluster_name` (String) The name of the Kafka cluster.
+- `cluster_name` (String) The name of the cluster.
 - `name` (String) The name of the healthcheck.
 - `script` (String) The script or command to execute (e.g., /usr/bin/ls, /path/to/script.sh).
 
 ### Optional
 
+- `cluster_type` (String) The cluster type (e.g. cassandra, kafka). Defaults to cassandra.
 - `interval` (String) The interval between checks (e.g., 1m, 30s). Default: 1m
 - `readonly` (Boolean) Whether the healthcheck is read-only. Default: false
 - `shell` (String) The shell to use for executing the script (e.g., /bin/bash). Default: empty (uses default shell)
@@ -92,12 +93,13 @@ resource "axonops_healthcheck_shell" "custom_monitor" {
 
 ## Import
 
-Shell healthchecks can be imported using the format `cluster_name/healthcheck_name`:
+Shell healthchecks can be imported using the format `cluster_type/cluster_name/healthcheck_name`:
 
 ```shell
-terraform import axonops_healthcheck_shell.example my-kafka-cluster/Disk%20Space%20Check
+terraform import axonops_healthcheck_shell.example cassandra/my-cluster/Disk%20Space%20Check
 ```
 
 Where:
+- `cluster_type` - The cluster type (e.g. cassandra, kafka)
 - `cluster_name` - The name of the cluster
 - `healthcheck_name` - The name of the healthcheck (URL-encoded if it contains spaces)

@@ -55,11 +55,17 @@ func (r *tcpHealthcheckResource) Metadata(_ context.Context, req resource.Metada
 
 func (r *tcpHealthcheckResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		Description: "Manages a TCP healthcheck configuration for a Kafka cluster.",
+		Description: "Manages a TCP healthcheck configuration for a cluster.",
 		Attributes: map[string]schema.Attribute{
 			"cluster_name": schema.StringAttribute{
 				Required:    true,
-				Description: "The name of the Kafka cluster.",
+				Description: "The name of the cluster.",
+			},
+			"cluster_type": schema.StringAttribute{
+				Optional:    true,
+				Computed:    true,
+				Default:     stringdefault.StaticString("cassandra"),
+				Description: "The cluster type (e.g. cassandra, kafka). Defaults to cassandra.",
 			},
 			"name": schema.StringAttribute{
 				Required:    true,
@@ -104,6 +110,7 @@ func (r *tcpHealthcheckResource) Schema(ctx context.Context, req resource.Schema
 
 type tcpHealthcheckResourceData struct {
 	ClusterName         types.String `tfsdk:"cluster_name"`
+	ClusterType         types.String `tfsdk:"cluster_type"`
 	Name                types.String `tfsdk:"name"`
 	ID                  types.String `tfsdk:"id"`
 	TCP                 types.String `tfsdk:"tcp"`
@@ -124,7 +131,7 @@ func (r *tcpHealthcheckResource) Create(ctx context.Context, req resource.Create
 	}
 
 	// Get existing healthchecks
-	existing, err := r.client.GetHealthchecks(data.ClusterName.ValueString())
+	existing, err := r.client.GetHealthchecks(data.ClusterType.ValueString(), data.ClusterName.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to get existing healthchecks, got error: %s", err))
 		return
@@ -163,7 +170,7 @@ func (r *tcpHealthcheckResource) Create(ctx context.Context, req resource.Create
 	existing.TCPChecks = append(existing.TCPChecks, newCheck)
 
 	// Update all healthchecks
-	err = r.client.UpdateHealthchecks(data.ClusterName.ValueString(), *existing)
+	err = r.client.UpdateHealthchecks(data.ClusterType.ValueString(), data.ClusterName.ValueString(), *existing)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create TCP healthcheck, got error: %s", err))
 		return
@@ -189,7 +196,7 @@ func (r *tcpHealthcheckResource) Read(ctx context.Context, req resource.ReadRequ
 	}
 
 	// Get all healthchecks
-	healthchecks, err := r.client.GetHealthchecks(data.ClusterName.ValueString())
+	healthchecks, err := r.client.GetHealthchecks(data.ClusterType.ValueString(), data.ClusterName.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read healthchecks, got error: %s", err))
 		return
@@ -244,7 +251,7 @@ func (r *tcpHealthcheckResource) Update(ctx context.Context, req resource.Update
 	}
 
 	// Get existing healthchecks
-	existing, err := r.client.GetHealthchecks(planData.ClusterName.ValueString())
+	existing, err := r.client.GetHealthchecks(planData.ClusterType.ValueString(), planData.ClusterName.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to get existing healthchecks, got error: %s", err))
 		return
@@ -283,7 +290,7 @@ func (r *tcpHealthcheckResource) Update(ctx context.Context, req resource.Update
 	}
 
 	// Update all healthchecks
-	err = r.client.UpdateHealthchecks(planData.ClusterName.ValueString(), *existing)
+	err = r.client.UpdateHealthchecks(planData.ClusterType.ValueString(), planData.ClusterName.ValueString(), *existing)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to update TCP healthcheck, got error: %s", err))
 		return
@@ -309,7 +316,7 @@ func (r *tcpHealthcheckResource) Delete(ctx context.Context, req resource.Delete
 	}
 
 	// Get existing healthchecks
-	existing, err := r.client.GetHealthchecks(data.ClusterName.ValueString())
+	existing, err := r.client.GetHealthchecks(data.ClusterType.ValueString(), data.ClusterName.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to get existing healthchecks, got error: %s", err))
 		return
@@ -325,7 +332,7 @@ func (r *tcpHealthcheckResource) Delete(ctx context.Context, req resource.Delete
 	existing.TCPChecks = updatedChecks
 
 	// Update all healthchecks (without our deleted one)
-	err = r.client.UpdateHealthchecks(data.ClusterName.ValueString(), *existing)
+	err = r.client.UpdateHealthchecks(data.ClusterType.ValueString(), data.ClusterName.ValueString(), *existing)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete TCP healthcheck, got error: %s", err))
 		return
@@ -335,23 +342,24 @@ func (r *tcpHealthcheckResource) Delete(ctx context.Context, req resource.Delete
 }
 
 // ImportState imports an existing TCP healthcheck into Terraform state.
-// Import ID format: cluster_name/healthcheck_name
+// Import ID format: cluster_type/cluster_name/healthcheck_name
 func (r *tcpHealthcheckResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	// Parse the import ID
 	parts := strings.Split(req.ID, "/")
-	if len(parts) != 2 {
+	if len(parts) != 3 {
 		resp.Diagnostics.AddError(
 			"Invalid Import ID",
-			fmt.Sprintf("Expected import ID format: cluster_name/healthcheck_name, got: %s", req.ID),
+			fmt.Sprintf("Expected import ID format: cluster_type/cluster_name/healthcheck_name, got: %s", req.ID),
 		)
 		return
 	}
 
-	clusterName := parts[0]
-	healthcheckName := parts[1]
+	clusterType := parts[0]
+	clusterName := parts[1]
+	healthcheckName := parts[2]
 
 	// Get all healthchecks
-	healthchecks, err := r.client.GetHealthchecks(clusterName)
+	healthchecks, err := r.client.GetHealthchecks(clusterType, clusterName)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Import Error",
@@ -379,6 +387,7 @@ func (r *tcpHealthcheckResource) ImportState(ctx context.Context, req resource.I
 
 	// Set the state
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("cluster_name"), clusterName)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("cluster_type"), clusterType)...)
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("name"), found.Name)...)
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), found.ID)...)
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("tcp"), found.TCP)...)

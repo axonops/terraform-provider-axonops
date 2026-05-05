@@ -5,6 +5,7 @@
 # Check Kafka broker port
 resource "axonops_healthcheck_tcp" "kafka_broker" {
   cluster_name          = "my-kafka-cluster"
+  cluster_type          = "kafka"
   name                  = "Kafka Broker Port"
   tcp                   = "0.0.0.0:9092"
   interval              = "30s"
@@ -15,6 +16,7 @@ resource "axonops_healthcheck_tcp" "kafka_broker" {
 # Check Kafka controller port
 resource "axonops_healthcheck_tcp" "kafka_controller" {
   cluster_name          = "my-kafka-cluster"
+  cluster_type          = "kafka"
   name                  = "Kafka Controller Port"
   tcp                   = "0.0.0.0:9093"
   interval              = "30s"
@@ -25,6 +27,7 @@ resource "axonops_healthcheck_tcp" "kafka_controller" {
 # Check Schema Registry port
 resource "axonops_healthcheck_tcp" "schema_registry" {
   cluster_name          = "my-kafka-cluster"
+  cluster_type          = "kafka"
   name                  = "Schema Registry Port"
   tcp                   = "0.0.0.0:8081"
   interval              = "1m"
@@ -35,6 +38,7 @@ resource "axonops_healthcheck_tcp" "schema_registry" {
 # Check Kafka Connect port
 resource "axonops_healthcheck_tcp" "kafka_connect" {
   cluster_name          = "my-kafka-cluster"
+  cluster_type          = "kafka"
   name                  = "Kafka Connect Port"
   tcp                   = "0.0.0.0:8083"
   interval              = "1m"
@@ -45,6 +49,7 @@ resource "axonops_healthcheck_tcp" "kafka_connect" {
 # Check ZooKeeper client port
 resource "axonops_healthcheck_tcp" "zookeeper" {
   cluster_name          = "my-kafka-cluster"
+  cluster_type          = "kafka"
   name                  = "ZooKeeper Client Port"
   tcp                   = "0.0.0.0:2181"
   interval              = "30s"
@@ -57,6 +62,7 @@ resource "axonops_healthcheck_tcp" "zookeeper" {
 # Check Schema Registry health endpoint
 resource "axonops_healthcheck_http" "schema_registry_health" {
   cluster_name          = "my-kafka-cluster"
+  cluster_type          = "kafka"
   name                  = "Schema Registry Health"
   url                   = "http://localhost:8081/subjects"
   method                = "GET"
@@ -69,6 +75,7 @@ resource "axonops_healthcheck_http" "schema_registry_health" {
 # Check Kafka Connect health endpoint
 resource "axonops_healthcheck_http" "connect_health" {
   cluster_name          = "my-kafka-cluster"
+  cluster_type          = "kafka"
   name                  = "Kafka Connect Health"
   url                   = "http://localhost:8083/connectors"
   method                = "GET"
@@ -80,13 +87,14 @@ resource "axonops_healthcheck_http" "connect_health" {
 
 # Check custom application health with headers
 resource "axonops_healthcheck_http" "app_health" {
-  cluster_name          = "my-kafka-cluster"
-  name                  = "Application Health"
-  url                   = "http://localhost:8080/health"
-  method                = "GET"
-  expected_status       = 200
-  interval              = "30s"
-  timeout               = "10s"
+  cluster_name    = "my-kafka-cluster"
+  cluster_type    = "kafka"
+  name            = "Application Health"
+  url             = "http://localhost:8080/health"
+  method          = "GET"
+  expected_status = 200
+  interval        = "30s"
+  timeout         = "10s"
   headers = {
     "Accept"        = "application/json"
     "Authorization" = "Bearer token123"
@@ -96,14 +104,15 @@ resource "axonops_healthcheck_http" "app_health" {
 
 # POST request healthcheck
 resource "axonops_healthcheck_http" "api_check" {
-  cluster_name          = "my-kafka-cluster"
-  name                  = "API Health Check"
-  url                   = "http://localhost:8080/api/v1/healthcheck"
-  method                = "POST"
-  body                  = "{\"check\": \"deep\"}"
-  expected_status       = 200
-  interval              = "2m"
-  timeout               = "30s"
+  cluster_name    = "my-kafka-cluster"
+  cluster_type    = "kafka"
+  name            = "API Health Check"
+  url             = "http://localhost:8080/api/v1/healthcheck"
+  method          = "POST"
+  body            = "{\"check\": \"deep\"}"
+  expected_status = 200
+  interval        = "2m"
+  timeout         = "30s"
   headers = {
     "Content-Type" = "application/json"
   }
@@ -115,6 +124,7 @@ resource "axonops_healthcheck_http" "api_check" {
 # Check disk space
 resource "axonops_healthcheck_shell" "disk_space" {
   cluster_name = "my-kafka-cluster"
+  cluster_type = "kafka"
   name         = "Disk Space Check"
   script       = "/usr/local/bin/check_disk_space.sh"
   shell        = "/bin/bash"
@@ -125,6 +135,7 @@ resource "axonops_healthcheck_shell" "disk_space" {
 # Check Kafka process
 resource "axonops_healthcheck_shell" "kafka_process" {
   cluster_name = "my-kafka-cluster"
+  cluster_type = "kafka"
   name         = "Kafka Process Check"
   script       = "pgrep -f kafka.Kafka"
   interval     = "1m"
@@ -134,6 +145,7 @@ resource "axonops_healthcheck_shell" "kafka_process" {
 # Check JVM heap usage
 resource "axonops_healthcheck_shell" "jvm_heap" {
   cluster_name = "my-kafka-cluster"
+  cluster_type = "kafka"
   name         = "JVM Heap Check"
   script       = "/usr/local/bin/check_jvm_heap.sh"
   shell        = "/bin/bash"
@@ -144,6 +156,7 @@ resource "axonops_healthcheck_shell" "jvm_heap" {
 # Simple file existence check
 resource "axonops_healthcheck_shell" "config_exists" {
   cluster_name = "my-kafka-cluster"
+  cluster_type = "kafka"
   name         = "Config File Check"
   script       = "test -f /etc/kafka/server.properties"
   interval     = "10m"
@@ -153,6 +166,7 @@ resource "axonops_healthcheck_shell" "config_exists" {
 # Check network connectivity
 resource "axonops_healthcheck_shell" "network_check" {
   cluster_name = "my-kafka-cluster"
+  cluster_type = "kafka"
   name         = "Network Connectivity"
   script       = "ping -c 1 -W 2 kafka-broker-1.internal"
   interval     = "1m"
@@ -162,6 +176,7 @@ resource "axonops_healthcheck_shell" "network_check" {
 # Custom monitoring script
 resource "axonops_healthcheck_shell" "custom_monitor" {
   cluster_name = "my-kafka-cluster"
+  cluster_type = "kafka"
   name         = "Custom Monitoring Script"
   script       = "/opt/scripts/kafka-health-check.sh"
   shell        = "/bin/bash"

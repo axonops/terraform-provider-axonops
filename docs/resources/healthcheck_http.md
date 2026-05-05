@@ -2,12 +2,12 @@
 page_title: "axonops_healthcheck_http Resource - axonops"
 subcategory: "Health Checks"
 description: |-
-  Manages an HTTP healthcheck configuration for a Kafka cluster.
+  Manages an HTTP healthcheck configuration for a cluster.
 ---
 
 # axonops_healthcheck_http (Resource)
 
-Manages an HTTP healthcheck configuration for a Kafka cluster.
+Manages an HTTP healthcheck configuration for a cluster.
 
 ## Example Usage
 
@@ -74,13 +74,14 @@ resource "axonops_healthcheck_http" "api_check" {
 
 ### Required
 
-- `cluster_name` (String) The name of the Kafka cluster.
+- `cluster_name` (String) The name of the cluster.
 - `name` (String) The name of the healthcheck.
 - `url` (String) The URL to check.
 
 ### Optional
 
 - `body` (String) The request body for POST/PUT requests.
+- `cluster_type` (String) The cluster type (e.g. cassandra, kafka). Defaults to cassandra.
 - `expected_status` (Number) The expected HTTP status code. Default: 200
 - `headers` (Map of String) HTTP headers to include in the request.
 - `interval` (String) The interval between checks (e.g., 1m, 30s). Default: 1m
@@ -95,12 +96,13 @@ resource "axonops_healthcheck_http" "api_check" {
 
 ## Import
 
-HTTP healthchecks can be imported using the format `cluster_name/healthcheck_name`:
+HTTP healthchecks can be imported using the format `cluster_type/cluster_name/healthcheck_name`:
 
 ```shell
-terraform import axonops_healthcheck_http.example my-kafka-cluster/Schema%20Registry%20Health
+terraform import axonops_healthcheck_http.example cassandra/my-cluster/Schema%20Registry%20Health
 ```
 
 Where:
+- `cluster_type` - The cluster type (e.g. cassandra, kafka)
 - `cluster_name` - The name of the cluster
 - `healthcheck_name` - The name of the healthcheck (URL-encoded if it contains spaces)

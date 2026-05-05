@@ -67,12 +67,13 @@ resource "axonops_healthcheck_tcp" "zookeeper" {
 
 ## Import
 
-TCP healthchecks can be imported using the format `cluster_name/healthcheck_name`:
+TCP healthchecks can be imported using the format `cluster_type/cluster_name/healthcheck_name`:
 
 ```shell
-terraform import axonops_healthcheck_tcp.example my-kafka-cluster/Kafka%20Broker%20Port
+terraform import axonops_healthcheck_tcp.example kafka/my-kafka-cluster/Kafka%20Broker%20Port
 ```
 
 Where:
+- `cluster_type` - The cluster type (e.g. cassandra, kafka)
 - `cluster_name` - The name of the cluster
 - `healthcheck_name` - The name of the healthcheck (URL-encoded if it contains spaces)
