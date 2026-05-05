@@ -18,6 +18,63 @@ import (
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
+// hasExplicitBooleanOperator reports whether the content already uses
+// simple_query_string boolean operators that would conflict with a blanket
+// `+term` rewrite. We deliberately ignore characters that appear naturally in
+// log messages but only have meaning in specific positions (parentheses,
+// wildcards, fuzzy `~`) so that messages like "Unable to lock JVM memory
+// (ENOMEM)" are still AND-normalised.
+func hasExplicitBooleanOperator(content string) bool {
+	if strings.Contains(content, `"`) {
+		return true
+	}
+	for tok := range strings.FieldsSeq(content) {
+		if tok == "|" || tok == "||" {
+			return true
+		}
+		if len(tok) > 0 && (tok[0] == '+' || tok[0] == '-') {
+			return true
+		}
+	}
+	return false
+}
+
+// isAlphanumeric reports whether b is an ASCII letter or digit.
+func isAlphanumeric(b byte) bool {
+	return (b >= 'a' && b <= 'z') || (b >= 'A' && b <= 'Z') || (b >= '0' && b <= '9')
+}
+
+// normaliseLogContent rewrites a multi-word content value so Elasticsearch's
+// simple_query_string performs an AND match across every term. Single words,
+// empty values, and strings already using simple_query_string boolean
+// operators are returned unchanged. Tokens that do not start with an
+// alphanumeric character are dropped — they are typically punctuation-wrapped
+// fragments (e.g. `(ENOMEM)` in "Unable to lock JVM memory (ENOMEM)") that
+// would either be ignored or misinterpreted by simple_query_string.
+func normaliseLogContent(content string) string {
+	if content == "" {
+		return content
+	}
+	if hasExplicitBooleanOperator(content) {
+		return content
+	}
+	parts := strings.Fields(content)
+	if len(parts) <= 1 {
+		return content
+	}
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		if !isAlphanumeric(p[0]) {
+			continue
+		}
+		out = append(out, "+"+p)
+	}
+	if len(out) == 0 {
+		return content
+	}
+	return strings.Join(out, " ")
+}
+
 var _ resource.Resource = (*logAlertRuleResource)(nil)
 var _ resource.ResourceWithImportState = (*logAlertRuleResource)(nil)
 
@@ -71,10 +128,14 @@ func (r *logAlertRuleResource) Schema(ctx context.Context, req resource.SchemaRe
 				Description: "The name of the log alert rule.",
 			},
 			"content": schema.StringAttribute{
-				Optional:    true,
-				Computed:    true,
-				Default:     stringdefault.StaticString(""),
-				Description: "The log content/phrase to search for.",
+				Optional: true,
+				Computed: true,
+				Default:  stringdefault.StaticString(""),
+				Description: "The log content/phrase to search for. Multi-word values are " +
+					"automatically rewritten as a simple_query_string AND match (e.g. " +
+					"`is now DOWN` is sent as `+is +now +DOWN`). To opt out, prefix any " +
+					"term with `+` or `-`, use `|` between terms for an OR match, or wrap " +
+					"the value in double quotes — the string is then passed through unchanged.",
 			},
 			"description": schema.StringAttribute{
 				Optional:    true,
@@ -201,7 +262,7 @@ func isLogAlertRule(rule axonopsClient.MetricAlertRule) bool {
 
 func (r *logAlertRuleResource) buildRule(data *logAlertRuleResourceData) axonopsClient.MetricAlertRule {
 	eventsExpr := buildEventsExpr(
-		data.Content.ValueString(),
+		normaliseLogContent(data.Content.ValueString()),
 		data.Level.ValueString(),
 		data.Source.ValueString(),
 		data.LogType.ValueString(),
@@ -287,7 +348,13 @@ func (r *logAlertRuleResource) Read(ctx context.Context, req resource.ReadReques
 	data.WarningValue = types.Float64Value(found.WarningValue)
 	data.CriticalValue = types.Float64Value(found.CriticalValue)
 	data.Duration = types.StringValue(found.For)
-	data.Content = types.StringValue(content)
+	// Preserve the prior content value when the API-side value is just the
+	// normalised form of what the user wrote — that way the user's natural
+	// language config (e.g. "is now DOWN") doesn't drift to the AND-prefixed
+	// form (e.g. "+is +now +DOWN") in state and produce noisy plans.
+	if normaliseLogContent(data.Content.ValueString()) != content {
+		data.Content = types.StringValue(content)
+	}
 	data.Level = types.StringValue(level)
 	data.LogType = types.StringValue(logType)
 	data.Source = types.StringValue(source)

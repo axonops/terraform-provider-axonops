@@ -2,32 +2,32 @@
 
 # Basic daily backup with local retention
 resource "axonops_cassandra_backup" "daily" {
-  cluster_name   = "my-cassandra-cluster"
-  tag            = "daily-backup"
-  datacenters    = ["dc1"]
-  schedule       = true
-  schedule_expr  = "0 1 * * *"  # Daily at 1 AM
+  cluster_name    = "my-cassandra-cluster"
+  tag             = "daily-backup"
+  datacenters     = ["dc1"]
+  schedule        = true
+  schedule_expr   = "0 1 * * *" # Daily at 1 AM
   local_retention = "10d"
 }
 
 # Multi-datacenter backup with custom schedule
 resource "axonops_cassandra_backup" "multi_dc" {
-  cluster_name   = "my-cassandra-cluster"
-  tag            = "multi-dc-backup"
-  datacenters    = ["dc1", "dc2"]
-  schedule       = true
-  schedule_expr  = "0 3 * * 0"  # Weekly on Sunday at 3 AM
+  cluster_name    = "my-cassandra-cluster"
+  tag             = "multi-dc-backup"
+  datacenters     = ["dc1", "dc2"]
+  schedule        = true
+  schedule_expr   = "0 3 * * 0" # Weekly on Sunday at 3 AM
   local_retention = "30d"
-  timeout        = "24h"
+  timeout         = "24h"
 }
 
 # Backup specific keyspaces and tables
 resource "axonops_cassandra_backup" "selective" {
-  cluster_name   = "my-cassandra-cluster"
-  tag            = "selective-backup"
-  datacenters    = ["dc1"]
-  schedule       = true
-  schedule_expr  = "0 2 * * *"  # Daily at 2 AM
+  cluster_name    = "my-cassandra-cluster"
+  tag             = "selective-backup"
+  datacenters     = ["dc1"]
+  schedule        = true
+  schedule_expr   = "0 2 * * *" # Daily at 2 AM
   local_retention = "7d"
 
   keyspaces = ["my_keyspace", "analytics_keyspace"]
@@ -40,7 +40,7 @@ resource "axonops_cassandra_backup" "remote_s3" {
   tag              = "s3-backup"
   datacenters      = ["dc1"]
   schedule         = true
-  schedule_expr    = "0 0 * * *"  # Daily at midnight
+  schedule_expr    = "0 0 * * *" # Daily at midnight
   local_retention  = "3d"
   remote           = true
   remote_type      = "s3"
@@ -57,7 +57,7 @@ resource "axonops_cassandra_backup" "remote_sftp" {
   tag              = "sftp-backup"
   datacenters      = ["dc1"]
   schedule         = true
-  schedule_expr    = "0 4 * * *"  # Daily at 4 AM
+  schedule_expr    = "0 4 * * *" # Daily at 4 AM
   local_retention  = "5d"
   remote           = true
   remote_type      = "sftp"
@@ -68,25 +68,25 @@ resource "axonops_cassandra_backup" "remote_sftp" {
 
 # DSE cluster backup
 resource "axonops_cassandra_backup" "dse" {
-  cluster_name   = "my-dse-cluster"
-  cluster_type   = "dse"
-  tag            = "dse-daily-backup"
-  datacenters    = ["dc1"]
-  schedule       = true
-  schedule_expr  = "0 1 * * *"
+  cluster_name    = "my-dse-cluster"
+  cluster_type    = "dse"
+  tag             = "dse-daily-backup"
+  datacenters     = ["dc1"]
+  schedule        = true
+  schedule_expr   = "0 1 * * *"
   local_retention = "14d"
-  timeout        = "12h"
+  timeout         = "12h"
 }
 
 # Backup specific nodes only
 resource "axonops_cassandra_backup" "node_specific" {
-  cluster_name   = "my-cassandra-cluster"
-  tag            = "node-backup"
-  datacenters    = ["dc1"]
-  schedule       = true
-  schedule_expr  = "0 5 * * 6"  # Weekly on Saturday at 5 AM
+  cluster_name    = "my-cassandra-cluster"
+  tag             = "node-backup"
+  datacenters     = ["dc1"]
+  schedule        = true
+  schedule_expr   = "0 5 * * 6" # Weekly on Saturday at 5 AM
   local_retention = "7d"
-  nodes          = ["node-1-uuid", "node-2-uuid"]
+  nodes           = ["node-1-uuid", "node-2-uuid"]
 }
 
 # Read existing backup configuration

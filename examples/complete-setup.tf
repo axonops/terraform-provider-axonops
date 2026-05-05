@@ -20,7 +20,7 @@ resource "axonops_kafka_topic" "user_events" {
 
   config = {
     cleanup_policy      = "delete"
-    retention_ms        = "604800000"  # 7 days
+    retention_ms        = "604800000" # 7 days
     min_insync_replicas = "2"
   }
 }
@@ -34,7 +34,7 @@ resource "axonops_kafka_topic" "orders" {
 
   config = {
     cleanup_policy      = "delete"
-    retention_ms        = "2592000000"  # 30 days
+    retention_ms        = "2592000000" # 30 days
     min_insync_replicas = "2"
   }
 }
@@ -61,7 +61,7 @@ resource "axonops_kafka_topic" "dlq" {
 
   config = {
     cleanup_policy = "delete"
-    retention_ms   = "2592000000"  # 30 days
+    retention_ms   = "2592000000" # 30 days
   }
 }
 
@@ -74,11 +74,11 @@ resource "axonops_schema" "user_events" {
   cluster_name = local.cluster_name
   subject      = "user-events-value"
   schema_type  = "AVRO"
-  schema       = jsonencode({
+  schema = jsonencode({
     type      = "record"
     name      = "UserEvent"
     namespace = "com.example.events"
-    fields    = [
+    fields = [
       { name = "user_id", type = "string" },
       { name = "event_type", type = "string" },
       { name = "timestamp", type = "long" },
@@ -92,11 +92,11 @@ resource "axonops_schema" "orders" {
   cluster_name = local.cluster_name
   subject      = "orders-value"
   schema_type  = "AVRO"
-  schema       = jsonencode({
+  schema = jsonencode({
     type      = "record"
     name      = "Order"
     namespace = "com.example.orders"
-    fields    = [
+    fields = [
       { name = "order_id", type = "string" },
       { name = "customer_id", type = "string" },
       { name = "total_amount", type = "double" },
@@ -215,7 +215,7 @@ resource "axonops_healthcheck_http" "schema_registry" {
   url                   = "http://localhost:8081/subjects"
   method                = "GET"
   expected_status       = 200
-  interval              = "1m"
+  interval              = "10m"
   timeout               = "30s"
   supported_agent_types = ["schema-registry"]
 }

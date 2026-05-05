@@ -35,16 +35,16 @@ resource "axonops_kafka_connect_connector" "jdbc_source" {
   name                 = "postgres-source"
 
   config = {
-    "connector.class"                    = "io.confluent.connect.jdbc.JdbcSourceConnector"
-    "tasks.max"                          = "1"
-    "connection.url"                     = "jdbc:postgresql://localhost:5432/mydb"
-    "connection.user"                    = "dbuser"
-    "connection.password"                = "dbpassword"
-    "table.whitelist"                    = "users,orders"
-    "mode"                               = "incrementing"
-    "incrementing.column.name"           = "id"
-    "topic.prefix"                       = "postgres-"
-    "poll.interval.ms"                   = "5000"
+    "connector.class"          = "io.confluent.connect.jdbc.JdbcSourceConnector"
+    "tasks.max"                = "1"
+    "connection.url"           = "jdbc:postgresql://localhost:5432/mydb"
+    "connection.user"          = "dbuser"
+    "connection.password"      = "dbpassword"
+    "table.whitelist"          = "users,orders"
+    "mode"                     = "incrementing"
+    "incrementing.column.name" = "id"
+    "topic.prefix"             = "postgres-"
+    "poll.interval.ms"         = "5000"
   }
 }
 
@@ -55,13 +55,13 @@ resource "axonops_kafka_connect_connector" "elasticsearch_sink" {
   name                 = "elasticsearch-sink"
 
   config = {
-    "connector.class"     = "io.confluent.connect.elasticsearch.ElasticsearchSinkConnector"
-    "tasks.max"           = "2"
-    "topics"              = "user-events"
-    "connection.url"      = "http://elasticsearch:9200"
-    "type.name"           = "_doc"
-    "key.ignore"          = "true"
-    "schema.ignore"       = "true"
+    "connector.class" = "io.confluent.connect.elasticsearch.ElasticsearchSinkConnector"
+    "tasks.max"       = "2"
+    "topics"          = "user-events"
+    "connection.url"  = "http://elasticsearch:9200"
+    "type.name"       = "_doc"
+    "key.ignore"      = "true"
+    "schema.ignore"   = "true"
   }
 }
 
@@ -72,19 +72,19 @@ resource "axonops_kafka_connect_connector" "s3_sink" {
   name                 = "s3-sink"
 
   config = {
-    "connector.class"                    = "io.confluent.connect.s3.S3SinkConnector"
-    "tasks.max"                          = "4"
-    "topics"                             = "events"
-    "s3.bucket.name"                     = "my-kafka-backup"
-    "s3.region"                          = "us-east-1"
-    "flush.size"                         = "1000"
-    "rotate.interval.ms"                 = "60000"
-    "storage.class"                      = "io.confluent.connect.s3.storage.S3Storage"
-    "format.class"                       = "io.confluent.connect.s3.format.json.JsonFormat"
-    "partitioner.class"                  = "io.confluent.connect.storage.partitioner.TimeBasedPartitioner"
-    "path.format"                        = "'year'=YYYY/'month'=MM/'day'=dd/'hour'=HH"
-    "locale"                             = "en-US"
-    "timezone"                           = "UTC"
+    "connector.class"    = "io.confluent.connect.s3.S3SinkConnector"
+    "tasks.max"          = "4"
+    "topics"             = "events"
+    "s3.bucket.name"     = "my-kafka-backup"
+    "s3.region"          = "us-east-1"
+    "flush.size"         = "1000"
+    "rotate.interval.ms" = "60000"
+    "storage.class"      = "io.confluent.connect.s3.storage.S3Storage"
+    "format.class"       = "io.confluent.connect.s3.format.json.JsonFormat"
+    "partitioner.class"  = "io.confluent.connect.storage.partitioner.TimeBasedPartitioner"
+    "path.format"        = "'year'=YYYY/'month'=MM/'day'=dd/'hour'=HH"
+    "locale"             = "en-US"
+    "timezone"           = "UTC"
   }
 }
 
@@ -95,15 +95,15 @@ resource "axonops_kafka_connect_connector" "debezium_mysql" {
   name                 = "mysql-cdc"
 
   config = {
-    "connector.class"                    = "io.debezium.connector.mysql.MySqlConnector"
-    "tasks.max"                          = "1"
-    "database.hostname"                  = "mysql-server"
-    "database.port"                      = "3306"
-    "database.user"                      = "debezium"
-    "database.password"                  = "dbz"
-    "database.server.id"                 = "184054"
-    "topic.prefix"                       = "mysql"
-    "database.include.list"              = "inventory"
+    "connector.class"                                 = "io.debezium.connector.mysql.MySqlConnector"
+    "tasks.max"                                       = "1"
+    "database.hostname"                               = "mysql-server"
+    "database.port"                                   = "3306"
+    "database.user"                                   = "debezium"
+    "database.password"                               = "dbz"
+    "database.server.id"                              = "184054"
+    "topic.prefix"                                    = "mysql"
+    "database.include.list"                           = "inventory"
     "schema.history.internal.kafka.bootstrap.servers" = "kafka:9092"
     "schema.history.internal.kafka.topic"             = "schema-changes.inventory"
   }

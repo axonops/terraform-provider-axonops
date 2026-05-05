@@ -11,7 +11,8 @@ resource "axonops_metric_alert_rule" "cassandra_down_count" {
   cluster_type   = "cassandra"
   name           = "DOWN count per node"
   dashboard      = "Overview"
-  chart          = "Number of Endpoints Down Per Node Point Of View"
+  chart          = "UP vs Down endpoints"
+  metric         = "max(cas_downendpoint_count) by (host_id)"
   operator       = ">="
   warning_value  = 1
   critical_value = 2
@@ -680,101 +681,11 @@ resource "axonops_metric_alert_rule" "cassandra_keycache_hitrate_low" {
 
 # ── Security ──────────────────────────────────────────────────────────
 
-resource "axonops_metric_alert_rule" "cassandra_failed_authentications" {
-  cluster_name   = var.cluster_name
-  cluster_type   = "cassandra"
-  name           = "Failed Authentications"
-  dashboard      = "Security"
-  chart          = "Failed Authentications"
-  operator       = ">="
-  warning_value  = 1
-  critical_value = 20
-  duration       = "3m"
-
-  annotations = {
-    description = "Failed authentication in Cassandra"
-  }
-}
-
-resource "axonops_metric_alert_rule" "cassandra_jmx_connections_high" {
-  cluster_name   = var.cluster_name
-  cluster_type   = "cassandra"
-  name           = "JMX"
-  dashboard      = "Security"
-  chart          = "JMX"
-  operator       = ">="
-  warning_value  = 10
-  critical_value = 100
-  duration       = "3m"
-
-  annotations = {
-    description = "JMX connections in Cassandra"
-  }
-}
-
-resource "axonops_metric_alert_rule" "cassandra_failed_authorizations" {
-  cluster_name   = var.cluster_name
-  cluster_type   = "cassandra"
-  name           = "Failed Authorizations"
-  dashboard      = "Security"
-  chart          = "Failed Authorizations"
-  operator       = ">="
-  warning_value  = 5
-  critical_value = 20
-  duration       = "3m"
-
-  annotations = {
-    description = "Failed authorizations in Cassandra"
-  }
-}
-
-resource "axonops_metric_alert_rule" "cassandra_ddl_queries_high" {
-  cluster_name   = var.cluster_name
-  cluster_type   = "cassandra"
-  name           = "DDL queries"
-  dashboard      = "Security"
-  chart          = "DDL queries"
-  operator       = ">="
-  warning_value  = 5
-  critical_value = 100
-  duration       = "3m"
-
-  annotations = {
-    description = "DDL queries run in Cassandra"
-  }
-}
-
-resource "axonops_metric_alert_rule" "cassandra_dcl_queries_high" {
-  cluster_name   = var.cluster_name
-  cluster_type   = "cassandra"
-  name           = "DCL queries"
-  dashboard      = "Security"
-  chart          = "DCL queries"
-  operator       = ">="
-  warning_value  = 5
-  critical_value = 100
-  duration       = "3m"
-
-  annotations = {
-    description = "DCL queries run in Cassandra"
-  }
-}
-
-resource "axonops_metric_alert_rule" "cassandra_dml_queries_high" {
-  cluster_name   = var.cluster_name
-  cluster_type   = "cassandra"
-  name           = "DML queries"
-  dashboard      = "Security"
-  chart          = "DML queries"
-  operator       = ">="
-  warning_value  = 5
-  critical_value = 100
-  duration       = "3m"
-
-  annotations = {
-    description = "DML queries in Cassandra"
-  }
-}
+# Security panels in the Cassandra dashboard are events_timeline (audit log
+# events), not metric panels — they cannot be used with axonops_metric_alert_rule.
+# The provider has no metric query to extract from. Equivalent rules have been
+# moved to log_alerts.tf as axonops_log_alert_rule resources targeting the
+# Cassandra audit log.
 
 
 # ── Table-Level Alerts (cluster-specific — update keyspace/scope for your tables) ──
