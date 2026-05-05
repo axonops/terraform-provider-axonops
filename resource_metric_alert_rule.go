@@ -512,13 +512,25 @@ func (r *metricAlertRuleResource) Create(ctx context.Context, req resource.Creat
 		return
 	}
 
-	data.ID = types.StringValue(deterministicAlertRuleID(
-		r.client.OrgId(),
-		data.ClusterType.ValueString(),
-		data.ClusterName.ValueString(),
-		data.Name.ValueString(),
-		"metric",
-	))
+	clusterType := data.ClusterType.ValueString()
+	clusterName := data.ClusterName.ValueString()
+	alertName := data.Name.ValueString()
+
+	// AxonOps generates server-side IDs and ignores client-supplied UUIDs
+	// when no record matches. Adopt any existing rule's ID to keep Create
+	// idempotent across state-loss; otherwise seed with a deterministic id.
+	existingRules, err := r.client.GetAlertRules(clusterType, clusterName)
+	if err != nil {
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to look up existing alert rules: %s", err))
+		return
+	}
+	if existing := findAlertRuleByName(existingRules, alertName, isMetricAlertRule); existing != nil {
+		data.ID = types.StringValue(existing.ID)
+	} else {
+		data.ID = types.StringValue(deterministicAlertRuleID(
+			r.client.OrgId(), clusterType, clusterName, alertName, "metric",
+		))
+	}
 
 	// Resolve dashboard/chart names to UUIDs
 	resolved, err := r.resolveDashboardChart(
@@ -562,10 +574,17 @@ func (r *metricAlertRuleResource) Create(ctx context.Context, req resource.Creat
 		"expr": rule.Expr,
 	})
 
-	err = r.client.CreateOrUpdateAlertRule(data.ClusterType.ValueString(), data.ClusterName.ValueString(), rule)
+	err = r.client.CreateOrUpdateAlertRule(clusterType, clusterName, rule)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create alert rule: %s", err))
 		return
+	}
+
+	// Re-fetch to capture the canonical server-assigned ID.
+	if rules, err := r.client.GetAlertRules(clusterType, clusterName); err == nil {
+		if found := findAlertRuleByName(rules, alertName, isMetricAlertRule); found != nil {
+			data.ID = types.StringValue(found.ID)
+		}
 	}
 
 	// Write computed annotations/integrations back to state
@@ -595,18 +614,28 @@ func (r *metricAlertRuleResource) Read(ctx context.Context, req resource.ReadReq
 		return
 	}
 
-	// Find rule by ID
+	// Find rule by ID, then fall back to alert name. The AxonOps API may
+	// have stored the rule under a different UUID than the one Terraform
+	// holds in state, so reconcile by name when the ID lookup misses.
+	wantID := data.ID.ValueString()
 	var found *axonopsClient.MetricAlertRule
-	for _, rule := range rules {
-		if rule.ID == data.ID.ValueString() {
-			found = &rule
+	for i := range rules {
+		if rules[i].ID == wantID && isMetricAlertRule(rules[i]) {
+			found = &rules[i]
 			break
 		}
+	}
+	if found == nil {
+		found = findAlertRuleByName(rules, data.Name.ValueString(), isMetricAlertRule)
 	}
 
 	if found == nil {
 		resp.State.RemoveResource(ctx)
 		return
+	}
+
+	if found.ID != wantID {
+		data.ID = types.StringValue(found.ID)
 	}
 
 	data.Name = types.StringValue(found.Alert)
@@ -717,10 +746,21 @@ func (r *metricAlertRuleResource) Update(ctx context.Context, req resource.Updat
 	filters := r.buildFilters(ctx, &planData)
 	rule := r.buildRule(ctx, &planData, filters)
 
-	err = r.client.CreateOrUpdateAlertRule(planData.ClusterType.ValueString(), planData.ClusterName.ValueString(), rule)
+	clusterType := planData.ClusterType.ValueString()
+	clusterName := planData.ClusterName.ValueString()
+	alertName := planData.Name.ValueString()
+
+	err = r.client.CreateOrUpdateAlertRule(clusterType, clusterName, rule)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to update alert rule: %s", err))
 		return
+	}
+
+	// Capture the canonical server-assigned ID after the upsert.
+	if rules, err := r.client.GetAlertRules(clusterType, clusterName); err == nil {
+		if found := findAlertRuleByName(rules, alertName, isMetricAlertRule); found != nil {
+			planData.ID = types.StringValue(found.ID)
+		}
 	}
 
 	// Write computed annotations/integrations back to state
@@ -744,8 +784,18 @@ func (r *metricAlertRuleResource) Delete(ctx context.Context, req resource.Delet
 		return
 	}
 
-	err := r.client.DeleteAlertRule(data.ClusterType.ValueString(), data.ClusterName.ValueString(), data.ID.ValueString())
-	if err != nil {
+	clusterType := data.ClusterType.ValueString()
+	clusterName := data.ClusterName.ValueString()
+	id := data.ID.ValueString()
+
+	// Resolve the canonical id by alert name in case state has drifted.
+	if rules, err := r.client.GetAlertRules(clusterType, clusterName); err == nil {
+		if found := findAlertRuleByName(rules, data.Name.ValueString(), isMetricAlertRule); found != nil {
+			id = found.ID
+		}
+	}
+
+	if err := r.client.DeleteAlertRule(clusterType, clusterName, id); err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete alert rule: %s", err))
 		return
 	}

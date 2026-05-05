@@ -90,7 +90,7 @@ resource "axonops_metric_alert_rule" "under_replicated" {
 ### Read-Only
 
 - `correlation_id` (String) Correlation ID linking this alert to a dashboard widget (auto-resolved from dashboard/chart).
-- `id` (String) The unique identifier for the alert rule (auto-generated).
+- `id` (String) Unique identifier for the alert rule. Derived deterministically from org, cluster type, cluster name, rule name, and rule type — the same configuration always produces the same ID, which makes Create idempotent across state loss and transient API retries.
 
 <a id="nestedatt--annotations"></a>
 ### Nested Schema for `annotations`

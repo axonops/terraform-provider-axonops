@@ -289,6 +289,44 @@ func (r *logAlertRuleResource) buildRule(data *logAlertRuleResourceData) axonops
 	}
 }
 
+// upsertLogAlertRule pushes a log alert rule to AxonOps and reconciles its ID
+// with the server-assigned UUID. The AxonOps API ignores the supplied id when
+// no record matches it server-side, so we look up by alert name first to
+// adopt any existing rule's id (preventing duplicates on state-loss retry),
+// then re-fetch after the POST to capture the canonical id the server stored
+// the rule under.
+func (r *logAlertRuleResource) upsertLogAlertRule(data *logAlertRuleResourceData) error {
+	clusterType := data.ClusterType.ValueString()
+	clusterName := data.ClusterName.ValueString()
+	alertName := data.Name.ValueString()
+
+	rules, err := r.client.GetAlertRules(clusterType, clusterName)
+	if err != nil {
+		return fmt.Errorf("looking up existing log alert rules: %w", err)
+	}
+	if existing := findAlertRuleByName(rules, alertName, isLogAlertRule); existing != nil {
+		data.ID = types.StringValue(existing.ID)
+	} else if data.ID.IsNull() || data.ID.IsUnknown() || data.ID.ValueString() == "" {
+		data.ID = types.StringValue(deterministicAlertRuleID(
+			r.client.OrgId(), clusterType, clusterName, alertName, "log",
+		))
+	}
+
+	rule := r.buildRule(data)
+	if err := r.client.CreateOrUpdateAlertRule(clusterType, clusterName, rule); err != nil {
+		return err
+	}
+
+	rules, err = r.client.GetAlertRules(clusterType, clusterName)
+	if err != nil {
+		return fmt.Errorf("verifying log alert rule after create/update: %w", err)
+	}
+	if found := findAlertRuleByName(rules, alertName, isLogAlertRule); found != nil {
+		data.ID = types.StringValue(found.ID)
+	}
+	return nil
+}
+
 func (r *logAlertRuleResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	var data logAlertRuleResourceData
 
@@ -298,18 +336,7 @@ func (r *logAlertRuleResource) Create(ctx context.Context, req resource.CreateRe
 		return
 	}
 
-	data.ID = types.StringValue(deterministicAlertRuleID(
-		r.client.OrgId(),
-		data.ClusterType.ValueString(),
-		data.ClusterName.ValueString(),
-		data.Name.ValueString(),
-		"log",
-	))
-
-	rule := r.buildRule(&data)
-
-	err := r.client.CreateOrUpdateAlertRule(data.ClusterType.ValueString(), data.ClusterName.ValueString(), rule)
-	if err != nil {
+	if err := r.upsertLogAlertRule(&data); err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create log alert rule: %s", err))
 		return
 	}
@@ -335,18 +362,30 @@ func (r *logAlertRuleResource) Read(ctx context.Context, req resource.ReadReques
 		return
 	}
 
-	// Find the log alert rule by ID
+	// Find the log alert rule by ID first, then fall back to alert name —
+	// the AxonOps API may have generated its own UUID for the rule, so the
+	// id stored in Terraform state can drift from the canonical server id.
 	var found *axonopsClient.MetricAlertRule
-	for _, rule := range rules {
-		if rule.ID == data.ID.ValueString() && isLogAlertRule(rule) {
-			found = &rule
+	wantID := data.ID.ValueString()
+	for i := range rules {
+		if rules[i].ID == wantID && isLogAlertRule(rules[i]) {
+			found = &rules[i]
 			break
 		}
+	}
+	if found == nil {
+		found = findAlertRuleByName(rules, data.Name.ValueString(), isLogAlertRule)
 	}
 
 	if found == nil {
 		resp.State.RemoveResource(ctx)
 		return
+	}
+
+	// Reconcile state ID with the server-assigned ID so subsequent
+	// applies don't perpetually try to recreate the rule.
+	if found.ID != wantID {
+		data.ID = types.StringValue(found.ID)
 	}
 
 	content, level, source, logType := parseEventsExpr(found.Expr)
@@ -385,13 +424,11 @@ func (r *logAlertRuleResource) Update(ctx context.Context, req resource.UpdateRe
 		return
 	}
 
-	// Keep the same ID
+	// Carry the prior state's id forward so upsertLogAlertRule can adopt it
+	// even if alert-name lookup fails (e.g. the rule was renamed).
 	planData.ID = stateData.ID
 
-	rule := r.buildRule(&planData)
-
-	err := r.client.CreateOrUpdateAlertRule(planData.ClusterType.ValueString(), planData.ClusterName.ValueString(), rule)
-	if err != nil {
+	if err := r.upsertLogAlertRule(&planData); err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to update log alert rule: %s", err))
 		return
 	}
@@ -411,8 +448,20 @@ func (r *logAlertRuleResource) Delete(ctx context.Context, req resource.DeleteRe
 		return
 	}
 
-	err := r.client.DeleteAlertRule(data.ClusterType.ValueString(), data.ClusterName.ValueString(), data.ID.ValueString())
-	if err != nil {
+	clusterType := data.ClusterType.ValueString()
+	clusterName := data.ClusterName.ValueString()
+	id := data.ID.ValueString()
+
+	// State id may not match the canonical server id (the API may have
+	// generated its own UUID at create time). Resolve the current id by
+	// alert name before issuing the DELETE.
+	if rules, err := r.client.GetAlertRules(clusterType, clusterName); err == nil {
+		if found := findAlertRuleByName(rules, data.Name.ValueString(), isLogAlertRule); found != nil {
+			id = found.ID
+		}
+	}
+
+	if err := r.client.DeleteAlertRule(clusterType, clusterName, id); err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete log alert rule: %s", err))
 		return
 	}

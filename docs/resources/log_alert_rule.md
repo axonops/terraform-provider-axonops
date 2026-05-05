@@ -122,7 +122,7 @@ held in the AxonOps backend.
 
 ### Read-Only
 
-- `id` (String) The unique identifier for the log alert rule (auto-generated).
+- `id` (String) Unique identifier for the alert rule. Derived deterministically from org, cluster type, cluster name, rule name, and rule type — the same configuration always produces the same ID, which makes Create idempotent across state loss and transient API retries.
 
 ## Import
 
