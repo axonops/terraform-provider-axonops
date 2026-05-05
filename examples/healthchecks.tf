@@ -30,7 +30,7 @@ resource "axonops_healthcheck_tcp" "schema_registry" {
   cluster_type          = "kafka"
   name                  = "Schema Registry Port"
   tcp                   = "0.0.0.0:8081"
-  interval              = "1m"
+  interval              = "10m"
   timeout               = "15s"
   supported_agent_types = ["schema-registry"]
 }
@@ -41,7 +41,7 @@ resource "axonops_healthcheck_tcp" "kafka_connect" {
   cluster_type          = "kafka"
   name                  = "Kafka Connect Port"
   tcp                   = "0.0.0.0:8083"
-  interval              = "1m"
+  interval              = "10m"
   timeout               = "15s"
   supported_agent_types = ["all"]
 }
@@ -67,7 +67,7 @@ resource "axonops_healthcheck_http" "schema_registry_health" {
   url                   = "http://localhost:8081/subjects"
   method                = "GET"
   expected_status       = 200
-  interval              = "1m"
+  interval              = "10m"
   timeout               = "30s"
   supported_agent_types = ["schema-registry"]
 }
@@ -80,7 +80,7 @@ resource "axonops_healthcheck_http" "connect_health" {
   url                   = "http://localhost:8083/connectors"
   method                = "GET"
   expected_status       = 200
-  interval              = "1m"
+  interval              = "10m"
   timeout               = "30s"
   supported_agent_types = ["all"]
 }
@@ -138,7 +138,7 @@ resource "axonops_healthcheck_shell" "kafka_process" {
   cluster_type = "kafka"
   name         = "Kafka Process Check"
   script       = "pgrep -f kafka.Kafka"
-  interval     = "1m"
+  interval     = "10m"
   timeout      = "10s"
 }
 
@@ -169,7 +169,7 @@ resource "axonops_healthcheck_shell" "network_check" {
   cluster_type = "kafka"
   name         = "Network Connectivity"
   script       = "ping -c 1 -W 2 kafka-broker-1.internal"
-  interval     = "1m"
+  interval     = "10m"
   timeout      = "10s"
 }
 
@@ -181,5 +181,5 @@ resource "axonops_healthcheck_shell" "custom_monitor" {
   script       = "/opt/scripts/kafka-health-check.sh"
   shell        = "/bin/bash"
   interval     = "3m"
-  timeout      = "1m"
+  timeout      = "10m"
 }

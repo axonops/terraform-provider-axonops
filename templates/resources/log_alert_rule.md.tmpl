@@ -13,6 +13,29 @@ description: |-
 
 {{ tffile "examples/resources/axonops_log_alert_rule/resource.tf" }}
 
+## Content Normalisation
+
+The `content` attribute is forwarded to Elasticsearch's `simple_query_string`
+query. By default, multi-word values match any term (logical OR), which often
+produces noisy false positives. To make alerts AND-match every term, the
+provider rewrites multi-word `content` values automatically:
+
+| User-supplied `content` | Sent to API     |
+|-------------------------|-----------------|
+| `DOWN`                  | `DOWN`          |
+| `is now DOWN`           | `+is +now +DOWN`|
+| `+is +now +DOWN`        | `+is +now +DOWN`|
+| `"is now DOWN"`         | `"is now DOWN"` |
+
+To opt out of normalisation, include any `simple_query_string` operator
+(`+`, `-`, `|`, `*`, `(`, `)`, `~`, `"`) anywhere in the value and the string
+is passed through verbatim.
+
+The provider preserves the natural-language form in Terraform state, so
+`terraform plan` will not show a perpetual diff between, for example, the
+`is now DOWN` value in your configuration and the `+is +now +DOWN` value
+held in the AxonOps backend.
+
 {{ .SchemaMarkdown | trimspace }}
 
 ## Import

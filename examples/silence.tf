@@ -39,7 +39,7 @@ resource "axonops_silence" "kafka_maintenance" {
   cluster_type = "kafka"
   duration     = "1h30m"
   is_recurring = true
-  cron_expr    = "0 2 * * 0"  # Every Sunday at 2 AM
+  cron_expr    = "0 2 * * 0" # Every Sunday at 2 AM
 }
 
 # Read an existing silence

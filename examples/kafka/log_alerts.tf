@@ -15,7 +15,7 @@ resource "axonops_log_alert_rule" "kafka_broker_startup_failure" {
   operator       = ">="
   warning_value  = 1
   critical_value = 1
-  duration       = "1m"
+  duration       = "10m"
   description    = "Broker failed to start. Check port conflicts, config errors, or permissions. Verify server.properties and listener ports."
 }
 
@@ -28,7 +28,7 @@ resource "axonops_log_alert_rule" "kafka_broker_jvm_oom" {
   operator       = ">="
   warning_value  = 1
   critical_value = 1
-  duration       = "1m"
+  duration       = "10m"
   description    = "JVM heap exhausted. Increase -Xmx, review message sizes, check for memory leaks in custom interceptors or serialisers."
 }
 
@@ -41,7 +41,7 @@ resource "axonops_log_alert_rule" "kafka_broker_fatal_error" {
   operator       = ">="
   warning_value  = 1
   critical_value = 1
-  duration       = "1m"
+  duration       = "10m"
   description    = "Fatal condition causing broker abort. Investigate immediately; check full stack trace."
 }
 
@@ -54,7 +54,7 @@ resource "axonops_log_alert_rule" "kafka_storage_exception" {
   operator       = ">="
   warning_value  = 1
   critical_value = 1
-  duration       = "1m"
+  duration       = "10m"
   description    = "Disk-level failure. Check disk health, SMART status, and filesystem mount state."
 }
 
@@ -67,7 +67,7 @@ resource "axonops_log_alert_rule" "kafka_data_directory_failure" {
   operator       = ">="
   warning_value  = 1
   critical_value = 1
-  duration       = "1m"
+  duration       = "10m"
   description    = "Kafka cannot access a log directory. Verify directory exists, permissions are correct, and the filesystem is mounted and writable."
 }
 
@@ -80,7 +80,7 @@ resource "axonops_log_alert_rule" "kafka_log_flush_io_error" {
   operator       = ">="
   warning_value  = 1
   critical_value = 1
-  duration       = "1m"
+  duration       = "10m"
   description    = "Typically java.io.IOException — No space left on device. Expand storage, reduce retention, or delete unused topics."
 }
 
@@ -93,7 +93,7 @@ resource "axonops_log_alert_rule" "kafka_disk_lock_error" {
   operator       = ">="
   warning_value  = 1
   critical_value = 1
-  duration       = "1m"
+  duration       = "10m"
   description    = "Another process is holding the data directory lock or the filesystem is read-only. Ensure no duplicate Kafka processes are running."
 }
 
@@ -148,7 +148,7 @@ resource "axonops_log_alert_rule" "kafka_offline_partition_log" {
   operator       = ">="
   warning_value  = 1
   critical_value = 1
-  duration       = "1m"
+  duration       = "10m"
   description    = "A partition has no active leader. Restore the failed broker or trigger partition reassignment."
 }
 
@@ -232,7 +232,7 @@ resource "axonops_log_alert_rule" "kafka_broker_gc_oom" {
   operator       = ">="
   warning_value  = 1
   critical_value = 1
-  duration       = "1m"
+  duration       = "10m"
   description    = "JVM heap exhausted as detected in GC log. Increase -Xmx immediately."
 }
 
@@ -248,7 +248,7 @@ resource "axonops_log_alert_rule" "kafka_controller_no_quorum_leader" {
   operator       = ">="
   warning_value  = 1
   critical_value = 1
-  duration       = "1m"
+  duration       = "10m"
   description    = "The KRaft quorum has no elected leader. The cluster cannot process metadata changes. Check connectivity between all controller nodes."
 }
 
@@ -261,7 +261,7 @@ resource "axonops_log_alert_rule" "kafka_controller_fatal_error" {
   operator       = ">="
   warning_value  = 1
   critical_value = 1
-  duration       = "1m"
+  duration       = "10m"
   description    = "Fatal condition in the controller process. Investigate the full stack trace immediately."
 }
 
@@ -287,7 +287,7 @@ resource "axonops_log_alert_rule" "kafka_controller_oom" {
   operator       = ">="
   warning_value  = 1
   critical_value = 1
-  duration       = "1m"
+  duration       = "10m"
   description    = "Controller JVM heap exhausted. Increase controller heap — larger clusters require more memory for in-memory metadata."
 }
 
@@ -313,7 +313,7 @@ resource "axonops_log_alert_rule" "kafka_controller_metadata_load_error" {
   operator       = ">="
   warning_value  = 1
   critical_value = 1
-  duration       = "1m"
+  duration       = "10m"
   description    = "The BrokerMetadataListener encountered errors loading the metadata log. Data integrity risk; investigate immediately."
 }
 
@@ -329,7 +329,7 @@ resource "axonops_log_alert_rule" "kafka_connect_worker_fatal_error" {
   operator       = ">="
   warning_value  = 1
   critical_value = 1
-  duration       = "1m"
+  duration       = "10m"
   description    = "The Connect worker process has encountered a fatal error. Restart the worker and investigate the root cause."
 }
 
@@ -342,7 +342,7 @@ resource "axonops_log_alert_rule" "kafka_connect_worker_startup_failure" {
   operator       = ">="
   warning_value  = 1
   critical_value = 1
-  duration       = "1m"
+  duration       = "10m"
   description    = "Worker failed to start, typically due to configuration errors. Validate connect-distributed.properties."
 }
 
@@ -358,7 +358,7 @@ resource "axonops_log_alert_rule" "kafka_connect_sink_task_failed" {
   operator       = ">="
   warning_value  = 1
   critical_value = 1
-  duration       = "1m"
+  duration       = "10m"
   description    = "A sink connector task has transitioned to FAILED state. Connect does NOT automatically restart failed tasks. Restart via REST API POST /connectors/{name}/tasks/{id}/restart."
 }
 
@@ -371,7 +371,7 @@ resource "axonops_log_alert_rule" "kafka_connect_source_task_failed" {
   operator       = ">="
   warning_value  = 1
   critical_value = 1
-  duration       = "1m"
+  duration       = "10m"
   description    = "A source connector task has transitioned to FAILED state. Connect does NOT automatically restart failed tasks. Restart via REST API POST /connectors/{name}/tasks/{id}/restart."
 }
 
@@ -410,7 +410,7 @@ resource "axonops_log_alert_rule" "kafka_connect_rest_api_unreachable" {
   operator       = ">="
   warning_value  = 1
   critical_value = 1
-  duration       = "1m"
+  duration       = "10m"
   description    = "The Connect worker REST API is unreachable — indicates a worker crash or network issue."
 }
 

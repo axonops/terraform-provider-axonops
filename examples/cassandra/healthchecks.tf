@@ -12,7 +12,7 @@ resource "axonops_healthcheck_tcp" "cql_port" {
   name         = "cql_client_port"
   tcp          = "{{.comp_listen_address}}:{{.comp_native_transport_port}}"
   interval     = "3m"
-  timeout      = "1m"
+  timeout      = "10m"
 }
 
 
@@ -35,7 +35,7 @@ resource "axonops_healthcheck_shell" "reboot_required" {
   script       = "/usr/local/bin/check-reboot-required.sh"
   shell        = "/bin/bash"
   interval     = "12h"
-  timeout      = "1m"
+  timeout      = "10m"
 }
 
 # Check for scheduled AWS maintenance events
@@ -45,7 +45,7 @@ resource "axonops_healthcheck_shell" "aws_maintenance_events" {
   script       = "/usr/local/bin/check-aws-events.py"
   shell        = "/usr/bin/python3"
   interval     = "12h"
-  timeout      = "1m"
+  timeout      = "10m"
 }
 
 # Detect schema disagreements across the cluster
@@ -55,7 +55,7 @@ resource "axonops_healthcheck_shell" "schema_disagreements" {
   script       = "/usr/local/bin/cassandra-check-schema.sh"
   shell        = "/bin/bash"
   interval     = "1d"
-  timeout      = "1m"
+  timeout      = "10m"
 }
 
 # Verify Cassandra data directory ownership
@@ -75,7 +75,7 @@ resource "axonops_healthcheck_shell" "commitlog_archives" {
   script       = "/usr/local/bin/cassandra-check-commitlog-archives.sh"
   shell        = "/bin/bash"
   interval     = "12h"
-  timeout      = "1m"
+  timeout      = "10m"
 }
 
 # Verify TLS certificate expiry on the CQL port
@@ -85,7 +85,7 @@ resource "axonops_healthcheck_shell" "ssl_certificate" {
   script       = "/usr/local/bin/cassandra-check-ssl-cert.sh"
   shell        = "/bin/bash"
   interval     = "12h"
-  timeout      = "1m"
+  timeout      = "10m"
 }
 
 # Run CQL read queries at each consistency level to verify cluster health
@@ -95,5 +95,5 @@ resource "axonops_healthcheck_shell" "cql_consistency_test" {
   script       = "/usr/local/bin/cassandra-cql-consistency-test.sh"
   shell        = "/bin/bash"
   interval     = "12h"
-  timeout      = "1m"
+  timeout      = "10m"
 }

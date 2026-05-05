@@ -24,12 +24,12 @@ resource "axonops_cassandra_scheduled_repair" "selective_repair" {
   keyspace      = "analytics"
   schedule_expr = "0 3 * * 6"
 
-  blacklisted_tables     = ["large_events", "raw_logs"]
-  specific_data_centers  = ["dc1", "dc2"]
-  segments_per_node      = 4
-  segmented              = true
-  optimise_streams       = true
-  job_threads            = 2
+  blacklisted_tables    = ["large_events", "raw_logs"]
+  specific_data_centers = ["dc1", "dc2"]
+  segments_per_node     = 4
+  segmented             = true
+  optimise_streams      = true
+  job_threads           = 2
 }
 
 # Read an existing scheduled repair

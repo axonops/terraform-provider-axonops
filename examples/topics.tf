@@ -32,10 +32,10 @@ resource "axonops_kafka_topic" "events" {
   cluster_name       = "my-kafka-cluster"
 
   config = {
-    cleanup_policy       = "delete"
-    retention_ms         = "259200000"    # 3 days
-    delete_retention_ms  = "86400000"     # 1 day
-    max_message_bytes    = "1048576"      # 1MB
+    cleanup_policy      = "delete"
+    retention_ms        = "259200000" # 3 days
+    delete_retention_ms = "86400000"  # 1 day
+    max_message_bytes   = "1048576"   # 1MB
   }
 }
 
@@ -47,9 +47,9 @@ resource "axonops_kafka_topic" "state_store" {
   cluster_name       = "my-kafka-cluster"
 
   config = {
-    cleanup_policy               = "compact"
-    min_cleanable_dirty_ratio    = "0.1"
-    segment_ms                   = "3600000"  # 1 hour
-    delete_retention_ms          = "86400000" # 1 day
+    cleanup_policy            = "compact"
+    min_cleanable_dirty_ratio = "0.1"
+    segment_ms                = "3600000"  # 1 hour
+    delete_retention_ms       = "86400000" # 1 day
   }
 }

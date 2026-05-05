@@ -5,11 +5,11 @@ resource "axonops_schema" "user_events" {
   cluster_name = "my-kafka-cluster"
   subject      = "user-events-value"
   schema_type  = "AVRO"
-  schema       = jsonencode({
+  schema = jsonencode({
     type      = "record"
     name      = "UserEvent"
     namespace = "com.example.events"
-    fields    = [
+    fields = [
       {
         name = "user_id"
         type = "string"
@@ -36,11 +36,11 @@ resource "axonops_schema" "order" {
   cluster_name = "my-kafka-cluster"
   subject      = "orders-value"
   schema_type  = "AVRO"
-  schema       = jsonencode({
+  schema = jsonencode({
     type      = "record"
     name      = "Order"
     namespace = "com.example.orders"
-    fields    = [
+    fields = [
       {
         name = "order_id"
         type = "string"
@@ -52,10 +52,10 @@ resource "axonops_schema" "order" {
       {
         name = "items"
         type = {
-          type  = "array"
+          type = "array"
           items = {
-            type   = "record"
-            name   = "OrderItem"
+            type = "record"
+            name = "OrderItem"
             fields = [
               { name = "product_id", type = "string" },
               { name = "quantity", type = "int" },
@@ -92,14 +92,14 @@ resource "axonops_schema" "notifications" {
   cluster_name = "my-kafka-cluster"
   subject      = "notifications-value"
   schema_type  = "JSON"
-  schema       = jsonencode({
-    "$schema"    = "http://json-schema.org/draft-07/schema#"
-    type         = "object"
-    title        = "Notification"
-    required     = ["id", "type", "message", "timestamp"]
-    properties   = {
+  schema = jsonencode({
+    "$schema" = "http://json-schema.org/draft-07/schema#"
+    type      = "object"
+    title     = "Notification"
+    required  = ["id", "type", "message", "timestamp"]
+    properties = {
       id = {
-        type = "string"
+        type   = "string"
         format = "uuid"
       }
       type = {
@@ -110,14 +110,14 @@ resource "axonops_schema" "notifications" {
         type = "string"
       }
       message = {
-        type = "string"
+        type      = "string"
         maxLength = 1000
       }
       timestamp = {
         type = "integer"
       }
       metadata = {
-        type = "object"
+        type                 = "object"
         additionalProperties = true
       }
     }
@@ -148,11 +148,11 @@ resource "axonops_schema" "user_events_key" {
   cluster_name = "my-kafka-cluster"
   subject      = "user-events-key"
   schema_type  = "AVRO"
-  schema       = jsonencode({
+  schema = jsonencode({
     type      = "record"
     name      = "UserEventKey"
     namespace = "com.example.events"
-    fields    = [
+    fields = [
       {
         name = "user_id"
         type = "string"

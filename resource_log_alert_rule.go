@@ -18,6 +18,33 @@ import (
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
+// simpleQueryStringOperators are simple_query_string special characters. If any
+// appear in content, the user is assumed to know the query DSL and the value
+// is passed through unchanged.
+const simpleQueryStringOperators = `+-|*()~"`
+
+// normaliseLogContent rewrites a multi-word content value so Elasticsearch's
+// simple_query_string performs an AND match across every term. Single words,
+// empty values, and strings already containing query operators are returned
+// unchanged.
+func normaliseLogContent(content string) string {
+	if content == "" {
+		return content
+	}
+	if strings.ContainsAny(content, simpleQueryStringOperators) {
+		return content
+	}
+	parts := strings.Fields(content)
+	if len(parts) <= 1 {
+		return content
+	}
+	out := make([]string, len(parts))
+	for i, p := range parts {
+		out[i] = "+" + p
+	}
+	return strings.Join(out, " ")
+}
+
 var _ resource.Resource = (*logAlertRuleResource)(nil)
 var _ resource.ResourceWithImportState = (*logAlertRuleResource)(nil)
 
@@ -71,10 +98,14 @@ func (r *logAlertRuleResource) Schema(ctx context.Context, req resource.SchemaRe
 				Description: "The name of the log alert rule.",
 			},
 			"content": schema.StringAttribute{
-				Optional:    true,
-				Computed:    true,
-				Default:     stringdefault.StaticString(""),
-				Description: "The log content/phrase to search for.",
+				Optional: true,
+				Computed: true,
+				Default:  stringdefault.StaticString(""),
+				Description: "The log content/phrase to search for. Multi-word values are " +
+					"automatically rewritten as a simple_query_string AND match (e.g. " +
+					"`is now DOWN` is sent as `+is +now +DOWN`). To opt out, include any " +
+					"simple_query_string operator (`+`, `-`, `|`, `*`, `(`, `)`, `~`, `\"`) " +
+					"and the value is passed through unchanged.",
 			},
 			"description": schema.StringAttribute{
 				Optional:    true,
@@ -201,7 +232,7 @@ func isLogAlertRule(rule axonopsClient.MetricAlertRule) bool {
 
 func (r *logAlertRuleResource) buildRule(data *logAlertRuleResourceData) axonopsClient.MetricAlertRule {
 	eventsExpr := buildEventsExpr(
-		data.Content.ValueString(),
+		normaliseLogContent(data.Content.ValueString()),
 		data.Level.ValueString(),
 		data.Source.ValueString(),
 		data.LogType.ValueString(),
@@ -287,7 +318,13 @@ func (r *logAlertRuleResource) Read(ctx context.Context, req resource.ReadReques
 	data.WarningValue = types.Float64Value(found.WarningValue)
 	data.CriticalValue = types.Float64Value(found.CriticalValue)
 	data.Duration = types.StringValue(found.For)
-	data.Content = types.StringValue(content)
+	// Preserve the prior content value when the API-side value is just the
+	// normalised form of what the user wrote — that way the user's natural
+	// language config (e.g. "is now DOWN") doesn't drift to the AND-prefixed
+	// form (e.g. "+is +now +DOWN") in state and produce noisy plans.
+	if normaliseLogContent(data.Content.ValueString()) != content {
+		data.Content = types.StringValue(content)
+	}
 	data.Level = types.StringValue(level)
 	data.LogType = types.StringValue(logType)
 	data.Source = types.StringValue(source)

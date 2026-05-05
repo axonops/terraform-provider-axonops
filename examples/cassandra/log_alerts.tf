@@ -147,7 +147,7 @@ resource "axonops_log_alert_rule" "cassandra_networking_buffer_pool_full" {
   cluster_name   = var.cluster_name
   cluster_type   = "cassandra"
   name           = "Maximum memory usage reached for networking buffer pool"
-  content        = "+\"INFO.*Messaging-EventLoop\" +NoSpamLogger.* +\"for networking buffer pool\" +\"cannot allocate chunk\""
+  content        = "+Messaging-EventLoop +NoSpamLogger +cannot +allocate +chunk"
   source         = "/var/log/cassandra/system.log"
   operator       = ">="
   warning_value  = 3
@@ -267,4 +267,93 @@ resource "axonops_log_alert_rule" "cassandra_prepared_statement_cache_full" {
   duration       = "10m"
   present        = true
   description    = "Prepared statements discarded because cache limit reached."
+}
+
+
+# ── Security (audit log) ──────────────────────────────────────────────
+# Cassandra audit log path assumes default axon-cassandra-agent config.
+# Adjust `source` if your cluster uses a different audit log location.
+
+resource "axonops_log_alert_rule" "cassandra_failed_authentications" {
+  cluster_name   = var.cluster_name
+  cluster_type   = "cassandra"
+  name           = "Failed Authentications"
+  content        = "category:AUTH type:LOGIN_ERROR"
+  source         = "/var/log/cassandra/audit/audit.log"
+  operator       = ">="
+  warning_value  = 1
+  critical_value = 20
+  duration       = "3m"
+  present        = true
+  description    = "Failed authentication in Cassandra"
+}
+
+resource "axonops_log_alert_rule" "cassandra_jmx_connections_high" {
+  cluster_name   = var.cluster_name
+  cluster_type   = "cassandra"
+  name           = "JMX connections"
+  content        = "JMX connection"
+  source         = "/var/log/cassandra/system.log"
+  operator       = ">="
+  warning_value  = 10
+  critical_value = 100
+  duration       = "3m"
+  present        = true
+  description    = "JMX connections in Cassandra"
+}
+
+resource "axonops_log_alert_rule" "cassandra_failed_authorizations" {
+  cluster_name   = var.cluster_name
+  cluster_type   = "cassandra"
+  name           = "Failed Authorizations"
+  content        = "category:AUTH type:UNAUTHORIZED_ATTEMPT"
+  source         = "/var/log/cassandra/audit/audit.log"
+  operator       = ">="
+  warning_value  = 5
+  critical_value = 20
+  duration       = "3m"
+  present        = true
+  description    = "Failed authorizations in Cassandra"
+}
+
+resource "axonops_log_alert_rule" "cassandra_ddl_queries_high" {
+  cluster_name   = var.cluster_name
+  cluster_type   = "cassandra"
+  name           = "DDL queries"
+  content        = "category:DDL"
+  source         = "/var/log/cassandra/audit/audit.log"
+  operator       = ">="
+  warning_value  = 5
+  critical_value = 100
+  duration       = "3m"
+  present        = true
+  description    = "DDL queries run in Cassandra"
+}
+
+resource "axonops_log_alert_rule" "cassandra_dcl_queries_high" {
+  cluster_name   = var.cluster_name
+  cluster_type   = "cassandra"
+  name           = "DCL queries"
+  content        = "category:DCL"
+  source         = "/var/log/cassandra/audit/audit.log"
+  operator       = ">="
+  warning_value  = 5
+  critical_value = 100
+  duration       = "3m"
+  present        = true
+  description    = "DCL queries run in Cassandra"
+}
+
+resource "axonops_log_alert_rule" "cassandra_dml_queries_high" {
+  cluster_name   = var.cluster_name
+  cluster_type   = "cassandra"
+  name           = "DML queries"
+  content        = "category:DML"
+  source         = "/var/log/cassandra/audit/audit.log"
+  operator       = ">="
+  warning_value  = 5
+  critical_value = 100
+  duration       = "3m"
+  present        = true
+  description    = "DML queries in Cassandra"
 }

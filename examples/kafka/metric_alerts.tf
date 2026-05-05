@@ -16,7 +16,7 @@ resource "axonops_metric_alert_rule" "kafka_multiple_active_controllers" {
   operator       = ">="
   warning_value  = 1
   critical_value = 1
-  duration       = "1m"
+  duration       = "10m"
 
   annotations = {
     description = "More than one active controller — split-brain condition. Page immediately."
@@ -48,7 +48,7 @@ resource "axonops_metric_alert_rule" "kafka_unclean_leader_elections" {
   operator       = ">="
   warning_value  = 1
   critical_value = 1
-  duration       = "1m"
+  duration       = "10m"
 
   annotations = {
     description = "A partition leader was elected from a replica outside the ISR — potential data loss. Expected value is always 0."
@@ -83,7 +83,7 @@ resource "axonops_metric_alert_rule" "kafka_under_min_isr_partitions" {
   operator       = ">="
   warning_value  = 1
   critical_value = 1
-  duration       = "1m"
+  duration       = "10m"
 
   annotations = {
     description = "Partitions below min.insync.replicas. Producers using acks=all will receive NotEnoughReplicas and writes will fail."
@@ -119,7 +119,7 @@ resource "axonops_metric_alert_rule" "kafka_controller_metadata_error_rate" {
   operator       = ">="
   warning_value  = 1
   critical_value = 1
-  duration       = "1m"
+  duration       = "10m"
 
   annotations = {
     description = "Errors during metadata log processing on the controller. Investigate immediately."

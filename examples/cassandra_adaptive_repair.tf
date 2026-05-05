@@ -11,15 +11,15 @@ resource "axonops_cassandra_adaptive_repair" "custom" {
   cluster_name       = "my-cassandra-cluster"
   active             = true
   parallelism        = 5
-  gc_grace_threshold = 43200  # 12 hours
+  gc_grace_threshold = 43200 # 12 hours
   segment_retries    = 5
 }
 
 # Adaptive repair excluding specific tables
 resource "axonops_cassandra_adaptive_repair" "with_exclusions" {
-  cluster_name      = "my-cassandra-cluster"
-  active            = true
-  parallelism       = 8
+  cluster_name = "my-cassandra-cluster"
+  active       = true
+  parallelism  = 8
   blacklisted_tables = [
     "my_keyspace.large_table",
     "analytics.raw_events",
@@ -30,15 +30,15 @@ resource "axonops_cassandra_adaptive_repair" "with_exclusions" {
 
 # Fine-tuned repair with segment configuration
 resource "axonops_cassandra_adaptive_repair" "fine_tuned" {
-  cluster_name         = "my-cassandra-cluster"
-  active               = true
-  parallelism          = 15
-  gc_grace_threshold   = 86400  # 24 hours
-  segment_retries      = 3
-  segments_per_vnode   = 2
+  cluster_name           = "my-cassandra-cluster"
+  active                 = true
+  parallelism            = 15
+  gc_grace_threshold     = 86400 # 24 hours
+  segment_retries        = 3
+  segments_per_vnode     = 2
   segment_target_size_mb = 512
-  filter_twcs_tables   = true
-  blacklisted_tables   = []
+  filter_twcs_tables     = true
+  blacklisted_tables     = []
 }
 
 # DSE cluster adaptive repair
@@ -55,7 +55,7 @@ resource "axonops_cassandra_adaptive_repair" "production" {
   cluster_name           = "production-cassandra"
   active                 = true
   parallelism            = 3
-  gc_grace_threshold     = 172800  # 48 hours
+  gc_grace_threshold     = 172800 # 48 hours
   segment_retries        = 5
   segments_per_vnode     = 1
   segment_target_size_mb = 128
