@@ -61,7 +61,7 @@ func (d *pagerdutyIntegrationDataSource) Schema(ctx context.Context, req datasou
 			"integration_key": schema.StringAttribute{
 				Computed:    true,
 				Sensitive:   true,
-				Description: "The PagerDuty integration key.",
+				Description: "Not returned by the API (masked). Always null.",
 			},
 		},
 	}
@@ -96,7 +96,8 @@ func (d *pagerdutyIntegrationDataSource) Read(ctx context.Context, req datasourc
 	}
 
 	data.ID = types.StringValue(def.ID)
-	data.IntegrationKey = types.StringValue(def.Params["integration_key"])
+	// integration_key is masked by the AxonOps API; always return null.
+	data.IntegrationKey = types.StringNull()
 
 	diags = resp.State.Set(ctx, &data)
 	resp.Diagnostics.Append(diags...)

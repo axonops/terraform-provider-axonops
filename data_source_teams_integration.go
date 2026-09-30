@@ -61,7 +61,7 @@ func (d *teamsIntegrationDataSource) Schema(ctx context.Context, req datasource.
 			"webhook_url": schema.StringAttribute{
 				Computed:    true,
 				Sensitive:   true,
-				Description: "The Microsoft Teams webhook URL.",
+				Description: "Not returned by the API (masked). Always null.",
 			},
 		},
 	}
@@ -96,7 +96,8 @@ func (d *teamsIntegrationDataSource) Read(ctx context.Context, req datasource.Re
 	}
 
 	data.ID = types.StringValue(def.ID)
-	data.WebhookURL = types.StringValue(def.Params["webHookURL"])
+	// webhook_url is masked by the AxonOps API; always return null.
+	data.WebhookURL = types.StringNull()
 
 	diags = resp.State.Set(ctx, &data)
 	resp.Diagnostics.Append(diags...)

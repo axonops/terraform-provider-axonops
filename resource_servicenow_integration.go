@@ -12,6 +12,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
@@ -50,6 +51,9 @@ func (r *servicenowIntegrationResource) Schema(ctx context.Context, req resource
 			"id": schema.StringAttribute{
 				Computed:    true,
 				Description: "The integration ID.",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"cluster_name": schema.StringAttribute{
 				Required:    true,
@@ -61,6 +65,7 @@ func (r *servicenowIntegrationResource) Schema(ctx context.Context, req resource
 			"cluster_type": schema.StringAttribute{
 				Required:    true,
 				Description: "The cluster type (cassandra, kafka, or dse).",
+				Validators:  []validator.String{clusterTypeValidator()},
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},
@@ -254,7 +259,8 @@ func (r *servicenowIntegrationResource) ImportState(ctx context.Context, req res
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("name"), def.Params["name"])...)
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("instance_name"), def.Params["instance_name"])...)
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("user"), def.Params["user"])...)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("password"), def.Params["password"])...)
+	// password is masked by the AxonOps API; do not persist it from import.
+	resp.Diagnostics.AddWarning("Sensitive Value Not Imported", integrationImportSecretWarning)
 
 	tflog.Info(ctx, fmt.Sprintf("Imported ServiceNow integration '%s' for %s/%s", name, clusterType, clusterName))
 }

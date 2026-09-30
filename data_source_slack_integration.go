@@ -61,7 +61,7 @@ func (d *slackIntegrationDataSource) Schema(ctx context.Context, req datasource.
 			"webhook_url": schema.StringAttribute{
 				Computed:    true,
 				Sensitive:   true,
-				Description: "The Slack webhook URL.",
+				Description: "Not returned by the API (masked). Always null.",
 			},
 			"channel": schema.StringAttribute{
 				Computed:    true,
@@ -106,7 +106,8 @@ func (d *slackIntegrationDataSource) Read(ctx context.Context, req datasource.Re
 	}
 
 	data.ID = types.StringValue(def.ID)
-	data.WebhookURL = types.StringValue(def.Params["url"])
+	// webhook_url is masked by the AxonOps API; always return null.
+	data.WebhookURL = types.StringNull()
 	data.Channel = types.StringValue(def.Params["channel"])
 	data.AxonopsURL = types.StringValue(def.Params["axondashUrl"])
 

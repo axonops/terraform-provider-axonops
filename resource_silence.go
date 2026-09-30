@@ -14,10 +14,69 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/listdefault"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
+
+// silenceEqual reports whether two silence windows have identical
+// user-supplied fields (everything except ID), used to disambiguate the
+// newly created silence when several candidate IDs appear after a create.
+func silenceEqual(a, b axonopsClient.SilenceWindow) bool {
+	if a.Active != b.Active || a.CronExpr != b.CronExpr || a.IsRecurring != b.IsRecurring || a.Duration != b.Duration {
+		return false
+	}
+	if len(a.DCs) != len(b.DCs) {
+		return false
+	}
+	for i := range a.DCs {
+		if a.DCs[i] != b.DCs[i] {
+			return false
+		}
+	}
+	return true
+}
+
+// findNewSilenceID identifies the server-assigned ID of a silence window
+// just created. The AxonOps API may not honour the client-supplied ID, so we
+// compare the silence list before and after the create call: prefer an exact
+// match on the generated ID, then fall back to a single newly appeared ID,
+// then to a newly appeared silence whose fields match what we requested.
+func findNewSilenceID(before, after []axonopsClient.SilenceWindow, generatedID string, want axonopsClient.SilenceWindow) string {
+	beforeIDs := make(map[string]bool, len(before))
+	for _, s := range before {
+		beforeIDs[s.ID] = true
+	}
+
+	var newOnes []axonopsClient.SilenceWindow
+	for _, s := range after {
+		if s.ID == generatedID {
+			return s.ID
+		}
+		if !beforeIDs[s.ID] {
+			newOnes = append(newOnes, s)
+		}
+	}
+
+	if len(newOnes) == 1 {
+		return newOnes[0].ID
+	}
+
+	for _, s := range newOnes {
+		if silenceEqual(s, want) {
+			return s.ID
+		}
+	}
+
+	if len(newOnes) > 0 {
+		return newOnes[0].ID
+	}
+
+	return generatedID
+}
 
 var _ resource.Resource = (*silenceResource)(nil)
 var _ resource.ResourceWithImportState = (*silenceResource)(nil)
@@ -66,6 +125,9 @@ func (r *silenceResource) Schema(ctx context.Context, req resource.SchemaRequest
 			"id": schema.StringAttribute{
 				Computed:    true,
 				Description: "The unique identifier of the silence window.",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"active": schema.BoolAttribute{
 				Optional:    true,
@@ -83,11 +145,13 @@ func (r *silenceResource) Schema(ctx context.Context, req resource.SchemaRequest
 				Optional:    true,
 				Computed:    true,
 				Default:     stringdefault.StaticString("0 * * * *"),
-				Description: "Cron expression for recurring silences. Also used as a unique identifier for the silence. Default: '0 * * * *'",
+				Description: "Cron expression for recurring silences. Default: '0 * * * *'",
+				Validators:  []validator.String{cronValidator()},
 			},
 			"duration": schema.StringAttribute{
 				Required:    true,
 				Description: "Duration of the silence (e.g., '1h', '30m', '2h30m').",
+				Validators:  []validator.String{durationValidator()},
 			},
 			"datacenters": schema.ListAttribute{
 				ElementType: types.StringType,
@@ -95,6 +159,12 @@ func (r *silenceResource) Schema(ctx context.Context, req resource.SchemaRequest
 				Computed:    true,
 				Default:     listdefault.StaticValue(types.ListValueMust(types.StringType, []attr.Value{})),
 				Description: "List of datacenters or nodes to apply the silence to. Empty means all.",
+			},
+			"note": schema.StringAttribute{
+				Optional:    true,
+				Computed:    true,
+				Default:     stringdefault.StaticString(""),
+				Description: "Free-text note describing why the silence exists. Requires an AxonOps server newer than 2.0.39; older servers ignore it.",
 			},
 		},
 	}
@@ -109,6 +179,7 @@ type silenceResourceData struct {
 	CronExpr    types.String `tfsdk:"cron_expr"`
 	Duration    types.String `tfsdk:"duration"`
 	Datacenters types.List   `tfsdk:"datacenters"`
+	Note        types.String `tfsdk:"note"`
 }
 
 func (r *silenceResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
@@ -139,29 +210,31 @@ func (r *silenceResource) Create(ctx context.Context, req resource.CreateRequest
 		IsRecurring: data.IsRecurring.ValueBool(),
 		Duration:    data.Duration.ValueString(),
 		DCs:         datacenters,
+		Note:        data.Note.ValueString(),
 	}
 
-	err := r.client.CreateSilenceWindow(ctx, data.ClusterType.ValueString(), data.ClusterName.ValueString(), silence)
+	// Snapshot existing silences before create so the server-assigned ID of
+	// the new silence can be identified reliably afterwards.
+	before, err := r.client.GetSilenceWindows(ctx, data.ClusterType.ValueString(), data.ClusterName.ValueString())
+	if err != nil {
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read silences before creation: %s", err))
+		return
+	}
+
+	err = r.client.CreateSilenceWindow(ctx, data.ClusterType.ValueString(), data.ClusterName.ValueString(), silence)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create silence: %s", err))
 		return
 	}
 
 	// Fetch the created silence to confirm and get the actual ID
-	silences, err := r.client.GetSilenceWindows(ctx, data.ClusterType.ValueString(), data.ClusterName.ValueString())
+	after, err := r.client.GetSilenceWindows(ctx, data.ClusterType.ValueString(), data.ClusterName.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read silences after creation: %s", err))
 		return
 	}
 
-	// Find by cron expression (used as identifier per Ansible module logic)
-	found := axonopsClient.FindSilenceWindowByCronExpr(silences, data.CronExpr.ValueString())
-	if found != nil {
-		data.ID = types.StringValue(found.ID)
-	} else {
-		// Fallback to the ID we generated
-		data.ID = types.StringValue(silenceID)
-	}
+	data.ID = types.StringValue(findNewSilenceID(before, after, silenceID, silence))
 
 	tflog.Info(ctx, "Created silence resource", map[string]any{
 		"cluster_name": data.ClusterName.ValueString(),
@@ -207,6 +280,11 @@ func (r *silenceResource) Read(ctx context.Context, req resource.ReadRequest, re
 	data.CronExpr = types.StringValue(found.CronExpr)
 	data.IsRecurring = types.BoolValue(found.IsRecurring)
 	data.Duration = types.StringValue(found.Duration)
+	// Servers up to 2.0.39 do not store notes, so an empty note from the API
+	// keeps the configured value instead of producing a perpetual diff.
+	if found.Note != "" || data.Note.IsNull() {
+		data.Note = types.StringValue(found.Note)
+	}
 
 	dcs := found.DCs
 	if dcs == nil {
@@ -259,29 +337,35 @@ func (r *silenceResource) Update(ctx context.Context, req resource.UpdateRequest
 		IsRecurring: data.IsRecurring.ValueBool(),
 		Duration:    data.Duration.ValueString(),
 		DCs:         datacenters,
+		Note:        data.Note.ValueString(),
 	}
 
-	err := r.client.CreateSilenceWindow(ctx, data.ClusterType.ValueString(), data.ClusterName.ValueString(), silence)
+	// Snapshot existing silences (post-delete) before re-create so the
+	// server-assigned ID of the replacement silence can be identified
+	// reliably afterwards.
+	before, err := r.client.GetSilenceWindows(ctx, data.ClusterType.ValueString(), data.ClusterName.ValueString())
+	if err != nil {
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read silences before replacement: %s", err))
+		return
+	}
+
+	err = r.client.CreateSilenceWindow(ctx, data.ClusterType.ValueString(), data.ClusterName.ValueString(), silence)
 	if err != nil {
 		resp.State.RemoveResource(ctx)
 		resp.Diagnostics.AddError("Client Error",
-			fmt.Sprintf("Deleted existing silence but failed to create replacement: %s", err))
+			fmt.Sprintf("Deleted existing silence but failed to create replacement; the resource has been "+
+				"removed from state — re-apply to recreate it: %s", err))
 		return
 	}
 
 	// Fetch the created silence to get its actual ID
-	silences, err := r.client.GetSilenceWindows(ctx, data.ClusterType.ValueString(), data.ClusterName.ValueString())
+	after, err := r.client.GetSilenceWindows(ctx, data.ClusterType.ValueString(), data.ClusterName.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read silences after update: %s", err))
 		return
 	}
 
-	found := axonopsClient.FindSilenceWindowByCronExpr(silences, data.CronExpr.ValueString())
-	if found != nil {
-		data.ID = types.StringValue(found.ID)
-	} else {
-		data.ID = types.StringValue(silenceID)
-	}
+	data.ID = types.StringValue(findNewSilenceID(before, after, silenceID, silence))
 
 	tflog.Info(ctx, "Updated silence resource", map[string]any{
 		"cluster_name": data.ClusterName.ValueString(),
@@ -367,6 +451,7 @@ func (r *silenceResource) ImportState(ctx context.Context, req resource.ImportSt
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("is_recurring"), found.IsRecurring)...)
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("cron_expr"), found.CronExpr)...)
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("duration"), found.Duration)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("note"), found.Note)...)
 
 	dcs := found.DCs
 	if dcs == nil {

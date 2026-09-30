@@ -12,7 +12,10 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
@@ -117,6 +120,7 @@ func (r *logAlertRuleResource) Schema(ctx context.Context, req resource.SchemaRe
 			"cluster_type": schema.StringAttribute{
 				Required:    true,
 				Description: "The cluster type (cassandra, kafka, or dse).",
+				Validators:  []validator.String{clusterTypeValidator()},
 			},
 			"id": schema.StringAttribute{
 				Computed: true,
@@ -124,6 +128,9 @@ func (r *logAlertRuleResource) Schema(ctx context.Context, req resource.SchemaRe
 					"org, cluster type, cluster name, rule name, and rule type — the same configuration " +
 					"always produces the same ID, which makes Create idempotent across state loss and " +
 					"transient API retries.",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"name": schema.StringAttribute{
 				Required:    true,
@@ -150,6 +157,7 @@ func (r *logAlertRuleResource) Schema(ctx context.Context, req resource.SchemaRe
 				Computed:    true,
 				Default:     stringdefault.StaticString(">="),
 				Description: "Comparison operator: >, >=, =, !=, <=, <. Defaults to >=.",
+				Validators:  []validator.String{alertOperatorValidator()},
 			},
 			"warning_value": schema.Float64Attribute{
 				Required:    true,
@@ -162,6 +170,7 @@ func (r *logAlertRuleResource) Schema(ctx context.Context, req resource.SchemaRe
 			"duration": schema.StringAttribute{
 				Required:    true,
 				Description: "Duration/time window for log scraping (e.g., 5m, 1h, 24h).",
+				Validators:  []validator.String{durationValidator()},
 			},
 			"level": schema.StringAttribute{
 				Optional:    true,

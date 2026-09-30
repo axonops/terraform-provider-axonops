@@ -61,7 +61,7 @@ func (d *opsgenieIntegrationDataSource) Schema(ctx context.Context, req datasour
 			"opsgenie_key": schema.StringAttribute{
 				Computed:    true,
 				Sensitive:   true,
-				Description: "The OpsGenie API key.",
+				Description: "Not returned by the API (masked). Always null.",
 			},
 		},
 	}
@@ -96,7 +96,8 @@ func (d *opsgenieIntegrationDataSource) Read(ctx context.Context, req datasource
 	}
 
 	data.ID = types.StringValue(def.ID)
-	data.OpsgenieKey = types.StringValue(def.Params["opsgenie_key"])
+	// opsgenie_key is masked by the AxonOps API; always return null.
+	data.OpsgenieKey = types.StringNull()
 
 	diags = resp.State.Set(ctx, &data)
 	resp.Diagnostics.Append(diags...)

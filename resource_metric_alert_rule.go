@@ -9,6 +9,7 @@ import (
 
 	axonopsClient "terraform-provider-axonops/client"
 
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -16,7 +17,10 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/listdefault"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
@@ -24,6 +28,16 @@ import (
 
 var _ resource.Resource = (*metricAlertRuleResource)(nil)
 var _ resource.ResourceWithImportState = (*metricAlertRuleResource)(nil)
+
+// validAlertOperators lists the comparison operators accepted for alert rule
+// thresholds.
+var validAlertOperators = []string{">", ">=", "=", "!=", "<=", "<"}
+
+// alertOperatorValidator restricts the operator attribute to a supported
+// comparison operator.
+func alertOperatorValidator() validator.String {
+	return stringvalidator.OneOf(validAlertOperators...)
+}
 
 var annotationsAttrTypes = map[string]attr.Type{
 	"summary":     types.StringType,
@@ -123,6 +137,7 @@ func (r *metricAlertRuleResource) Schema(ctx context.Context, req resource.Schem
 			"cluster_type": schema.StringAttribute{
 				Required:    true,
 				Description: "The cluster type (cassandra, kafka, or dse).",
+				Validators:  []validator.String{clusterTypeValidator()},
 			},
 			"id": schema.StringAttribute{
 				Computed: true,
@@ -130,6 +145,9 @@ func (r *metricAlertRuleResource) Schema(ctx context.Context, req resource.Schem
 					"org, cluster type, cluster name, rule name, and rule type — the same configuration " +
 					"always produces the same ID, which makes Create idempotent across state loss and " +
 					"transient API retries.",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"name": schema.StringAttribute{
 				Required:    true,
@@ -143,6 +161,7 @@ func (r *metricAlertRuleResource) Schema(ctx context.Context, req resource.Schem
 			"operator": schema.StringAttribute{
 				Required:    true,
 				Description: "Comparison operator: >, >=, =, !=, <=, <",
+				Validators:  []validator.String{alertOperatorValidator()},
 			},
 			"warning_value": schema.Float64Attribute{
 				Required:    true,
@@ -155,6 +174,7 @@ func (r *metricAlertRuleResource) Schema(ctx context.Context, req resource.Schem
 			"duration": schema.StringAttribute{
 				Required:    true,
 				Description: "Duration before triggering (e.g., 15m, 1h).",
+				Validators:  []validator.String{durationValidator()},
 			},
 			"dashboard": schema.StringAttribute{
 				Required:    true,
@@ -849,17 +869,22 @@ func (r *metricAlertRuleResource) ImportState(ctx context.Context, req resource.
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("duration"), found.For)...)
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("correlation_id"), found.CorrelationId)...)
 
-	// Reverse-resolve correlation ID to dashboard/chart names
-	if found.CorrelationId != "" {
-		dashName, chartName, err := r.reverseLookupDashboardChart(ctx, clusterType, clusterName, found.CorrelationId)
-		if err != nil {
-			resp.Diagnostics.AddWarning("Dashboard Resolution Warning",
-				fmt.Sprintf("Could not resolve dashboard/chart names from correlation ID: %s", err))
-		} else {
-			resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("dashboard"), dashName)...)
-			resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("chart"), chartName)...)
-		}
+	// Reverse-resolve correlation ID to dashboard/chart names. dashboard and
+	// chart are Required attributes, so failure to resolve them must block
+	// the import rather than leave the resource in an invalid state.
+	if found.CorrelationId == "" {
+		resp.Diagnostics.AddError("Dashboard Resolution Error",
+			"Alert rule has no correlation ID; unable to determine the required dashboard and chart attributes.")
+		return
 	}
+	dashName, chartName, err := r.reverseLookupDashboardChart(ctx, clusterType, clusterName, found.CorrelationId)
+	if err != nil {
+		resp.Diagnostics.AddError("Dashboard Resolution Error",
+			fmt.Sprintf("Could not resolve dashboard/chart names from correlation ID: %s", err))
+		return
+	}
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("dashboard"), dashName)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("chart"), chartName)...)
 
 	annObj, diags := buildAnnotationsObject(ctx, found.Annotations)
 	resp.Diagnostics.Append(diags...)

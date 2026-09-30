@@ -96,7 +96,7 @@ func CreateHTTPClient(protocol, axonopsHost, apiKey, orgid, tokenType string, tl
 		client: &http.Client{
 			Timeout: 10 * time.Second,
 			Transport: &http.Transport{
-				TLSClientConfig: &tls.Config{InsecureSkipVerify: tlsSkipVerify},
+				TLSClientConfig: &tls.Config{InsecureSkipVerify: tlsSkipVerify}, // #nosec G402 -- opt-in via tls_skip_verify; the provider emits a warning diagnostic
 			},
 		},
 		orgid:     orgid,
@@ -2129,6 +2129,7 @@ type SilenceWindow struct {
 	IsRecurring bool     `json:"IsRecurring"`
 	Duration    string   `json:"Duration"`
 	DCs         []string `json:"DCs"`
+	Note        string   `json:"Note,omitempty"`
 }
 
 func (c *AxonopsHttpClient) GetSilenceWindows(ctx context.Context, clusterType, clusterName string) ([]SilenceWindow, error) {
