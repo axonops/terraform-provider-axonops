@@ -215,6 +215,11 @@ func (r *silenceResource) Create(ctx context.Context, req resource.CreateRequest
 
 	// Snapshot existing silences before create so the server-assigned ID of
 	// the new silence can be identified reliably afterwards.
+	// Serialise the before/create/after sequence per cluster: parallel
+	// creates would otherwise see each other's new silence in the diff.
+	unlock := lockCluster("silences", data.ClusterType.ValueString(), data.ClusterName.ValueString())
+	defer unlock()
+
 	before, err := r.client.GetSilenceWindows(ctx, data.ClusterType.ValueString(), data.ClusterName.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read silences before creation: %s", err))
@@ -339,6 +344,11 @@ func (r *silenceResource) Update(ctx context.Context, req resource.UpdateRequest
 	// Snapshot existing silences (post-delete) before re-create so the
 	// server-assigned ID of the replacement silence can be identified
 	// reliably afterwards.
+	// Serialise the before/create/after sequence per cluster: parallel
+	// creates would otherwise see each other's new silence in the diff.
+	unlock := lockCluster("silences", data.ClusterType.ValueString(), data.ClusterName.ValueString())
+	defer unlock()
+
 	before, err := r.client.GetSilenceWindows(ctx, data.ClusterType.ValueString(), data.ClusterName.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read silences before replacement: %s", err))

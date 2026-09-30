@@ -287,7 +287,12 @@ func (r *httpHealthcheckResource) Read(ctx context.Context, req resource.ReadReq
 	data.Readonly = types.BoolValue(found.Readonly)
 
 	// Convert headers to map
-	data.Headers, diags = types.MapValueFrom(ctx, types.StringType, found.Headers)
+	// The API omits empty headers; normalise to the schema default {}.
+	foundHeaders := found.Headers
+	if foundHeaders == nil {
+		foundHeaders = map[string]string{}
+	}
+	data.Headers, diags = types.MapValueFrom(ctx, types.StringType, foundHeaders)
 	resp.Diagnostics.Append(diags...)
 
 	// Convert supported agent types to list
@@ -480,7 +485,11 @@ func (r *httpHealthcheckResource) ImportState(ctx context.Context, req resource.
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), found.ID)...)
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("url"), found.URL)...)
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("method"), found.Method)...)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("headers"), found.Headers)...)
+	importHeaders := found.Headers
+	if importHeaders == nil {
+		importHeaders = map[string]string{}
+	}
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("headers"), importHeaders)...)
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("body"), found.Body)...)
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("expected_status"), int64(found.ExpectedStatus))...)
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("interval"), found.Interval)...)

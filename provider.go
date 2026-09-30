@@ -225,6 +225,7 @@ func (p *axonopsProvider) Configure(ctx context.Context, req provider.ConfigureR
 	}
 
 	resp.ResourceData = client
+	resp.DataSourceData = client
 
 }
 
