@@ -20,3 +20,7 @@ description: |-
 Schema Registry schemas can be imported using the format `cluster_name/subject`:
 
 {{ codefile "shell" "examples/resources/axonops_schema/import.sh" }}
+
+In Terraform v1.5.0 and later, use an [`import` block](https://developer.hashicorp.com/terraform/language/import) instead:
+
+{{ tffile "examples/resources/axonops_schema/import.tf" }}

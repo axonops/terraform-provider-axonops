@@ -86,6 +86,20 @@ terraform import axonops_cassandra_scheduled_repair.monthly cassandra/my-cassand
 terraform import axonops_cassandra_scheduled_repair.monthly my-cassandra-cluster/monthly-full-repair
 ```
 
+In Terraform v1.5.0 and later, use an [`import` block](https://developer.hashicorp.com/terraform/language/import) instead:
+
+```terraform
+import {
+  to = axonops_cassandra_scheduled_repair.monthly
+  id = "cassandra/my-cassandra-cluster/monthly-full-repair"
+}
+
+import {
+  to = axonops_cassandra_scheduled_repair.monthly
+  id = "my-cassandra-cluster/monthly-full-repair"
+}
+```
+
 - `cluster_type/cluster_name/tag` (preferred) - `cluster_type` is validated only to look up the repair; it is not otherwise stored.
 - `cluster_name/tag` (legacy, still accepted) - kept for backward compatibility with configurations written before `cluster_type` support was added.
 

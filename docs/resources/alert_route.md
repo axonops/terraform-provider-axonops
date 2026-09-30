@@ -93,6 +93,15 @@ Alert routes can be imported using the format `cluster_type/cluster_name/type/se
 terraform import axonops_alert_route.example cassandra/my-cassandra-cluster/metrics/warning/slack/metrics-slack
 ```
 
+In Terraform v1.5.0 and later, use an [`import` block](https://developer.hashicorp.com/terraform/language/import) instead:
+
+```terraform
+import {
+  to = axonops_alert_route.example
+  id = "cassandra/my-cassandra-cluster/metrics/warning/slack/metrics-slack"
+}
+```
+
 Where:
 - `cluster_type` - The type of cluster (cassandra, kafka, or dse)
 - `cluster_name` - The name of the cluster

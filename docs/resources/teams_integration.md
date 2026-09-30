@@ -14,6 +14,11 @@ Use this resource to configure a Microsoft Teams incoming webhook that AxonOps u
 ## Example Usage
 
 ```terraform
+variable "teams_webhook_url" {
+  type      = string
+  sensitive = true
+}
+
 resource "axonops_teams_integration" "ops_alerts" {
   cluster_name = "production-cassandra"
   cluster_type = "cassandra"
@@ -52,6 +57,15 @@ Teams integrations can be imported using the format `cluster_type/cluster_name/n
 
 ```shell
 terraform import axonops_teams_integration.example cassandra/my-cassandra-cluster/ops-teams-alerts
+```
+
+In Terraform v1.5.0 and later, use an [`import` block](https://developer.hashicorp.com/terraform/language/import) instead:
+
+```terraform
+import {
+  to = axonops_teams_integration.example
+  id = "cassandra/my-cassandra-cluster/ops-teams-alerts"
+}
 ```
 
 Where:

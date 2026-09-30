@@ -129,10 +129,19 @@ held in the AxonOps backend.
 Log alert rules can be imported using the format `cluster_type/cluster_name/alert_id`:
 
 ```shell
-terraform import axonops_log_alert_rule.example cassandra/my-cluster/alert-uuid-here
+terraform import axonops_log_alert_rule.example cassandra/my-cassandra-cluster/f47ac10b-58cc-4372-a567-0e02b2c3d479
+```
+
+In Terraform v1.5.0 and later, use an [`import` block](https://developer.hashicorp.com/terraform/language/import) instead:
+
+```terraform
+import {
+  to = axonops_log_alert_rule.example
+  id = "cassandra/my-cassandra-cluster/f47ac10b-58cc-4372-a567-0e02b2c3d479"
+}
 ```
 
 Where:
 - `cluster_type` - The type of cluster (cassandra, kafka, or dse)
 - `cluster_name` - The name of the cluster
-- `alert_id` - The UUID of the log alert rule
+- `alert_id` - The UUID of the log alert rule (the `id` attribute; the ID is derived deterministically from the cluster and rule name when created by Terraform)

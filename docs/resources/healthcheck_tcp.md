@@ -94,6 +94,15 @@ TCP healthchecks can be imported using the format `cluster_type/cluster_name/hea
 terraform import axonops_healthcheck_tcp.example kafka/my-kafka-cluster/Kafka%20Broker%20Port
 ```
 
+In Terraform v1.5.0 and later, use an [`import` block](https://developer.hashicorp.com/terraform/language/import) instead:
+
+```terraform
+import {
+  to = axonops_healthcheck_tcp.example
+  id = "kafka/my-kafka-cluster/Kafka%20Broker%20Port"
+}
+```
+
 Where:
 - `cluster_type` - The cluster type (e.g. cassandra, kafka)
 - `cluster_name` - The name of the cluster

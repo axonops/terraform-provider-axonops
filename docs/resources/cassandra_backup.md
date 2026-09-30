@@ -12,6 +12,12 @@ Manages a Cassandra backup schedule. Updates are performed as delete-then-create
 ## Example Usage
 
 ```terraform
+variable "s3_remote_config" {
+  description = "rclone-style S3 remote configuration (key=value lines)"
+  type        = string
+  sensitive   = true
+}
+
 # Basic daily backup
 resource "axonops_cassandra_backup" "daily" {
   cluster_name    = "my-cassandra-cluster"
@@ -34,7 +40,7 @@ resource "axonops_cassandra_backup" "remote_s3" {
   remote_type      = "s3"
   remote_path      = "my-bucket/cassandra-backups"
   remote_retention = "90d"
-  remote_config    = "access_key_id=AKIAEXAMPLE\nsecret_access_key=SECRET\nregion=us-east-1"
+  remote_config    = var.s3_remote_config # e.g. "access_key_id=...\nsecret_access_key=...\nregion=us-east-1"
 }
 
 # Selective backup
@@ -92,4 +98,13 @@ Cassandra backup schedules can be imported using the format `cluster_type/cluste
 
 ```shell
 terraform import axonops_cassandra_backup.example cassandra/my-cassandra-cluster/daily-backup
+```
+
+In Terraform v1.5.0 and later, use an [`import` block](https://developer.hashicorp.com/terraform/language/import) instead:
+
+```terraform
+import {
+  to = axonops_cassandra_backup.example
+  id = "cassandra/my-cassandra-cluster/daily-backup"
+}
 ```

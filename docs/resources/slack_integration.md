@@ -14,6 +14,11 @@ Use this resource to configure a Slack webhook that AxonOps uses to deliver aler
 ## Example Usage
 
 ```terraform
+variable "slack_webhook_url" {
+  type      = string
+  sensitive = true
+}
+
 resource "axonops_slack_integration" "ops_alerts" {
   cluster_name = "production-cassandra"
   cluster_type = "cassandra"
@@ -58,6 +63,15 @@ Slack integrations can be imported using the format `cluster_type/cluster_name/n
 
 ```shell
 terraform import axonops_slack_integration.example cassandra/my-cassandra-cluster/ops-slack-alerts
+```
+
+In Terraform v1.5.0 and later, use an [`import` block](https://developer.hashicorp.com/terraform/language/import) instead:
+
+```terraform
+import {
+  to = axonops_slack_integration.example
+  id = "cassandra/my-cassandra-cluster/ops-slack-alerts"
+}
 ```
 
 Where:

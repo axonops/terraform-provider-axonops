@@ -1,3 +1,8 @@
+variable "opsgenie_api_key" {
+  type      = string
+  sensitive = true
+}
+
 resource "axonops_opsgenie_integration" "oncall" {
   cluster_name = "production-cassandra"
   cluster_type = "cassandra"

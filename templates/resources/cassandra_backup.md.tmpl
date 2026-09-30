@@ -24,3 +24,7 @@ The AxonOps API has no in-place update endpoint for backup schedules. `Update` t
 Cassandra backup schedules can be imported using the format `cluster_type/cluster_name/tag`:
 
 {{ codefile "shell" "examples/resources/axonops_cassandra_backup/import.sh" }}
+
+In Terraform v1.5.0 and later, use an [`import` block](https://developer.hashicorp.com/terraform/language/import) instead:
+
+{{ tffile "examples/resources/axonops_cassandra_backup/import.tf" }}

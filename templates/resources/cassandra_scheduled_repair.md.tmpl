@@ -21,6 +21,10 @@ Cassandra scheduled repairs accept two import ID formats:
 
 {{ codefile "shell" "examples/resources/axonops_cassandra_scheduled_repair/import.sh" }}
 
+In Terraform v1.5.0 and later, use an [`import` block](https://developer.hashicorp.com/terraform/language/import) instead:
+
+{{ tffile "examples/resources/axonops_cassandra_scheduled_repair/import.tf" }}
+
 - `cluster_type/cluster_name/tag` (preferred) - `cluster_type` is validated only to look up the repair; it is not otherwise stored.
 - `cluster_name/tag` (legacy, still accepted) - kept for backward compatibility with configurations written before `cluster_type` support was added.
 

@@ -74,4 +74,13 @@ Kafka ACLs can be imported using the format `cluster_name/resource_type/resource
 terraform import axonops_kafka_acl.example my-kafka-cluster/TOPIC/my-topic/LITERAL/User:producer-app/*/WRITE/ALLOW
 ```
 
+In Terraform v1.5.0 and later, use an [`import` block](https://developer.hashicorp.com/terraform/language/import) instead:
+
+```terraform
+import {
+  to = axonops_kafka_acl.example
+  id = "my-kafka-cluster/TOPIC/my-topic/LITERAL/User:producer-app/*/WRITE/ALLOW"
+}
+```
+
 > **Note:** `principal` is the only identity field likely to contain `/` (e.g. `User:svc/account`). The provider fixes the first 4 fields and the last 3 fields of the import ID and treats everything in between as the principal, so a `/`-containing principal imports correctly without extra escaping.

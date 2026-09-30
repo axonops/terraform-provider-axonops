@@ -1,3 +1,8 @@
+variable "pagerduty_integration_key" {
+  type      = string
+  sensitive = true
+}
+
 resource "axonops_pagerduty_integration" "oncall" {
   cluster_name    = "production-kafka"
   cluster_type    = "kafka"

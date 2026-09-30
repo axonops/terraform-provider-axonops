@@ -14,6 +14,11 @@ Use this resource to configure an OpsGenie API key that AxonOps uses to create a
 ## Example Usage
 
 ```terraform
+variable "opsgenie_api_key" {
+  type      = string
+  sensitive = true
+}
+
 resource "axonops_opsgenie_integration" "oncall" {
   cluster_name = "production-cassandra"
   cluster_type = "cassandra"
@@ -52,6 +57,15 @@ OpsGenie integrations can be imported using the format `cluster_type/cluster_nam
 
 ```shell
 terraform import axonops_opsgenie_integration.example cassandra/my-cassandra-cluster/opsgenie-oncall
+```
+
+In Terraform v1.5.0 and later, use an [`import` block](https://developer.hashicorp.com/terraform/language/import) instead:
+
+```terraform
+import {
+  to = axonops_opsgenie_integration.example
+  id = "cassandra/my-cassandra-cluster/opsgenie-oncall"
+}
 ```
 
 Where:

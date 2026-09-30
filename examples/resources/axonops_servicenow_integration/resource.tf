@@ -1,3 +1,8 @@
+variable "servicenow_password" {
+  type      = string
+  sensitive = true
+}
+
 resource "axonops_servicenow_integration" "incidents" {
   cluster_name  = "production-cassandra"
   cluster_type  = "cassandra"

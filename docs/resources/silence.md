@@ -61,6 +61,15 @@ Silences can be imported using the format `cluster_type/cluster_name/silence_id`
 terraform import axonops_silence.maintenance_window cassandra/my-cassandra-cluster/f47ac10b-58cc-4372-a567-0e02b2c3d479
 ```
 
+In Terraform v1.5.0 and later, use an [`import` block](https://developer.hashicorp.com/terraform/language/import) instead:
+
+```terraform
+import {
+  to = axonops_silence.maintenance_window
+  id = "cassandra/my-cassandra-cluster/f47ac10b-58cc-4372-a567-0e02b2c3d479"
+}
+```
+
 Where:
 - `cluster_type` - The type of cluster (cassandra, kafka, or dse)
 - `cluster_name` - The name of the cluster

@@ -286,31 +286,42 @@ func (p *axonopsProvider) Resources(ctx context.Context) []func() resource.Resou
 
 func (p *axonopsProvider) Schema(ctx context.Context, req provider.SchemaRequest, resp *provider.SchemaResponse) {
 	resp.Schema = schema.Schema{
+		Description: "Configure the AxonOps provider to manage Kafka, Cassandra, and DataStax Enterprise (DSE) clusters.",
 		Attributes: map[string]schema.Attribute{
 			"api_key": schema.StringAttribute{
 				Optional:    true,
 				Sensitive:   true,
-				Description: "API key for authentication. Can also be set via AXONOPS_API_KEY environment variable.",
+				Description: "The API key for authentication with AxonOps. Generate this from your AxonOps dashboard. If not provided, the provider will use the AXONOPS_API_KEY environment variable. This value is sensitive and should be stored securely.",
 			},
 			"axonops_host": schema.StringAttribute{
-				Optional:    true,
-				Description: "AxonOps server hostname (without protocol). For SaaS, leave empty to auto-detect the correct URL. For on-premise deployments, specify your server hostname. Can also be set via AXONOPS_HOST environment variable.",
+				Optional: true,
+				Description: "The AxonOps server hostname without the protocol (e.g., 'axonops.example.com' or 'myorg.axonops.cloud'). " +
+					"For AxonOps SaaS, leave this empty to auto-detect the correct URL based on org_id and SAML configuration. " +
+					"For self-hosted deployments, specify your server's fully qualified domain name. " +
+					"Default: Auto-detected for SaaS. Environment variable: AXONOPS_HOST.",
 			},
 			"axonops_protocol": schema.StringAttribute{
-				Optional:    true,
-				Description: "Protocol to use for API requests. Valid values: 'https' (default) or 'http'. Can also be set via AXONOPS_PROTOCOL environment variable.",
+				Optional: true,
+				Description: "The protocol to use when connecting to the AxonOps API. " +
+					"Valid values: 'https' (default, recommended for production) or 'http' (only for non-production environments). " +
+					"Default: 'https'. Environment variable: AXONOPS_PROTOCOL.",
 			},
 			"org_id": schema.StringAttribute{
 				Required:    true,
-				Description: "Organization ID for your AxonOps account.",
+				Description: "The AxonOps organization ID. This identifies your organization within AxonOps and is required for authentication.",
 			},
 			"tls_skip_verify": schema.BoolAttribute{
-				Optional:    true,
-				Description: "Skip TLS certificate verification. Use with caution, only for self-signed certificates. Default: false. Can also be set via AXONOPS_TLS_SKIP_VERIFY environment variable.",
+				Optional: true,
+				Description: "Skip TLS certificate verification when connecting to the AxonOps API. " +
+					"Use only for development environments with self-signed certificates. " +
+					"WARNING: Disabling TLS verification exposes your API key to man-in-the-middle attacks. " +
+					"Default: false. Environment variable: AXONOPS_TLS_SKIP_VERIFY (set to 'true' to enable).",
 			},
 			"token_type": schema.StringAttribute{
-				Optional:    true,
-				Description: "Token type for Authorization header. Valid values: 'Bearer' (default for SaaS) or 'AxonApi' (for on-premise). Can also be set via AXONOPS_TOKEN_TYPE environment variable.",
+				Optional: true,
+				Description: "The type of authentication token to use in the Authorization header. " +
+					"Valid values: 'Bearer' (default for SaaS) or 'AxonApi' (typically for on-premise deployments). " +
+					"Most users should leave this at the default. Default: 'Bearer'. Environment variable: AXONOPS_TOKEN_TYPE.",
 			},
 		},
 	}

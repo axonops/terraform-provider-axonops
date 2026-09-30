@@ -72,7 +72,122 @@ No provider configuration is required to use SAML; simply point `axonops_host` (
 
 ## Example Usage
 
-{{ tffile "examples/provider/provider.tf" }}
+### SaaS Deployment (SAML Auto-Detected)
+
+```terraform
+terraform {
+  required_providers {
+    axonops = {
+      source  = "axonops/axonops"
+      version = "~> 0.1"
+    }
+  }
+}
+
+provider "axonops" {
+  org_id  = var.axonops_org_id
+  api_key = var.axonops_api_key
+}
+```
+
+### Self-Hosted Deployment
+
+For self-hosted AxonOps deployments, specify the server hostname. SAML is still auto-detected:
+
+```terraform
+provider "axonops" {
+  org_id           = var.axonops_org_id
+  api_key          = var.axonops_api_key
+  axonops_host     = "axonops.example.com"
+  axonops_protocol = "https"
+  token_type       = "Bearer"
+  tls_skip_verify  = false  # Only for self-signed certificates in non-production
+}
+```
+
+### Environment Variables
+
+Avoid hardcoding credentials. Use environment variables instead:
+
+```bash
+export AXONOPS_ORG_ID="your-org-id"
+export AXONOPS_API_KEY="your-api-key"
+export AXONOPS_PROTOCOL="https"
+```
+
+Then configure the provider without credentials:
+
+```terraform
+provider "axonops" {
+  org_id = var.axonops_org_id
+  # api_key will be read from AXONOPS_API_KEY environment variable
+}
+```
+
+## Resources
+
+### Kafka Management
+- `axonops_kafka_topic` - Manage Kafka topics
+- `axonops_kafka_acl` - Manage Kafka ACLs
+- `axonops_kafka_connect_connector` - Deploy Kafka Connect connectors
+
+### Cassandra/DSE Management
+- `axonops_cassandra_backup` - Schedule and manage backups
+- `axonops_cassandra_scheduled_repair` - Schedule repair jobs
+- `axonops_cassandra_adaptive_repair` - Configure adaptive repair
+
+### Monitoring & Alerting
+- `axonops_metric_alert_rule` - Create metric-based alert rules
+- `axonops_log_alert_rule` - Create log-based alert rules
+- `axonops_alert_route` - Route alerts to integrations
+- `axonops_silence` - Suppress alerts during maintenance
+
+### Integrations
+- `axonops_slack_integration` - Configure Slack webhook
+- `axonops_teams_integration` - Configure Microsoft Teams webhook
+- `axonops_pagerduty_integration` - Configure PagerDuty Events API
+- `axonops_opsgenie_integration` - Configure OpsGenie API
+- `axonops_servicenow_integration` - Configure ServiceNow credentials
+
+### Health Checks & Log Collection
+- `axonops_healthcheck_tcp` - Monitor TCP connectivity
+- `axonops_healthcheck_http` - Monitor HTTP endpoints
+- `axonops_healthcheck_shell` - Run custom shell health checks
+- `axonops_logcollector` - Configure log collection
+- `axonops_schema` - Manage Schema Registry schemas
+
+## Data Sources
+
+### Kafka
+- `axonops_kafka_topic` - Look up a Kafka topic
+- `axonops_kafka_acl` - Look up a specific Kafka ACL
+- `axonops_kafka_acl_list` - List all Kafka ACLs
+- `axonops_kafka_connect_connector` - Look up a Kafka Connect connector
+
+### Cassandra/DSE
+- `axonops_cassandra_backup` - Look up a backup
+- `axonops_cassandra_scheduled_repair` - Look up a repair schedule
+- `axonops_cassandra_adaptive_repair` - Look up adaptive repair settings
+
+### Monitoring & Alerting
+- `axonops_metric_alert_rule` - Look up a metric alert rule
+- `axonops_log_alert_rule` - Look up a log alert rule
+- `axonops_alert_route` - Look up an alert route
+- `axonops_silence` - Look up a silence
+
+### Integrations
+- `axonops_slack_integration` - Look up a Slack integration
+- `axonops_teams_integration` - Look up a Teams integration
+- `axonops_pagerduty_integration` - Look up a PagerDuty integration
+- `axonops_opsgenie_integration` - Look up an OpsGenie integration
+- `axonops_servicenow_integration` - Look up a ServiceNow integration
+
+### Health Checks & Log Collection
+- `axonops_healthcheck_tcp` - Look up a TCP health check
+- `axonops_healthcheck_http` - Look up an HTTP health check
+- `axonops_healthcheck_shell` - Look up a shell health check
+- `axonops_logcollector` - Look up a log collector
+- `axonops_schema` - Look up a Schema Registry schema
 
 ## Security
 

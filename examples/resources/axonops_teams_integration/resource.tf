@@ -1,3 +1,8 @@
+variable "teams_webhook_url" {
+  type      = string
+  sensitive = true
+}
+
 resource "axonops_teams_integration" "ops_alerts" {
   cluster_name = "production-cassandra"
   cluster_type = "cassandra"

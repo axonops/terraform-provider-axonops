@@ -72,6 +72,15 @@ Kafka Connect connectors can be imported using the format `cluster_name/connect_
 terraform import axonops_kafka_connect_connector.example my-kafka-cluster/my-connect-cluster/my-connector
 ```
 
+In Terraform v1.5.0 and later, use an [`import` block](https://developer.hashicorp.com/terraform/language/import) instead:
+
+```terraform
+import {
+  to = axonops_kafka_connect_connector.example
+  id = "my-kafka-cluster/my-connect-cluster/my-connector"
+}
+```
+
 > **Note:** `connector_name` (the last field) may itself contain `/`. The provider splits only the first two `/`-separated fields (`cluster_name`, `connect_cluster_name`) and treats the remainder of the ID as the connector name, so a `/`-containing name imports correctly.
 
 > **Warning:** `config` is `Sensitive` and stores every key currently set on the connector, including any embedded credentials (e.g. database passwords, API tokens). Importing a connector with credentials in its config writes those credentials into Terraform state. Store state in an encrypted, access-controlled backend — see [Security](../index.md#security).

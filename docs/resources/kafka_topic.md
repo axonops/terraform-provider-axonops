@@ -64,3 +64,12 @@ Kafka topics can be imported using the format `cluster_name/topic_name`:
 ```shell
 terraform import axonops_kafka_topic.example my-kafka-cluster/my-topic
 ```
+
+In Terraform v1.5.0 and later, use an [`import` block](https://developer.hashicorp.com/terraform/language/import) instead:
+
+```terraform
+import {
+  to = axonops_kafka_topic.example
+  id = "my-kafka-cluster/my-topic"
+}
+```

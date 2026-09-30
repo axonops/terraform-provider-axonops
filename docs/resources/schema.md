@@ -82,3 +82,12 @@ Schema Registry schemas can be imported using the format `cluster_name/subject`:
 ```shell
 terraform import axonops_schema.example my-kafka-cluster/user-events-value
 ```
+
+In Terraform v1.5.0 and later, use an [`import` block](https://developer.hashicorp.com/terraform/language/import) instead:
+
+```terraform
+import {
+  to = axonops_schema.example
+  id = "my-kafka-cluster/user-events-value"
+}
+```

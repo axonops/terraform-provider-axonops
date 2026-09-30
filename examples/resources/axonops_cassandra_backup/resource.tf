@@ -1,3 +1,9 @@
+variable "s3_remote_config" {
+  description = "rclone-style S3 remote configuration (key=value lines)"
+  type        = string
+  sensitive   = true
+}
+
 # Basic daily backup
 resource "axonops_cassandra_backup" "daily" {
   cluster_name    = "my-cassandra-cluster"
@@ -20,7 +26,7 @@ resource "axonops_cassandra_backup" "remote_s3" {
   remote_type      = "s3"
   remote_path      = "my-bucket/cassandra-backups"
   remote_retention = "90d"
-  remote_config    = "access_key_id=AKIAEXAMPLE\nsecret_access_key=SECRET\nregion=us-east-1"
+  remote_config    = var.s3_remote_config # e.g. "access_key_id=...\nsecret_access_key=...\nregion=us-east-1"
 }
 
 # Selective backup

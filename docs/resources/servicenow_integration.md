@@ -16,6 +16,11 @@ Use this resource to configure ServiceNow instance credentials that AxonOps uses
 ## Example Usage
 
 ```terraform
+variable "servicenow_password" {
+  type      = string
+  sensitive = true
+}
+
 resource "axonops_servicenow_integration" "incidents" {
   cluster_name  = "production-cassandra"
   cluster_type  = "cassandra"
@@ -58,6 +63,15 @@ ServiceNow integrations can be imported using the format `cluster_type/cluster_n
 
 ```shell
 terraform import axonops_servicenow_integration.example cassandra/my-cassandra-cluster/servicenow-incidents
+```
+
+In Terraform v1.5.0 and later, use an [`import` block](https://developer.hashicorp.com/terraform/language/import) instead:
+
+```terraform
+import {
+  to = axonops_servicenow_integration.example
+  id = "cassandra/my-cassandra-cluster/servicenow-incidents"
+}
 ```
 
 Where:

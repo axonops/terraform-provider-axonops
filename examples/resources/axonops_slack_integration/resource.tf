@@ -1,3 +1,8 @@
+variable "slack_webhook_url" {
+  type      = string
+  sensitive = true
+}
+
 resource "axonops_slack_integration" "ops_alerts" {
   cluster_name = "production-cassandra"
   cluster_type = "cassandra"

@@ -104,6 +104,15 @@ HTTP healthchecks can be imported using the format `cluster_type/cluster_name/he
 terraform import axonops_healthcheck_http.example cassandra/my-cassandra-cluster/Schema%20Registry%20Health
 ```
 
+In Terraform v1.5.0 and later, use an [`import` block](https://developer.hashicorp.com/terraform/language/import) instead:
+
+```terraform
+import {
+  to = axonops_healthcheck_http.example
+  id = "cassandra/my-cassandra-cluster/Schema%20Registry%20Health"
+}
+```
+
 Where:
 - `cluster_type` - The cluster type (e.g. cassandra, kafka)
 - `cluster_name` - The name of the cluster

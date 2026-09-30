@@ -20,3 +20,7 @@ description: |-
 Cassandra adaptive repair settings can be imported using the format `cluster_type/cluster_name`:
 
 {{ codefile "shell" "examples/resources/axonops_cassandra_adaptive_repair/import.sh" }}
+
+In Terraform v1.5.0 and later, use an [`import` block](https://developer.hashicorp.com/terraform/language/import) instead:
+
+{{ tffile "examples/resources/axonops_cassandra_adaptive_repair/import.tf" }}
