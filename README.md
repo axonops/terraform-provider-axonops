@@ -14,7 +14,7 @@ A Terraform provider for managing resources through the AxonOps platform. This p
 ## Requirements
 
 - [Terraform](https://www.terraform.io/downloads.html) >= 1.0
-- [Go](https://golang.org/doc/install) >= 1.23 (for building from source)
+- [Go](https://golang.org/doc/install) >= 1.25 (for building from source)
 - Access to an AxonOps instance
 
 ## Installation

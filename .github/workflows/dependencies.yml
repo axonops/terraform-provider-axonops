@@ -18,4 +18,20 @@ jobs:
       - name: Install gosec
         run: go install github.com/securego/gosec/v2/cmd/gosec@latest
       - name: Run gosec
-        run: gosec -exclude=G402 ./...
+        # InsecureSkipVerify (G402) is only reachable via the opt-in
+        # tls_skip_verify setting and is annotated inline with #nosec.
+        run: gosec ./...
+
+  govulncheck:
+    name: Known Vulnerabilities
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+          cache: true
+      - name: Install govulncheck
+        run: go install golang.org/x/vuln/cmd/govulncheck@latest
+      - name: Run govulncheck
+        run: govulncheck ./...
