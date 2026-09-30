@@ -40,11 +40,11 @@ resource "axonops_schema" "user_events_key" {
   cluster_name = "my-kafka-cluster"
   subject      = "user-events-key"
   schema_type  = data.axonops_schema.existing.schema_type
-  schema       = jsonencode({
+  schema = jsonencode({
     type      = "record"
     name      = "UserEventKey"
     namespace = "com.example.events"
-    fields    = [
+    fields = [
       {
         name = "user_id"
         type = "string"

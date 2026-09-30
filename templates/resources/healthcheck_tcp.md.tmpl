@@ -11,57 +11,9 @@ description: |-
 
 ## Example Usage
 
-```terraform
-# Check Kafka broker port
-resource "axonops_healthcheck_tcp" "kafka_broker" {
-  cluster_name          = "my-kafka-cluster"
-  name                  = "Kafka Broker Port"
-  tcp                   = "0.0.0.0:9092"
-  interval              = "30s"
-  timeout               = "10s"
-  supported_agent_types = ["broker", "kraft-broker"]
-}
+{{ tffile "examples/resources/axonops_healthcheck_tcp/resource.tf" }}
 
-# Check Kafka controller port
-resource "axonops_healthcheck_tcp" "kafka_controller" {
-  cluster_name          = "my-kafka-cluster"
-  name                  = "Kafka Controller Port"
-  tcp                   = "0.0.0.0:9093"
-  interval              = "30s"
-  timeout               = "10s"
-  supported_agent_types = ["kraft-controller"]
-}
-
-# Check Schema Registry port
-resource "axonops_healthcheck_tcp" "schema_registry" {
-  cluster_name          = "my-kafka-cluster"
-  name                  = "Schema Registry Port"
-  tcp                   = "0.0.0.0:8081"
-  interval              = "1m"
-  timeout               = "15s"
-  supported_agent_types = ["schema-registry"]
-}
-
-# Check Kafka Connect port
-resource "axonops_healthcheck_tcp" "kafka_connect" {
-  cluster_name          = "my-kafka-cluster"
-  name                  = "Kafka Connect Port"
-  tcp                   = "0.0.0.0:8083"
-  interval              = "1m"
-  timeout               = "15s"
-  supported_agent_types = ["all"]
-}
-
-# Check ZooKeeper client port
-resource "axonops_healthcheck_tcp" "zookeeper" {
-  cluster_name          = "my-kafka-cluster"
-  name                  = "ZooKeeper Client Port"
-  tcp                   = "0.0.0.0:2181"
-  interval              = "30s"
-  timeout               = "10s"
-  supported_agent_types = ["zookeeper"]
-}
-```
+> **Note:** Healthchecks and log collectors for a given cluster share a single document on the AxonOps server. The provider serializes writes to that document across all healthcheck/log-collector resources for the same `cluster_type`/`cluster_name` within one `terraform apply`, so concurrent Terraform operations in the same run cannot silently overwrite each other's changes. This protection does NOT extend across separate `terraform apply` processes (e.g. two CI pipelines applying at once) or edits made via the AxonOps UI at the same time — those can still race and the last write wins.
 
 {{ .SchemaMarkdown | trimspace }}
 
@@ -69,9 +21,7 @@ resource "axonops_healthcheck_tcp" "zookeeper" {
 
 TCP healthchecks can be imported using the format `cluster_type/cluster_name/healthcheck_name`:
 
-```shell
-terraform import axonops_healthcheck_tcp.example kafka/my-kafka-cluster/Kafka%20Broker%20Port
-```
+{{ codefile "shell" "examples/resources/axonops_healthcheck_tcp/import.sh" }}
 
 Where:
 - `cluster_type` - The cluster type (e.g. cassandra, kafka)

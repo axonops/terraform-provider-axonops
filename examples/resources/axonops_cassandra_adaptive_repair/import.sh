@@ -1,0 +1,1 @@
+terraform import axonops_cassandra_adaptive_repair.example cassandra/my-cassandra-cluster

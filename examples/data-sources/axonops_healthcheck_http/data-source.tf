@@ -1,0 +1,26 @@
+# Read an existing HTTP healthcheck
+data "axonops_healthcheck_http" "existing" {
+  cluster_name = "my-kafka-cluster"
+  name         = "Schema Registry Health"
+}
+
+# Output healthcheck details
+output "healthcheck_url" {
+  value = data.axonops_healthcheck_http.existing.url
+}
+
+output "healthcheck_method" {
+  value = data.axonops_healthcheck_http.existing.method
+}
+
+output "healthcheck_interval" {
+  value = data.axonops_healthcheck_http.existing.interval
+}
+
+output "healthcheck_expected_status" {
+  value = data.axonops_healthcheck_http.existing.expected_status
+}
+
+output "healthcheck_agent_types" {
+  value = data.axonops_healthcheck_http.existing.supported_agent_types
+}

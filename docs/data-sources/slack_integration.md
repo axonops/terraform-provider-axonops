@@ -43,4 +43,4 @@ output "slack_channel" {
 - `axonops_url` (String) The AxonOps dashboard URL.
 - `channel` (String) The Slack channel name.
 - `id` (String) The integration ID.
-- `webhook_url` (String, Sensitive) The Slack webhook URL.
+- `webhook_url` (String, Sensitive) Not returned by the API (masked). Always null.

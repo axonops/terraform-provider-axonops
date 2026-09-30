@@ -20,7 +20,7 @@ Alert routes allow you to send alerts from AxonOps to external integrations such
 
 ## Route Types
 
-The `route_type` parameter determines which alerts are routed:
+The `type` attribute determines which alerts are routed:
 - `global` - All alerts
 - `metrics` - Metric-based alerts
 - `backups` - Backup-related alerts
@@ -38,14 +38,20 @@ The `route_type` parameter determines which alerts are routed:
 
 ## Import
 
-Alert routes can be imported using the format `cluster_type/cluster_name/integration_type/route_type`:
+Alert routes can be imported using the format `cluster_type/cluster_name/type/severity/integration_type/integration_name`:
 
-```shell
-terraform import axonops_alert_route.example cassandra/my-cluster/slack/metrics
-```
+{{ codefile "shell" "examples/resources/axonops_alert_route/import.sh" }}
 
 Where:
 - `cluster_type` - The type of cluster (cassandra, kafka, or dse)
 - `cluster_name` - The name of the cluster
-- `integration_type` - The integration type (slack, pagerduty, email, teams, servicenow, webhook, opsgenie)
-- `route_type` - The route type (global, metrics, backups, servicechecks, nodes, commands, repairs, rollingrestart)
+- `type` - The route type (global, metrics, backups, servicechecks, nodes, commands, repairs, rollingrestart)
+- `severity` - The severity this route applies to (info, warning, error); ignored when `type` is `global`, but a value MUST still be supplied
+- `integration_type` - The integration type (email, smtp, pagerduty, slack, teams, servicenow, webhook, opsgenie)
+- `integration_name` - The name of the integration (the `name` attribute of the corresponding integration resource, not its ID)
+
+> **Warning:** The import ID has 6 slash-separated parts, in this exact order. An import ID with 4 parts (e.g. `cassandra/my-cluster/slack/metrics`) fails with `Invalid Import ID`.
+
+## Replacement Behaviour
+
+`cluster_name`, `cluster_type`, `type`, `severity`, `integration_type`, and `integration_name` each force replacement (`RequiresReplace`) — they form the route's identity, and AxonOps has no API to change a route's identity in place. Changing any of them destroys the existing route and creates a new one. Only `enable_override` can be updated in place.

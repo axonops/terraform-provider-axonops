@@ -17,11 +17,11 @@ resource "axonops_schema" "user_events" {
   cluster_name = "my-kafka-cluster"
   subject      = "user-events-value"
   schema_type  = "AVRO"
-  schema       = jsonencode({
+  schema = jsonencode({
     type      = "record"
     name      = "UserEvent"
     namespace = "com.example.events"
-    fields    = [
+    fields = [
       { name = "user_id", type = "string" },
       { name = "event_type", type = "string" },
       { name = "timestamp", type = "long" }
@@ -34,7 +34,7 @@ resource "axonops_schema" "notifications" {
   cluster_name = "my-kafka-cluster"
   subject      = "notifications-value"
   schema_type  = "JSON"
-  schema       = jsonencode({
+  schema = jsonencode({
     "$schema" = "http://json-schema.org/draft-07/schema#"
     type      = "object"
     required  = ["id", "message"]

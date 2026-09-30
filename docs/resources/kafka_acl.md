@@ -2,12 +2,12 @@
 page_title: "axonops_kafka_acl Resource - axonops"
 subcategory: "Kafka"
 description: |-
-  Manages a Kafka ACL (Access Control List) entry.
+  Manages a Kafka ACL (Access Control List) entry. All identity fields force replacement on change since ACLs cannot be updated in place.
 ---
 
 # axonops_kafka_acl (Resource)
 
-Manages a Kafka ACL (Access Control List) entry.
+Manages a Kafka ACL (Access Control List) entry. All identity fields force replacement on change since ACLs cannot be updated in place.
 
 ## Example Usage
 
@@ -68,8 +68,10 @@ resource "axonops_kafka_acl" "consumer_group" {
 
 ## Import
 
-Kafka ACLs can be imported using the format `cluster_name/resource_type/resource_name/pattern_type/principal/host/operation/permission`:
+Kafka ACLs can be imported using the format `cluster_name/resource_type/resource_name/resource_pattern_type/principal/host/operation/permission_type`:
 
 ```shell
 terraform import axonops_kafka_acl.example my-kafka-cluster/TOPIC/my-topic/LITERAL/User:producer-app/*/WRITE/ALLOW
 ```
+
+> **Note:** `principal` is the only identity field likely to contain `/` (e.g. `User:svc/account`). The provider fixes the first 4 fields and the last 3 fields of the import ID and treats everything in between as the principal, so a `/`-containing principal imports correctly without extra escaping.

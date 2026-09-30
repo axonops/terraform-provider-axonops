@@ -13,16 +13,6 @@ Use this data source to reference an existing Microsoft Teams integration when c
 
 ## Example Usage
 
-```terraform
-data "axonops_teams_integration" "existing" {
-  cluster_name = "production-cassandra"
-  cluster_type = "cassandra"
-  name         = "ops-teams-alerts"
-}
-
-output "teams_integration_id" {
-  value = data.axonops_teams_integration.existing.id
-}
-```
+{{ tffile "examples/data-sources/axonops_teams_integration/data-source.tf" }}
 
 {{ .SchemaMarkdown | trimspace }}

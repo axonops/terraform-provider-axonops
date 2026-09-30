@@ -37,4 +37,4 @@ output "teams_integration_id" {
 ### Read-Only
 
 - `id` (String) The integration ID.
-- `webhook_url` (String, Sensitive) The Microsoft Teams webhook URL.
+- `webhook_url` (String, Sensitive) Not returned by the API (masked). Always null.

@@ -1,0 +1,27 @@
+# Read existing adaptive repair settings
+data "axonops_cassandra_adaptive_repair" "existing" {
+  cluster_name = "my-cassandra-cluster"
+}
+
+# Output repair settings
+output "repair_active" {
+  value = data.axonops_cassandra_adaptive_repair.existing.active
+}
+
+output "repair_parallelism" {
+  value = data.axonops_cassandra_adaptive_repair.existing.parallelism
+}
+
+output "gc_grace_threshold" {
+  value = data.axonops_cassandra_adaptive_repair.existing.gc_grace_threshold
+}
+
+output "blacklisted_tables" {
+  value = data.axonops_cassandra_adaptive_repair.existing.blacklisted_tables
+}
+
+# Read DSE cluster adaptive repair settings
+data "axonops_cassandra_adaptive_repair" "dse" {
+  cluster_name = "my-dse-cluster"
+  cluster_type = "dse"
+}

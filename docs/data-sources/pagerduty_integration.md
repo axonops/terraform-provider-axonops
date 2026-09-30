@@ -37,4 +37,4 @@ output "pagerduty_integration_id" {
 ### Read-Only
 
 - `id` (String) The integration ID.
-- `integration_key` (String, Sensitive) The PagerDuty integration key.
+- `integration_key` (String, Sensitive) Not returned by the API (masked). Always null.

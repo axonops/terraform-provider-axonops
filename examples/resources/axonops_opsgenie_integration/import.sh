@@ -1,0 +1,1 @@
+terraform import axonops_opsgenie_integration.example cassandra/my-cassandra-cluster/opsgenie-oncall
