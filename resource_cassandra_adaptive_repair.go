@@ -7,6 +7,7 @@ import (
 
 	axonopsClient "terraform-provider-axonops/client"
 
+	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -15,6 +16,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64default"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/listdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
@@ -64,6 +66,7 @@ func (r *cassandraAdaptiveRepairResource) Schema(ctx context.Context, req resour
 				Computed:    true,
 				Default:     stringdefault.StaticString("cassandra"),
 				Description: "The cluster type (cassandra or dse). Default: cassandra",
+				Validators:  []validator.String{clusterTypeValidator()},
 			},
 			"active": schema.BoolAttribute{
 				Optional:    true,
@@ -76,12 +79,14 @@ func (r *cassandraAdaptiveRepairResource) Schema(ctx context.Context, req resour
 				Computed:    true,
 				Default:     int64default.StaticInt64(10),
 				Description: "Number of tables to repair concurrently. Default: 10",
+				Validators:  []validator.Int64{int64validator.AtLeast(1)},
 			},
 			"gc_grace_threshold": schema.Int64Attribute{
 				Optional:    true,
 				Computed:    true,
 				Default:     int64default.StaticInt64(86400),
 				Description: "GC grace period threshold in seconds. Default: 86400",
+				Validators:  []validator.Int64{int64validator.AtLeast(0)},
 			},
 			"blacklisted_tables": schema.ListAttribute{
 				ElementType: types.StringType,
@@ -101,18 +106,21 @@ func (r *cassandraAdaptiveRepairResource) Schema(ctx context.Context, req resour
 				Computed:    true,
 				Default:     int64default.StaticInt64(3),
 				Description: "Maximum retry attempts per segment. Default: 3",
+				Validators:  []validator.Int64{int64validator.AtLeast(0)},
 			},
 			"segments_per_vnode": schema.Int64Attribute{
 				Optional:    true,
 				Computed:    true,
 				Default:     int64default.StaticInt64(1),
 				Description: "Number of segments per vnode. Default: 1",
+				Validators:  []validator.Int64{int64validator.AtLeast(1)},
 			},
 			"segment_target_size_mb": schema.Int64Attribute{
 				Optional:    true,
 				Computed:    true,
 				Default:     int64default.StaticInt64(256),
 				Description: "Target segment size in MB. Default: 256",
+				Validators:  []validator.Int64{int64validator.AtLeast(1)},
 			},
 		},
 	}

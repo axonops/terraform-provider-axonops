@@ -8,6 +8,7 @@ import (
 	axonopsClient "terraform-provider-axonops/client"
 
 	"github.com/google/uuid"
+	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -15,7 +16,10 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64default"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/listdefault"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
@@ -63,8 +67,11 @@ func (r *logCollectorResource) Schema(ctx context.Context, req resource.SchemaRe
 				Description: "The name of the cluster.",
 			},
 			"cluster_type": schema.StringAttribute{
-				Required:    true,
-				Description: "The type of cluster (e.g., cassandra, kafka, dse).",
+				Optional:    true,
+				Computed:    true,
+				Default:     stringdefault.StaticString("cassandra"),
+				Description: "The type of cluster (e.g., cassandra, kafka, dse). Defaults to cassandra.",
+				Validators:  []validator.String{clusterTypeValidator()},
 			},
 			"name": schema.StringAttribute{
 				Required:    true,
@@ -73,6 +80,9 @@ func (r *logCollectorResource) Schema(ctx context.Context, req resource.SchemaRe
 			"uuid": schema.StringAttribute{
 				Computed:    true,
 				Description: "The unique identifier for the log collector (auto-generated).",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"filename": schema.StringAttribute{
 				Required:    true,
@@ -120,18 +130,21 @@ func (r *logCollectorResource) Schema(ctx context.Context, req resource.SchemaRe
 				Computed:    true,
 				Default:     int64default.StaticInt64(0),
 				Description: "Threshold for error alerts. Default: 0",
+				Validators:  []validator.Int64{int64validator.AtLeast(0)},
 			},
 			"interval": schema.StringAttribute{
 				Optional:    true,
 				Computed:    true,
 				Default:     stringdefault.StaticString("5s"),
 				Description: "Interval for log collection. Default: 5s",
+				Validators:  []validator.String{durationValidator()},
 			},
 			"timeout": schema.StringAttribute{
 				Optional:    true,
 				Computed:    true,
 				Default:     stringdefault.StaticString("1m"),
 				Description: "Timeout for log collection. Default: 1m",
+				Validators:  []validator.String{durationValidator()},
 			},
 			"readonly": schema.BoolAttribute{
 				Optional:    true,
@@ -170,6 +183,11 @@ func (r *logCollectorResource) Create(ctx context.Context, req resource.CreateRe
 	if resp.Diagnostics.HasError() {
 		return
 	}
+
+	// Serialize read-modify-write against the shared log collectors
+	// document for this cluster (see cluster_lock.go).
+	unlock := lockCluster("logcollectors", data.ClusterType.ValueString(), data.ClusterName.ValueString())
+	defer unlock()
 
 	// Get existing log collectors
 	existingCollectors, err := r.client.GetLogCollectors(ctx, data.ClusterType.ValueString(), data.ClusterName.ValueString())
@@ -321,6 +339,11 @@ func (r *logCollectorResource) Update(ctx context.Context, req resource.UpdateRe
 		return
 	}
 
+	// Serialize read-modify-write against the shared log collectors
+	// document for this cluster (see cluster_lock.go).
+	unlock := lockCluster("logcollectors", planData.ClusterType.ValueString(), planData.ClusterName.ValueString())
+	defer unlock()
+
 	// Get existing log collectors
 	existingCollectors, err := r.client.GetLogCollectors(ctx, planData.ClusterType.ValueString(), planData.ClusterName.ValueString())
 	if err != nil {
@@ -390,6 +413,11 @@ func (r *logCollectorResource) Delete(ctx context.Context, req resource.DeleteRe
 	if resp.Diagnostics.HasError() {
 		return
 	}
+
+	// Serialize read-modify-write against the shared log collectors
+	// document for this cluster (see cluster_lock.go).
+	unlock := lockCluster("logcollectors", data.ClusterType.ValueString(), data.ClusterName.ValueString())
+	defer unlock()
 
 	// Get existing log collectors
 	existingCollectors, err := r.client.GetLogCollectors(ctx, data.ClusterType.ValueString(), data.ClusterName.ValueString())

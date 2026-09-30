@@ -8,6 +8,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
@@ -54,6 +55,7 @@ func (d *tcpHealthcheckDataSource) Schema(ctx context.Context, req datasource.Sc
 			"cluster_type": schema.StringAttribute{
 				Optional:    true,
 				Description: "The cluster type (e.g. cassandra, kafka). Defaults to cassandra.",
+				Validators:  []validator.String{clusterTypeValidator()},
 			},
 			"name": schema.StringAttribute{
 				Required:    true,

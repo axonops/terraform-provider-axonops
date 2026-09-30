@@ -8,6 +8,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
@@ -55,6 +56,7 @@ func (d *cassandraBackupDataSource) Schema(ctx context.Context, req datasource.S
 				Optional:    true,
 				Computed:    true,
 				Description: "The cluster type (cassandra or dse). Default: cassandra",
+				Validators:  []validator.String{clusterTypeValidator()},
 			},
 			"tag": schema.StringAttribute{
 				Required:    true,

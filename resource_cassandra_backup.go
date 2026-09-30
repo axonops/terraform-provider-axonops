@@ -8,6 +8,8 @@ import (
 	axonopsClient "terraform-provider-axonops/client"
 
 	"github.com/google/uuid"
+	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -16,6 +18,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64default"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/listdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
@@ -54,7 +57,7 @@ func (r *cassandraBackupResource) Metadata(_ context.Context, req resource.Metad
 
 func (r *cassandraBackupResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		Description: "Manages a Cassandra backup schedule.",
+		Description: "Manages a Cassandra backup schedule. Updates are performed as delete-then-create since the API does not support in-place updates; a successful update assigns a new `id`. If create fails after the old backup has already been deleted, the resource is removed from state so a subsequent apply recreates it.",
 		Attributes: map[string]schema.Attribute{
 			"cluster_name": schema.StringAttribute{
 				Required:    true,
@@ -65,10 +68,11 @@ func (r *cassandraBackupResource) Schema(ctx context.Context, req resource.Schem
 				Computed:    true,
 				Default:     stringdefault.StaticString("cassandra"),
 				Description: "The cluster type (cassandra or dse). Default: cassandra",
+				Validators:  []validator.String{clusterTypeValidator()},
 			},
 			"id": schema.StringAttribute{
 				Computed:    true,
-				Description: "The unique identifier for the backup (auto-generated).",
+				Description: "The unique identifier for the backup (auto-generated). Changes on every update, since updates are performed as delete-then-create.",
 			},
 			"tag": schema.StringAttribute{
 				Required:    true,
@@ -90,12 +94,14 @@ func (r *cassandraBackupResource) Schema(ctx context.Context, req resource.Schem
 				Computed:    true,
 				Default:     stringdefault.StaticString("0 1 * * *"),
 				Description: "Cron expression for backup schedule. Default: 0 1 * * *",
+				Validators:  []validator.String{cronValidator()},
 			},
 			"local_retention": schema.StringAttribute{
 				Optional:    true,
 				Computed:    true,
 				Default:     stringdefault.StaticString("10d"),
 				Description: "Local backup retention duration. Default: 10d",
+				Validators:  []validator.String{durationValidator()},
 			},
 			"remote": schema.BoolAttribute{
 				Optional:    true,
@@ -106,6 +112,7 @@ func (r *cassandraBackupResource) Schema(ctx context.Context, req resource.Schem
 			"remote_type": schema.StringAttribute{
 				Optional:    true,
 				Description: "Remote storage type: s3, sftp, azure.",
+				Validators:  []validator.String{stringvalidator.OneOf("s3", "sftp", "azure")},
 			},
 			"remote_path": schema.StringAttribute{
 				Optional:    true,
@@ -116,6 +123,7 @@ func (r *cassandraBackupResource) Schema(ctx context.Context, req resource.Schem
 				Computed:    true,
 				Default:     stringdefault.StaticString("60d"),
 				Description: "Remote backup retention duration. Default: 60d",
+				Validators:  []validator.String{durationValidator()},
 			},
 			"remote_config": schema.StringAttribute{
 				Optional:    true,
@@ -127,18 +135,21 @@ func (r *cassandraBackupResource) Schema(ctx context.Context, req resource.Schem
 				Computed:    true,
 				Default:     stringdefault.StaticString("10h"),
 				Description: "Backup operation timeout. Default: 10h",
+				Validators:  []validator.String{durationValidator()},
 			},
 			"transfers": schema.Int64Attribute{
 				Optional:    true,
 				Computed:    true,
 				Default:     int64default.StaticInt64(1),
 				Description: "Number of parallel transfers. Default: 1",
+				Validators:  []validator.Int64{int64validator.AtLeast(1)},
 			},
 			"tps_limit": schema.Int64Attribute{
 				Optional:    true,
 				Computed:    true,
 				Default:     int64default.StaticInt64(50),
 				Description: "Throughput per second limit. Default: 50",
+				Validators:  []validator.Int64{int64validator.AtLeast(0)},
 			},
 			"bw_limit": schema.StringAttribute{
 				Optional:    true,
@@ -311,8 +322,18 @@ func (r *cassandraBackupResource) Read(ctx context.Context, req resource.ReadReq
 	if found.Remote {
 		data.RemoteType = types.StringValue(found.RemoteType)
 		data.RemotePath = types.StringValue(found.RemotePath)
-		data.RemoteRetention = types.StringValue(found.RemoteRetentionDuration)
 		data.RemoteConfig = types.StringValue(found.RemoteConfig)
+	}
+
+	// Refresh remote_retention from the API regardless of the remote flag so
+	// drift is detected even if remote backup was toggled outside of
+	// Terraform. If the API returns an empty value while remote=false (some
+	// backends omit remote_retention entirely once remote backup is
+	// disabled), keep the existing state value instead of overwriting it
+	// with "" -- otherwise every plan would show a perpetual diff against
+	// the schema default.
+	if found.RemoteRetentionDuration != "" || found.Remote {
+		data.RemoteRetention = types.StringValue(found.RemoteRetentionDuration)
 	}
 
 	data.Datacenters, diags = types.ListValueFrom(ctx, types.StringType, found.Datacenters)
@@ -418,7 +439,13 @@ func (r *cassandraBackupResource) Update(ctx context.Context, req resource.Updat
 
 	err = r.client.CreateCassandraBackup(ctx, planData.ClusterType.ValueString(), planData.ClusterName.ValueString(), backup)
 	if err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create updated backup: %s", err))
+		// The old backup was already deleted above; clear state so
+		// Terraform knows the resource no longer exists and will recreate
+		// it on the next apply instead of assuming the (now stale) prior
+		// state is still valid.
+		resp.State.RemoveResource(ctx)
+		resp.Diagnostics.AddError("Client Error",
+			fmt.Sprintf("Deleted existing backup but failed to create replacement: %s", err))
 		return
 	}
 

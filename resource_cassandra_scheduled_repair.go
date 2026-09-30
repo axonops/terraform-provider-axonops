@@ -7,6 +7,8 @@ import (
 
 	axonopsClient "terraform-provider-axonops/client"
 
+	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -16,6 +18,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64default"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/listdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
@@ -96,6 +99,7 @@ func (r *cassandraScheduledRepairResource) Schema(ctx context.Context, req resou
 				Computed:    true,
 				Default:     int64default.StaticInt64(1),
 				Description: "Number of segments per node. Default: 1",
+				Validators:  []validator.Int64{int64validator.AtLeast(1)},
 			},
 			"segmented": schema.BoolAttribute{
 				Optional:    true,
@@ -114,10 +118,12 @@ func (r *cassandraScheduledRepairResource) Schema(ctx context.Context, req resou
 				Computed:    true,
 				Default:     int64default.StaticInt64(1),
 				Description: "Number of job threads. Default: 1",
+				Validators:  []validator.Int64{int64validator.AtLeast(1)},
 			},
 			"schedule_expr": schema.StringAttribute{
 				Required:    true,
 				Description: "Cron expression for the repair schedule (e.g. '0 0 1 * *' for the first day of each month at midnight).",
+				Validators:  []validator.String{cronValidator()},
 			},
 			"primary_range": schema.BoolAttribute{
 				Optional:    true,
@@ -130,6 +136,7 @@ func (r *cassandraScheduledRepairResource) Schema(ctx context.Context, req resou
 				Computed:    true,
 				Default:     stringdefault.StaticString("Parallel"),
 				Description: "Repair parallelism mode. Valid values: Parallel, Sequential, DC-Aware. Default: Parallel",
+				Validators:  []validator.String{stringvalidator.OneOf("Parallel", "Sequential", "DC-Aware")},
 			},
 			"optimise_streams": schema.BoolAttribute{
 				Optional:    true,
@@ -453,19 +460,35 @@ func (r *cassandraScheduledRepairResource) Delete(ctx context.Context, req resou
 }
 
 // ImportState imports an existing scheduled repair.
-// Import ID format: cluster_name/tag
+// Import ID format: cluster_name/tag (legacy, 2 parts) or
+// cluster_type/cluster_name/tag (3 parts, for consistency with sibling
+// resources). Both are accepted for backward compatibility; this resource
+// has no cluster_type attribute, so when the 3-part form is used the
+// leading cluster_type segment is only used to route the API lookup and is
+// otherwise discarded. Since tag is a free-text field that may itself
+// contain "/", only a single "/" in the ID is treated as the legacy
+// cluster_name/tag form -- two or more "/" are treated as the 3-part form,
+// with the remainder (which may still contain "/") taken as the tag.
 func (r *cassandraScheduledRepairResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	parts := strings.Split(req.ID, "/")
-	if len(parts) != 2 {
+	var clusterName, tag string
+
+	switch strings.Count(req.ID, "/") {
+	case 0:
 		resp.Diagnostics.AddError(
 			"Invalid Import ID",
-			fmt.Sprintf("Expected import ID format: cluster_name/tag, got: %s", req.ID),
+			fmt.Sprintf("Expected import ID format: cluster_name/tag or cluster_type/cluster_name/tag, got: %s", req.ID),
 		)
 		return
+	case 1:
+		parts := strings.SplitN(req.ID, "/", 2)
+		clusterName = parts[0]
+		tag = parts[1]
+	default:
+		parts := strings.SplitN(req.ID, "/", 3)
+		// parts[0] is cluster_type, used only to look up the repair below.
+		clusterName = parts[1]
+		tag = parts[2]
 	}
-
-	clusterName := parts[0]
-	tag := parts[1]
 
 	repairs, err := r.client.GetScheduledRepairs(ctx, clusterName)
 	if err != nil {

@@ -8,6 +8,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
@@ -54,6 +55,7 @@ func (d *logCollectorDataSource) Schema(ctx context.Context, req datasource.Sche
 			"cluster_type": schema.StringAttribute{
 				Required:    true,
 				Description: "The type of cluster (e.g., cassandra, kafka, dse).",
+				Validators:  []validator.String{clusterTypeValidator()},
 			},
 			"name": schema.StringAttribute{
 				Required:    true,

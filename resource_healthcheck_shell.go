@@ -12,7 +12,10 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
@@ -64,6 +67,7 @@ func (r *shellHealthcheckResource) Schema(ctx context.Context, req resource.Sche
 				Computed:    true,
 				Default:     stringdefault.StaticString("cassandra"),
 				Description: "The cluster type (e.g. cassandra, kafka). Defaults to cassandra.",
+				Validators:  []validator.String{clusterTypeValidator()},
 			},
 			"name": schema.StringAttribute{
 				Required:    true,
@@ -72,6 +76,9 @@ func (r *shellHealthcheckResource) Schema(ctx context.Context, req resource.Sche
 			"id": schema.StringAttribute{
 				Computed:    true,
 				Description: "The unique identifier for the healthcheck (auto-generated).",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"script": schema.StringAttribute{
 				Required:    true,
@@ -88,12 +95,14 @@ func (r *shellHealthcheckResource) Schema(ctx context.Context, req resource.Sche
 				Computed:    true,
 				Default:     stringdefault.StaticString("1m"),
 				Description: "The interval between checks (e.g., 1m, 30s). Default: 1m",
+				Validators:  []validator.String{durationValidator()},
 			},
 			"timeout": schema.StringAttribute{
 				Optional:    true,
 				Computed:    true,
 				Default:     stringdefault.StaticString("1m"),
 				Description: "The timeout for the check (e.g., 1m, 30s). Default: 1m",
+				Validators:  []validator.String{durationValidator()},
 			},
 			"readonly": schema.BoolAttribute{
 				Optional:    true,
@@ -126,6 +135,11 @@ func (r *shellHealthcheckResource) Create(ctx context.Context, req resource.Crea
 	if resp.Diagnostics.HasError() {
 		return
 	}
+
+	// Serialize read-modify-write against the shared healthchecks document
+	// for this cluster (see cluster_lock.go).
+	unlock := lockCluster("healthchecks", data.ClusterType.ValueString(), data.ClusterName.ValueString())
+	defer unlock()
 
 	// Get existing healthchecks
 	existing, err := r.client.GetHealthchecks(ctx, data.ClusterType.ValueString(), data.ClusterName.ValueString())
@@ -236,6 +250,11 @@ func (r *shellHealthcheckResource) Update(ctx context.Context, req resource.Upda
 		return
 	}
 
+	// Serialize read-modify-write against the shared healthchecks document
+	// for this cluster (see cluster_lock.go).
+	unlock := lockCluster("healthchecks", planData.ClusterType.ValueString(), planData.ClusterName.ValueString())
+	defer unlock()
+
 	// Get existing healthchecks
 	existing, err := r.client.GetHealthchecks(ctx, planData.ClusterType.ValueString(), planData.ClusterName.ValueString())
 	if err != nil {
@@ -292,6 +311,11 @@ func (r *shellHealthcheckResource) Delete(ctx context.Context, req resource.Dele
 	if resp.Diagnostics.HasError() {
 		return
 	}
+
+	// Serialize read-modify-write against the shared healthchecks document
+	// for this cluster (see cluster_lock.go).
+	unlock := lockCluster("healthchecks", data.ClusterType.ValueString(), data.ClusterName.ValueString())
+	defer unlock()
 
 	// Get existing healthchecks
 	existing, err := r.client.GetHealthchecks(ctx, data.ClusterType.ValueString(), data.ClusterName.ValueString())
