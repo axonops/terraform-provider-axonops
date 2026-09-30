@@ -1,6 +1,6 @@
 module terraform-provider-axonops
 
-go 1.25.0
+go 1.27.1
 
 require (
 	github.com/hashicorp/terraform-plugin-framework v1.12.0

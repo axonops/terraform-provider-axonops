@@ -14,8 +14,8 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        # go.mod requires Go 1.25; also test against the latest stable release.
-        go-version: ['1.25', 'stable']
+        # go.mod requires Go 1.27.1; also test against the latest stable release.
+        go-version: ['1.27.1', 'stable']
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5

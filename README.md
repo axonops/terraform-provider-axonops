@@ -53,7 +53,7 @@ terraform apply
 ## Requirements
 
 - [Terraform](https://www.terraform.io/downloads.html) >= 1.0
-- [Go](https://golang.org/doc/install) >= 1.25 (for building from source)
+- [Go](https://golang.org/doc/install) >= 1.27.1 (for building from source)
 - Access to an AxonOps instance (SaaS or self-hosted)
 
 ## Installation
