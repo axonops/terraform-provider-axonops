@@ -257,7 +257,7 @@ func (r *cassandraBackupResource) Create(ctx context.Context, req resource.Creat
 		backup.RemoteConfig = data.RemoteConfig.ValueString()
 	}
 
-	err := r.client.CreateCassandraBackup(data.ClusterType.ValueString(), data.ClusterName.ValueString(), backup)
+	err := r.client.CreateCassandraBackup(ctx, data.ClusterType.ValueString(), data.ClusterName.ValueString(), backup)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create backup: %s", err))
 		return
@@ -278,7 +278,7 @@ func (r *cassandraBackupResource) Read(ctx context.Context, req resource.ReadReq
 		return
 	}
 
-	backups, err := r.client.GetCassandraBackups(data.ClusterType.ValueString(), data.ClusterName.ValueString())
+	backups, err := r.client.GetCassandraBackups(ctx, data.ClusterType.ValueString(), data.ClusterName.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read backups: %s", err))
 		return
@@ -356,7 +356,7 @@ func (r *cassandraBackupResource) Update(ctx context.Context, req resource.Updat
 	}
 
 	// Delete the old backup
-	err := r.client.DeleteCassandraBackup(stateData.ClusterType.ValueString(), stateData.ClusterName.ValueString(), []string{stateData.ID.ValueString()})
+	err := r.client.DeleteCassandraBackup(ctx, stateData.ClusterType.ValueString(), stateData.ClusterName.ValueString(), []string{stateData.ID.ValueString()})
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete old backup for update: %s", err))
 		return
@@ -416,7 +416,7 @@ func (r *cassandraBackupResource) Update(ctx context.Context, req resource.Updat
 		backup.RemoteConfig = planData.RemoteConfig.ValueString()
 	}
 
-	err = r.client.CreateCassandraBackup(planData.ClusterType.ValueString(), planData.ClusterName.ValueString(), backup)
+	err = r.client.CreateCassandraBackup(ctx, planData.ClusterType.ValueString(), planData.ClusterName.ValueString(), backup)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create updated backup: %s", err))
 		return
@@ -437,7 +437,7 @@ func (r *cassandraBackupResource) Delete(ctx context.Context, req resource.Delet
 		return
 	}
 
-	err := r.client.DeleteCassandraBackup(data.ClusterType.ValueString(), data.ClusterName.ValueString(), []string{data.ID.ValueString()})
+	err := r.client.DeleteCassandraBackup(ctx, data.ClusterType.ValueString(), data.ClusterName.ValueString(), []string{data.ID.ValueString()})
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete backup: %s", err))
 		return
@@ -462,7 +462,7 @@ func (r *cassandraBackupResource) ImportState(ctx context.Context, req resource.
 	clusterName := parts[1]
 	tag := parts[2]
 
-	backups, err := r.client.GetCassandraBackups(clusterType, clusterName)
+	backups, err := r.client.GetCassandraBackups(ctx, clusterType, clusterName)
 	if err != nil {
 		resp.Diagnostics.AddError("Import Error", fmt.Sprintf("Unable to read backups: %s", err))
 		return

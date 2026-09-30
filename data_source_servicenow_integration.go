@@ -93,7 +93,7 @@ func (d *servicenowIntegrationDataSource) Read(ctx context.Context, req datasour
 		return
 	}
 
-	integrations, err := d.client.GetIntegrations(data.ClusterType.ValueString(), data.ClusterName.ValueString())
+	integrations, err := d.client.GetIntegrations(ctx, data.ClusterType.ValueString(), data.ClusterName.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to get integrations: %s", err))
 		return

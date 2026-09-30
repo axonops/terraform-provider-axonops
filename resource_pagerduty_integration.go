@@ -105,13 +105,13 @@ func (r *pagerdutyIntegrationResource) Create(ctx context.Context, req resource.
 		},
 	}
 
-	err := r.client.CreateOrUpdateIntegration(data.ClusterType.ValueString(), data.ClusterName.ValueString(), payload)
+	err := r.client.CreateOrUpdateIntegration(ctx, data.ClusterType.ValueString(), data.ClusterName.ValueString(), payload)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create PagerDuty integration: %s", err))
 		return
 	}
 
-	integrations, err := r.client.GetIntegrations(data.ClusterType.ValueString(), data.ClusterName.ValueString())
+	integrations, err := r.client.GetIntegrations(ctx, data.ClusterType.ValueString(), data.ClusterName.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read integrations: %s", err))
 		return
@@ -137,7 +137,7 @@ func (r *pagerdutyIntegrationResource) Read(ctx context.Context, req resource.Re
 		return
 	}
 
-	integrations, err := r.client.GetIntegrations(data.ClusterType.ValueString(), data.ClusterName.ValueString())
+	integrations, err := r.client.GetIntegrations(ctx, data.ClusterType.ValueString(), data.ClusterName.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to get integrations: %s", err))
 		return
@@ -177,7 +177,7 @@ func (r *pagerdutyIntegrationResource) Update(ctx context.Context, req resource.
 		},
 	}
 
-	err := r.client.CreateOrUpdateIntegration(planData.ClusterType.ValueString(), planData.ClusterName.ValueString(), payload)
+	err := r.client.CreateOrUpdateIntegration(ctx, planData.ClusterType.ValueString(), planData.ClusterName.ValueString(), payload)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to update PagerDuty integration: %s", err))
 		return
@@ -198,7 +198,7 @@ func (r *pagerdutyIntegrationResource) Delete(ctx context.Context, req resource.
 		return
 	}
 
-	err := r.client.DeleteIntegration(data.ClusterType.ValueString(), data.ClusterName.ValueString(), data.ID.ValueString())
+	err := r.client.DeleteIntegration(ctx, data.ClusterType.ValueString(), data.ClusterName.ValueString(), data.ID.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete PagerDuty integration: %s", err))
 		return
@@ -219,7 +219,7 @@ func (r *pagerdutyIntegrationResource) ImportState(ctx context.Context, req reso
 	clusterName := parts[1]
 	name := parts[2]
 
-	integrations, err := r.client.GetIntegrations(clusterType, clusterName)
+	integrations, err := r.client.GetIntegrations(ctx, clusterType, clusterName)
 	if err != nil {
 		resp.Diagnostics.AddError("Import Error", fmt.Sprintf("Unable to get integrations: %s", err))
 		return

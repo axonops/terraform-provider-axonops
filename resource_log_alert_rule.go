@@ -295,12 +295,12 @@ func (r *logAlertRuleResource) buildRule(data *logAlertRuleResourceData) axonops
 // adopt any existing rule's id (preventing duplicates on state-loss retry),
 // then re-fetch after the POST to capture the canonical id the server stored
 // the rule under.
-func (r *logAlertRuleResource) upsertLogAlertRule(data *logAlertRuleResourceData) error {
+func (r *logAlertRuleResource) upsertLogAlertRule(ctx context.Context, data *logAlertRuleResourceData) error {
 	clusterType := data.ClusterType.ValueString()
 	clusterName := data.ClusterName.ValueString()
 	alertName := data.Name.ValueString()
 
-	rules, err := r.client.GetAlertRules(clusterType, clusterName)
+	rules, err := r.client.GetAlertRules(ctx, clusterType, clusterName)
 	if err != nil {
 		return fmt.Errorf("looking up existing log alert rules: %w", err)
 	}
@@ -313,11 +313,11 @@ func (r *logAlertRuleResource) upsertLogAlertRule(data *logAlertRuleResourceData
 	}
 
 	rule := r.buildRule(data)
-	if err := r.client.CreateOrUpdateAlertRule(clusterType, clusterName, rule); err != nil {
+	if err := r.client.CreateOrUpdateAlertRule(ctx, clusterType, clusterName, rule); err != nil {
 		return err
 	}
 
-	rules, err = r.client.GetAlertRules(clusterType, clusterName)
+	rules, err = r.client.GetAlertRules(ctx, clusterType, clusterName)
 	if err != nil {
 		return fmt.Errorf("verifying log alert rule after create/update: %w", err)
 	}
@@ -336,7 +336,7 @@ func (r *logAlertRuleResource) Create(ctx context.Context, req resource.CreateRe
 		return
 	}
 
-	if err := r.upsertLogAlertRule(&data); err != nil {
+	if err := r.upsertLogAlertRule(ctx, &data); err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create log alert rule: %s", err))
 		return
 	}
@@ -356,7 +356,7 @@ func (r *logAlertRuleResource) Read(ctx context.Context, req resource.ReadReques
 		return
 	}
 
-	rules, err := r.client.GetAlertRules(data.ClusterType.ValueString(), data.ClusterName.ValueString())
+	rules, err := r.client.GetAlertRules(ctx, data.ClusterType.ValueString(), data.ClusterName.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read alert rules: %s", err))
 		return
@@ -428,7 +428,7 @@ func (r *logAlertRuleResource) Update(ctx context.Context, req resource.UpdateRe
 	// even if alert-name lookup fails (e.g. the rule was renamed).
 	planData.ID = stateData.ID
 
-	if err := r.upsertLogAlertRule(&planData); err != nil {
+	if err := r.upsertLogAlertRule(ctx, &planData); err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to update log alert rule: %s", err))
 		return
 	}
@@ -455,13 +455,13 @@ func (r *logAlertRuleResource) Delete(ctx context.Context, req resource.DeleteRe
 	// State id may not match the canonical server id (the API may have
 	// generated its own UUID at create time). Resolve the current id by
 	// alert name before issuing the DELETE.
-	if rules, err := r.client.GetAlertRules(clusterType, clusterName); err == nil {
+	if rules, err := r.client.GetAlertRules(ctx, clusterType, clusterName); err == nil {
 		if found := findAlertRuleByName(rules, data.Name.ValueString(), isLogAlertRule); found != nil {
 			id = found.ID
 		}
 	}
 
-	if err := r.client.DeleteAlertRule(clusterType, clusterName, id); err != nil {
+	if err := r.client.DeleteAlertRule(ctx, clusterType, clusterName, id); err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete log alert rule: %s", err))
 		return
 	}
@@ -485,7 +485,7 @@ func (r *logAlertRuleResource) ImportState(ctx context.Context, req resource.Imp
 	clusterName := parts[1]
 	alertID := parts[2]
 
-	rules, err := r.client.GetAlertRules(clusterType, clusterName)
+	rules, err := r.client.GetAlertRules(ctx, clusterType, clusterName)
 	if err != nil {
 		resp.Diagnostics.AddError("Import Error", fmt.Sprintf("Unable to read alert rules: %s", err))
 		return

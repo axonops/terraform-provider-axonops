@@ -122,14 +122,14 @@ func (r *slackIntegrationResource) Create(ctx context.Context, req resource.Crea
 		},
 	}
 
-	err := r.client.CreateOrUpdateIntegration(data.ClusterType.ValueString(), data.ClusterName.ValueString(), payload)
+	err := r.client.CreateOrUpdateIntegration(ctx, data.ClusterType.ValueString(), data.ClusterName.ValueString(), payload)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create Slack integration: %s", err))
 		return
 	}
 
 	// Read back to get the ID
-	integrations, err := r.client.GetIntegrations(data.ClusterType.ValueString(), data.ClusterName.ValueString())
+	integrations, err := r.client.GetIntegrations(ctx, data.ClusterType.ValueString(), data.ClusterName.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read integrations: %s", err))
 		return
@@ -155,7 +155,7 @@ func (r *slackIntegrationResource) Read(ctx context.Context, req resource.ReadRe
 		return
 	}
 
-	integrations, err := r.client.GetIntegrations(data.ClusterType.ValueString(), data.ClusterName.ValueString())
+	integrations, err := r.client.GetIntegrations(ctx, data.ClusterType.ValueString(), data.ClusterName.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to get integrations: %s", err))
 		return
@@ -200,7 +200,7 @@ func (r *slackIntegrationResource) Update(ctx context.Context, req resource.Upda
 		},
 	}
 
-	err := r.client.CreateOrUpdateIntegration(planData.ClusterType.ValueString(), planData.ClusterName.ValueString(), payload)
+	err := r.client.CreateOrUpdateIntegration(ctx, planData.ClusterType.ValueString(), planData.ClusterName.ValueString(), payload)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to update Slack integration: %s", err))
 		return
@@ -221,7 +221,7 @@ func (r *slackIntegrationResource) Delete(ctx context.Context, req resource.Dele
 		return
 	}
 
-	err := r.client.DeleteIntegration(data.ClusterType.ValueString(), data.ClusterName.ValueString(), data.ID.ValueString())
+	err := r.client.DeleteIntegration(ctx, data.ClusterType.ValueString(), data.ClusterName.ValueString(), data.ID.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete Slack integration: %s", err))
 		return
@@ -242,7 +242,7 @@ func (r *slackIntegrationResource) ImportState(ctx context.Context, req resource
 	clusterName := parts[1]
 	name := parts[2]
 
-	integrations, err := r.client.GetIntegrations(clusterType, clusterName)
+	integrations, err := r.client.GetIntegrations(ctx, clusterType, clusterName)
 	if err != nil {
 		resp.Diagnostics.AddError("Import Error", fmt.Sprintf("Unable to get integrations: %s", err))
 		return

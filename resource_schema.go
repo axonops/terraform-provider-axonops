@@ -104,7 +104,7 @@ func (r *schemaResource) Create(ctx context.Context, req resource.CreateRequest,
 		SchemaType: data.SchemaType.ValueString(),
 	}
 
-	result, err := r.client.CreateSchema(data.ClusterName.ValueString(), data.Subject.ValueString(), schemaReq)
+	result, err := r.client.CreateSchema(ctx, data.ClusterName.ValueString(), data.Subject.ValueString(), schemaReq)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create schema, got error: %s", err))
 		return
@@ -114,7 +114,7 @@ func (r *schemaResource) Create(ctx context.Context, req resource.CreateRequest,
 	data.SchemaId = types.Int64Value(int64(result.Id))
 
 	// Read back to get the version
-	schemaInfo, err := r.client.GetSchema(data.ClusterName.ValueString(), data.Subject.ValueString(), "latest")
+	schemaInfo, err := r.client.GetSchema(ctx, data.ClusterName.ValueString(), data.Subject.ValueString(), "latest")
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read schema after creation, got error: %s", err))
 		return
@@ -140,7 +140,7 @@ func (r *schemaResource) Read(ctx context.Context, req resource.ReadRequest, res
 		return
 	}
 
-	result, err := r.client.GetSchema(data.ClusterName.ValueString(), data.Subject.ValueString(), "latest")
+	result, err := r.client.GetSchema(ctx, data.ClusterName.ValueString(), data.Subject.ValueString(), "latest")
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read schema, got error: %s", err))
 		return
@@ -179,7 +179,7 @@ func (r *schemaResource) Update(ctx context.Context, req resource.UpdateRequest,
 		SchemaType: planData.SchemaType.ValueString(),
 	}
 
-	result, err := r.client.CreateSchema(planData.ClusterName.ValueString(), planData.Subject.ValueString(), schemaReq)
+	result, err := r.client.CreateSchema(ctx, planData.ClusterName.ValueString(), planData.Subject.ValueString(), schemaReq)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to update schema, got error: %s", err))
 		return
@@ -189,7 +189,7 @@ func (r *schemaResource) Update(ctx context.Context, req resource.UpdateRequest,
 	planData.SchemaId = types.Int64Value(int64(result.Id))
 
 	// Read back to get the new version
-	schemaInfo, err := r.client.GetSchema(planData.ClusterName.ValueString(), planData.Subject.ValueString(), "latest")
+	schemaInfo, err := r.client.GetSchema(ctx, planData.ClusterName.ValueString(), planData.Subject.ValueString(), "latest")
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read schema after update, got error: %s", err))
 		return
@@ -215,7 +215,7 @@ func (r *schemaResource) Delete(ctx context.Context, req resource.DeleteRequest,
 		return
 	}
 
-	err := r.client.DeleteSchema(data.ClusterName.ValueString(), data.Subject.ValueString())
+	err := r.client.DeleteSchema(ctx, data.ClusterName.ValueString(), data.Subject.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete schema, got error: %s", err))
 		return
@@ -241,7 +241,7 @@ func (r *schemaResource) ImportState(ctx context.Context, req resource.ImportSta
 	subject := parts[1]
 
 	// Get schema details from the API
-	schemaInfo, err := r.client.GetSchema(clusterName, subject, "latest")
+	schemaInfo, err := r.client.GetSchema(ctx, clusterName, subject, "latest")
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Import Error",

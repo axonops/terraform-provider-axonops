@@ -141,14 +141,14 @@ func (r *silenceResource) Create(ctx context.Context, req resource.CreateRequest
 		DCs:         datacenters,
 	}
 
-	err := r.client.CreateSilenceWindow(data.ClusterType.ValueString(), data.ClusterName.ValueString(), silence)
+	err := r.client.CreateSilenceWindow(ctx, data.ClusterType.ValueString(), data.ClusterName.ValueString(), silence)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create silence: %s", err))
 		return
 	}
 
 	// Fetch the created silence to confirm and get the actual ID
-	silences, err := r.client.GetSilenceWindows(data.ClusterType.ValueString(), data.ClusterName.ValueString())
+	silences, err := r.client.GetSilenceWindows(ctx, data.ClusterType.ValueString(), data.ClusterName.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read silences after creation: %s", err))
 		return
@@ -182,7 +182,7 @@ func (r *silenceResource) Read(ctx context.Context, req resource.ReadRequest, re
 		return
 	}
 
-	silences, err := r.client.GetSilenceWindows(data.ClusterType.ValueString(), data.ClusterName.ValueString())
+	silences, err := r.client.GetSilenceWindows(ctx, data.ClusterType.ValueString(), data.ClusterName.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read silences: %s", err))
 		return
@@ -233,7 +233,7 @@ func (r *silenceResource) Update(ctx context.Context, req resource.UpdateRequest
 
 	// Delete existing silence if we have an ID
 	if state.ID.ValueString() != "" {
-		err := r.client.DeleteSilenceWindow(state.ClusterType.ValueString(), state.ClusterName.ValueString(), state.ID.ValueString())
+		err := r.client.DeleteSilenceWindow(ctx, state.ClusterType.ValueString(), state.ClusterName.ValueString(), state.ID.ValueString())
 		if err != nil {
 			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete existing silence during update: %s", err))
 			return
@@ -261,7 +261,7 @@ func (r *silenceResource) Update(ctx context.Context, req resource.UpdateRequest
 		DCs:         datacenters,
 	}
 
-	err := r.client.CreateSilenceWindow(data.ClusterType.ValueString(), data.ClusterName.ValueString(), silence)
+	err := r.client.CreateSilenceWindow(ctx, data.ClusterType.ValueString(), data.ClusterName.ValueString(), silence)
 	if err != nil {
 		resp.State.RemoveResource(ctx)
 		resp.Diagnostics.AddError("Client Error",
@@ -270,7 +270,7 @@ func (r *silenceResource) Update(ctx context.Context, req resource.UpdateRequest
 	}
 
 	// Fetch the created silence to get its actual ID
-	silences, err := r.client.GetSilenceWindows(data.ClusterType.ValueString(), data.ClusterName.ValueString())
+	silences, err := r.client.GetSilenceWindows(ctx, data.ClusterType.ValueString(), data.ClusterName.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read silences after update: %s", err))
 		return
@@ -305,7 +305,7 @@ func (r *silenceResource) Delete(ctx context.Context, req resource.DeleteRequest
 	silenceID := data.ID.ValueString()
 	if silenceID == "" {
 		// Try to find by cron expression
-		silences, err := r.client.GetSilenceWindows(data.ClusterType.ValueString(), data.ClusterName.ValueString())
+		silences, err := r.client.GetSilenceWindows(ctx, data.ClusterType.ValueString(), data.ClusterName.ValueString())
 		if err != nil {
 			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read silences: %s", err))
 			return
@@ -318,7 +318,7 @@ func (r *silenceResource) Delete(ctx context.Context, req resource.DeleteRequest
 	}
 
 	if silenceID != "" {
-		err := r.client.DeleteSilenceWindow(data.ClusterType.ValueString(), data.ClusterName.ValueString(), silenceID)
+		err := r.client.DeleteSilenceWindow(ctx, data.ClusterType.ValueString(), data.ClusterName.ValueString(), silenceID)
 		if err != nil {
 			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete silence: %s", err))
 			return
@@ -348,7 +348,7 @@ func (r *silenceResource) ImportState(ctx context.Context, req resource.ImportSt
 	clusterName := parts[1]
 	silenceID := parts[2]
 
-	silences, err := r.client.GetSilenceWindows(clusterType, clusterName)
+	silences, err := r.client.GetSilenceWindows(ctx, clusterType, clusterName)
 	if err != nil {
 		resp.Diagnostics.AddError("Import Error", fmt.Sprintf("Unable to read silences: %s", err))
 		return

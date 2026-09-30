@@ -157,7 +157,7 @@ func (d *cassandraScheduledRepairDataSource) Read(ctx context.Context, req datas
 		return
 	}
 
-	repairs, err := d.client.GetScheduledRepairs(data.ClusterName.ValueString())
+	repairs, err := d.client.GetScheduledRepairs(ctx, data.ClusterName.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read scheduled repairs: %s", err))
 		return

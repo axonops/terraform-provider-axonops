@@ -105,7 +105,7 @@ func (d *silenceDataSource) Read(ctx context.Context, req datasource.ReadRequest
 		return
 	}
 
-	silences, err := d.client.GetSilenceWindows(data.ClusterType.ValueString(), data.ClusterName.ValueString())
+	silences, err := d.client.GetSilenceWindows(ctx, data.ClusterType.ValueString(), data.ClusterName.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read silences: %s", err))
 		return

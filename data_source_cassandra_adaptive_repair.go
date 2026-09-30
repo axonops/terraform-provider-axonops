@@ -120,7 +120,7 @@ func (d *cassandraAdaptiveRepairDataSource) Read(ctx context.Context, req dataso
 		clusterType = "cassandra"
 	}
 
-	settings, err := d.client.GetCassandraAdaptiveRepair(clusterType, data.ClusterName.ValueString())
+	settings, err := d.client.GetCassandraAdaptiveRepair(ctx, clusterType, data.ClusterName.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read adaptive repair settings: %s", err))
 		return

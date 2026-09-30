@@ -2,6 +2,7 @@ package axonopsClient
 
 import (
 	"bytes"
+	"context"
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
@@ -13,7 +14,13 @@ import (
 	"time"
 )
 
-var axonops_api_version = "api/v1"
+const axonops_api_version = "api/v1"
+
+// esc escapes a single URL path segment so user-supplied names containing
+// "/", "?", "#" or spaces cannot alter the request path.
+func esc(s string) string {
+	return url.PathEscape(s)
+}
 
 // debugRequest logs request details for debugging
 func debugRequest(req *http.Request, body []byte) {
@@ -121,7 +128,7 @@ type KafkaTopicConfig struct {
 	Value string `json:"value"`
 }
 
-func (c *AxonopsHttpClient) CreateTopic(topicName, clusterName string, partitionCount, replicationFactor int32, topicConfigs []KafkaTopicConfig) error {
+func (c *AxonopsHttpClient) CreateTopic(ctx context.Context, topicName, clusterName string, partitionCount, replicationFactor int32, topicConfigs []KafkaTopicConfig) error {
 
 	payload := KafkaTopic{
 		TopicName:         topicName,
@@ -135,9 +142,9 @@ func (c *AxonopsHttpClient) CreateTopic(topicName, clusterName string, partition
 		return fmt.Errorf("failed to encode JSON payload: %w", err)
 	}
 
-	url := fmt.Sprintf("%s://%s/%s/%s/kafka/%s/topics", c.protocol, c.axonopsHost, axonops_api_version, c.orgid, clusterName)
+	url := fmt.Sprintf("%s://%s/%s/%s/kafka/%s/topics", c.protocol, c.axonopsHost, axonops_api_version, esc(c.orgid), esc(clusterName))
 
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer(payloadJson))
+	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(payloadJson))
 	if err != nil {
 		return fmt.Errorf("failed to create POST request for url %v: %w", url, err)
 	}
@@ -157,7 +164,10 @@ func (c *AxonopsHttpClient) CreateTopic(topicName, clusterName string, partition
 
 	defer resp.Body.Close() //nolint:errcheck
 
-	bodyBytes, _ := io.ReadAll(resp.Body)
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read response body: %w", err)
+	}
 	debugResponse(resp, bodyBytes)
 
 	if resp.StatusCode == 201 {
@@ -196,11 +206,11 @@ type TopicConfigResponse struct {
 }
 
 // GetTopic retrieves a topic's information including configs
-func (c *AxonopsHttpClient) GetTopic(topicName, clusterName string) (*TopicInfo, error) {
+func (c *AxonopsHttpClient) GetTopic(ctx context.Context, topicName, clusterName string) (*TopicInfo, error) {
 	// Get basic topic info
-	topicUrl := fmt.Sprintf("%s://%s/%s/%s/kafka/%s/topics/%s", c.protocol, c.axonopsHost, axonops_api_version, c.orgid, clusterName, topicName)
+	topicUrl := fmt.Sprintf("%s://%s/%s/%s/kafka/%s/topics/%s", c.protocol, c.axonopsHost, axonops_api_version, esc(c.orgid), esc(clusterName), esc(topicName))
 
-	req, err := http.NewRequest("GET", topicUrl, nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", topicUrl, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create GET request: %w for url %v", err, topicUrl)
 	}
@@ -217,9 +227,15 @@ func (c *AxonopsHttpClient) GetTopic(topicName, clusterName string) (*TopicInfo,
 	}
 	defer resp.Body.Close() //nolint:errcheck
 
-	bodyBytes, _ := io.ReadAll(resp.Body)
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %w", err)
+	}
 	debugResponse(resp, bodyBytes)
 
+	if resp.StatusCode == 404 {
+		return nil, nil
+	}
 	if resp.StatusCode != 200 {
 		return nil, fmt.Errorf("failed to get topic: status %d for url %v, body: %s", resp.StatusCode, topicUrl, string(bodyBytes))
 	}
@@ -230,9 +246,9 @@ func (c *AxonopsHttpClient) GetTopic(topicName, clusterName string) (*TopicInfo,
 	}
 
 	// Get topic configs
-	configUrl := fmt.Sprintf("%s://%s/%s/%s/kafka/%s/topics/%s/configs", c.protocol, c.axonopsHost, axonops_api_version, c.orgid, clusterName, topicName)
+	configUrl := fmt.Sprintf("%s://%s/%s/%s/kafka/%s/topics/%s/configs", c.protocol, c.axonopsHost, axonops_api_version, esc(c.orgid), esc(clusterName), esc(topicName))
 
-	configReq, err := http.NewRequest("GET", configUrl, nil)
+	configReq, err := http.NewRequestWithContext(ctx, "GET", configUrl, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create GET request for configs: %w", err)
 	}
@@ -270,10 +286,10 @@ func (c *AxonopsHttpClient) GetTopic(topicName, clusterName string) (*TopicInfo,
 }
 
 // GetTopics retrieves all topics for a cluster
-func (c *AxonopsHttpClient) GetTopics(clusterName string) ([]TopicInfo, error) {
-	url := fmt.Sprintf("%s://%s/%s/%s/kafka/%s/topics", c.protocol, c.axonopsHost, axonops_api_version, c.orgid, clusterName)
+func (c *AxonopsHttpClient) GetTopics(ctx context.Context, clusterName string) ([]TopicInfo, error) {
+	url := fmt.Sprintf("%s://%s/%s/%s/kafka/%s/topics", c.protocol, c.axonopsHost, axonops_api_version, esc(c.orgid), esc(clusterName))
 
-	req, err := http.NewRequest("GET", url, nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create GET request: %w for url %v", err, url)
 	}
@@ -300,11 +316,11 @@ func (c *AxonopsHttpClient) GetTopics(clusterName string) ([]TopicInfo, error) {
 	return topics, nil
 }
 
-func (c *AxonopsHttpClient) DeleteTopic(topicName, clusterName string) error {
+func (c *AxonopsHttpClient) DeleteTopic(ctx context.Context, topicName, clusterName string) error {
 
-	url := fmt.Sprintf("%s://%s/%s/%s/kafka/%s/topics/%s", c.protocol, c.axonopsHost, axonops_api_version, c.orgid, clusterName, topicName)
+	url := fmt.Sprintf("%s://%s/%s/%s/kafka/%s/topics/%s", c.protocol, c.axonopsHost, axonops_api_version, esc(c.orgid), esc(clusterName), esc(topicName))
 
-	req, err := http.NewRequest("DELETE", url, nil)
+	req, err := http.NewRequestWithContext(ctx, "DELETE", url, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create DELETE request for url %v: %w", url, err)
 	}
@@ -336,7 +352,7 @@ type KafkaUpdateTopicConfig struct {
 	Op    string `json:"op"`
 }
 
-func (c *AxonopsHttpClient) UpdateTopicConfig(topicName, clusterName string, partitionCount, replicationFactor int32, topicConfigs []KafkaUpdateTopicConfig) error {
+func (c *AxonopsHttpClient) UpdateTopicConfig(ctx context.Context, topicName, clusterName string, partitionCount, replicationFactor int32, topicConfigs []KafkaUpdateTopicConfig) error {
 
 	payload := ConfigsWrapper{
 		Configs: topicConfigs,
@@ -347,9 +363,9 @@ func (c *AxonopsHttpClient) UpdateTopicConfig(topicName, clusterName string, par
 		return fmt.Errorf("failed to encode JSON payload: %w", err)
 	}
 
-	url := fmt.Sprintf("%s://%s/%s/%s/kafka/%s/topics/%s/configs", c.protocol, c.axonopsHost, axonops_api_version, c.orgid, clusterName, topicName)
+	url := fmt.Sprintf("%s://%s/%s/%s/kafka/%s/topics/%s/configs", c.protocol, c.axonopsHost, axonops_api_version, esc(c.orgid), esc(clusterName), esc(topicName))
 
-	req, err := http.NewRequest("PUT", url, bytes.NewBuffer(payloadJson))
+	req, err := http.NewRequestWithContext(ctx, "PUT", url, bytes.NewBuffer(payloadJson))
 	if err != nil {
 		return fmt.Errorf("failed to create PUT request for url %v: %w", url, err)
 	}
@@ -371,6 +387,75 @@ func (c *AxonopsHttpClient) UpdateTopicConfig(topicName, clusterName string, par
 	} else {
 		return fmt.Errorf("failed to send PUT request: status %d for url %v with topicName:%v and payload %+v", resp.StatusCode, url, topicName, payload)
 	}
+}
+
+// doJSON sends a request with an optional JSON body and returns the status
+// code and response body.
+func (c *AxonopsHttpClient) doJSON(ctx context.Context, method, reqURL string, payload interface{}) (int, []byte, error) {
+	var body io.Reader
+	var payloadJson []byte
+	if payload != nil {
+		var err error
+		payloadJson, err = json.Marshal(payload)
+		if err != nil {
+			return 0, nil, fmt.Errorf("failed to encode JSON payload: %w", err)
+		}
+		body = bytes.NewReader(payloadJson)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, method, reqURL, body)
+	if err != nil {
+		return 0, nil, fmt.Errorf("failed to create %s request for url %v: %w", method, reqURL, err)
+	}
+	if payload != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	if c.apiKey != "" {
+		req.Header.Set("Authorization", c.tokenType+" "+c.apiKey)
+	}
+
+	debugRequest(req, payloadJson)
+
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return 0, nil, fmt.Errorf("failed to send %s request: %w", method, err)
+	}
+	defer resp.Body.Close() //nolint:errcheck
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return resp.StatusCode, nil, fmt.Errorf("failed to read response body: %w", err)
+	}
+	debugResponse(resp, respBody)
+
+	return resp.StatusCode, respBody, nil
+}
+
+// SetTopicPartitions increases the partition count of a topic.
+func (c *AxonopsHttpClient) SetTopicPartitions(ctx context.Context, topicName, clusterName string, partitions int32) error {
+	reqURL := fmt.Sprintf("%s://%s/%s/%s/kafka/%s/topics/%s/partitions", c.protocol, c.axonopsHost, axonops_api_version, esc(c.orgid), esc(clusterName), esc(topicName))
+	status, body, err := c.doJSON(ctx, "PUT", reqURL, map[string]int32{"partitions": partitions})
+	if err != nil {
+		return err
+	}
+	if status < 200 || status > 299 {
+		return fmt.Errorf("failed to set partitions: status %d for url %v, body: %s", status, reqURL, string(body))
+	}
+	return nil
+}
+
+// SetTopicReplicationFactor changes the replication factor of a topic.
+func (c *AxonopsHttpClient) SetTopicReplicationFactor(ctx context.Context, topicName, clusterName string, replicationFactor int32) error {
+	reqURL := fmt.Sprintf("%s://%s/%s/%s/kafka/%s/topics/%s/replicationfactor", c.protocol, c.axonopsHost, axonops_api_version, esc(c.orgid), esc(clusterName), esc(topicName))
+	payload := map[string]string{"replication_factor": fmt.Sprintf("%d", replicationFactor)}
+	status, body, err := c.doJSON(ctx, "PUT", reqURL, payload)
+	if err != nil {
+		return err
+	}
+	if status < 200 || status > 299 {
+		return fmt.Errorf("failed to set replication factor: status %d for url %v, body: %s", status, reqURL, string(body))
+	}
+	return nil
 }
 
 // ACL types and methods
@@ -396,10 +481,10 @@ type ACLResponse struct {
 	ACLResources []ACLResource `json:"aclResources"`
 }
 
-func (c *AxonopsHttpClient) GetACLs(clusterName string) (*ACLResponse, error) {
-	url := fmt.Sprintf("%s://%s/%s/%s/kafka/%s/acls", c.protocol, c.axonopsHost, axonops_api_version, c.orgid, clusterName)
+func (c *AxonopsHttpClient) GetACLs(ctx context.Context, clusterName string) (*ACLResponse, error) {
+	url := fmt.Sprintf("%s://%s/%s/%s/kafka/%s/acls", c.protocol, c.axonopsHost, axonops_api_version, esc(c.orgid), esc(clusterName))
 
-	req, err := http.NewRequest("GET", url, nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create GET request: %w for url %v", err, url)
 	}
@@ -416,7 +501,10 @@ func (c *AxonopsHttpClient) GetACLs(clusterName string) (*ACLResponse, error) {
 	}
 	defer resp.Body.Close() //nolint:errcheck
 
-	body, _ := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %w", err)
+	}
 	debugResponse(resp, body)
 
 	if resp.StatusCode != 200 {
@@ -431,15 +519,15 @@ func (c *AxonopsHttpClient) GetACLs(clusterName string) (*ACLResponse, error) {
 	return &result, nil
 }
 
-func (c *AxonopsHttpClient) CreateACL(clusterName string, acl KafkaACL) error {
+func (c *AxonopsHttpClient) CreateACL(ctx context.Context, clusterName string, acl KafkaACL) error {
 	payloadJson, err := json.Marshal(acl)
 	if err != nil {
 		return fmt.Errorf("failed to encode JSON payload: %w", err)
 	}
 
-	url := fmt.Sprintf("%s://%s/%s/%s/kafka/%s/acls", c.protocol, c.axonopsHost, axonops_api_version, c.orgid, clusterName)
+	url := fmt.Sprintf("%s://%s/%s/%s/kafka/%s/acls", c.protocol, c.axonopsHost, axonops_api_version, esc(c.orgid), esc(clusterName))
 
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer(payloadJson))
+	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(payloadJson))
 	if err != nil {
 		return fmt.Errorf("failed to create POST request for url %v: %w", url, err)
 	}
@@ -463,15 +551,15 @@ func (c *AxonopsHttpClient) CreateACL(clusterName string, acl KafkaACL) error {
 	}
 }
 
-func (c *AxonopsHttpClient) DeleteACL(clusterName string, acl KafkaACL) error {
+func (c *AxonopsHttpClient) DeleteACL(ctx context.Context, clusterName string, acl KafkaACL) error {
 	payloadJson, err := json.Marshal(acl)
 	if err != nil {
 		return fmt.Errorf("failed to encode JSON payload: %w", err)
 	}
 
-	url := fmt.Sprintf("%s://%s/%s/%s/kafka/%s/acls", c.protocol, c.axonopsHost, axonops_api_version, c.orgid, clusterName)
+	url := fmt.Sprintf("%s://%s/%s/%s/kafka/%s/acls", c.protocol, c.axonopsHost, axonops_api_version, esc(c.orgid), esc(clusterName))
 
-	req, err := http.NewRequest("DELETE", url, bytes.NewBuffer(payloadJson))
+	req, err := http.NewRequestWithContext(ctx, "DELETE", url, bytes.NewBuffer(payloadJson))
 	if err != nil {
 		return fmt.Errorf("failed to create DELETE request for url %v: %w", url, err)
 	}
@@ -548,15 +636,15 @@ type ConnectorTaskStatus struct {
 	Trace    string `json:"trace"`
 }
 
-func (c *AxonopsHttpClient) CreateConnector(clusterName, connectClusterName string, connector KafkaConnector) (*KafkaConnectorResponse, error) {
+func (c *AxonopsHttpClient) CreateConnector(ctx context.Context, clusterName, connectClusterName string, connector KafkaConnector) (*KafkaConnectorResponse, error) {
 	payloadJson, err := json.Marshal(connector)
 	if err != nil {
 		return nil, fmt.Errorf("failed to encode JSON payload: %w", err)
 	}
 
-	url := fmt.Sprintf("%s://%s/%s/%s/kafka/%s/connect/%s/connector", c.protocol, c.axonopsHost, axonops_api_version, c.orgid, clusterName, connectClusterName)
+	url := fmt.Sprintf("%s://%s/%s/%s/kafka/%s/connect/%s/connector", c.protocol, c.axonopsHost, axonops_api_version, esc(c.orgid), esc(clusterName), esc(connectClusterName))
 
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer(payloadJson))
+	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(payloadJson))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create POST request: %w for url %v", err, url)
 	}
@@ -575,7 +663,10 @@ func (c *AxonopsHttpClient) CreateConnector(clusterName, connectClusterName stri
 	}
 	defer resp.Body.Close() //nolint:errcheck
 
-	bodyBytes, _ := io.ReadAll(resp.Body)
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %w", err)
+	}
 	debugResponse(resp, bodyBytes)
 
 	if resp.StatusCode == 200 || resp.StatusCode == 201 {
@@ -589,12 +680,12 @@ func (c *AxonopsHttpClient) CreateConnector(clusterName, connectClusterName stri
 	}
 }
 
-func (c *AxonopsHttpClient) GetConnector(clusterName, connectClusterName, connectorName string) (*KafkaConnectorResponse, error) {
+func (c *AxonopsHttpClient) GetConnector(ctx context.Context, clusterName, connectClusterName, connectorName string) (*KafkaConnectorResponse, error) {
 	// Use the connectors list endpoint and filter for the specific connector
 	// The single connector GET endpoint has known issues with AxonOps API
-	url := fmt.Sprintf("%s://%s/%s/%s/kafka/%s/connect/%s/connectors", c.protocol, c.axonopsHost, axonops_api_version, c.orgid, clusterName, connectClusterName)
+	url := fmt.Sprintf("%s://%s/%s/%s/kafka/%s/connect/%s/connectors", c.protocol, c.axonopsHost, axonops_api_version, esc(c.orgid), esc(clusterName), esc(connectClusterName))
 
-	req, err := http.NewRequest("GET", url, nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create GET request: %w for url %v", err, url)
 	}
@@ -612,7 +703,10 @@ func (c *AxonopsHttpClient) GetConnector(clusterName, connectClusterName, connec
 	}
 	defer resp.Body.Close() //nolint:errcheck
 
-	bodyBytes, _ := io.ReadAll(resp.Body)
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %w", err)
+	}
 	debugResponse(resp, bodyBytes)
 
 	switch resp.StatusCode {
@@ -634,7 +728,7 @@ func (c *AxonopsHttpClient) GetConnector(clusterName, connectClusterName, connec
 	}
 }
 
-func (c *AxonopsHttpClient) UpdateConnectorConfig(clusterName, connectClusterName, connectorName string, config map[string]string) (*KafkaConnectorResponse, error) {
+func (c *AxonopsHttpClient) UpdateConnectorConfig(ctx context.Context, clusterName, connectClusterName, connectorName string, config map[string]string) (*KafkaConnectorResponse, error) {
 	payload := KafkaConnectorConfig{
 		Config: config,
 	}
@@ -644,9 +738,9 @@ func (c *AxonopsHttpClient) UpdateConnectorConfig(clusterName, connectClusterNam
 		return nil, fmt.Errorf("failed to encode JSON payload: %w", err)
 	}
 
-	url := fmt.Sprintf("%s://%s/%s/%s/kafka/%s/connect/%s/%s/config", c.protocol, c.axonopsHost, axonops_api_version, c.orgid, clusterName, connectClusterName, connectorName)
+	url := fmt.Sprintf("%s://%s/%s/%s/kafka/%s/connect/%s/%s/config", c.protocol, c.axonopsHost, axonops_api_version, esc(c.orgid), esc(clusterName), esc(connectClusterName), esc(connectorName))
 
-	req, err := http.NewRequest("PUT", url, bytes.NewBuffer(payloadJson))
+	req, err := http.NewRequestWithContext(ctx, "PUT", url, bytes.NewBuffer(payloadJson))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create PUT request: %w for url %v", err, url)
 	}
@@ -665,7 +759,10 @@ func (c *AxonopsHttpClient) UpdateConnectorConfig(clusterName, connectClusterNam
 	}
 	defer resp.Body.Close() //nolint:errcheck
 
-	bodyBytes, _ := io.ReadAll(resp.Body)
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %w", err)
+	}
 	debugResponse(resp, bodyBytes)
 
 	if resp.StatusCode == 200 {
@@ -679,10 +776,10 @@ func (c *AxonopsHttpClient) UpdateConnectorConfig(clusterName, connectClusterNam
 	}
 }
 
-func (c *AxonopsHttpClient) DeleteConnector(clusterName, connectClusterName, connectorName string) error {
-	url := fmt.Sprintf("%s://%s/%s/%s/kafka/%s/connect/%s/%s", c.protocol, c.axonopsHost, axonops_api_version, c.orgid, clusterName, connectClusterName, connectorName)
+func (c *AxonopsHttpClient) DeleteConnector(ctx context.Context, clusterName, connectClusterName, connectorName string) error {
+	url := fmt.Sprintf("%s://%s/%s/%s/kafka/%s/connect/%s/%s", c.protocol, c.axonopsHost, axonops_api_version, esc(c.orgid), esc(clusterName), esc(connectClusterName), esc(connectorName))
 
-	req, err := http.NewRequest("DELETE", url, nil)
+	req, err := http.NewRequestWithContext(ctx, "DELETE", url, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create DELETE request for url %v: %w", url, err)
 	}
@@ -700,7 +797,10 @@ func (c *AxonopsHttpClient) DeleteConnector(clusterName, connectClusterName, con
 	}
 	defer resp.Body.Close() //nolint:errcheck
 
-	bodyBytes, _ := io.ReadAll(resp.Body)
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read response body: %w", err)
+	}
 	debugResponse(resp, bodyBytes)
 
 	if isDeleteSuccess(resp.StatusCode) {
@@ -736,15 +836,15 @@ type SchemaRegistryVersionedSchema struct {
 	IsSoftDeleted bool              `json:"isSoftDeleted"`
 }
 
-func (c *AxonopsHttpClient) CreateSchema(clusterName, subject string, schema CreateSchemaRequest) (*CreateSchemaResponse, error) {
+func (c *AxonopsHttpClient) CreateSchema(ctx context.Context, clusterName, subject string, schema CreateSchemaRequest) (*CreateSchemaResponse, error) {
 	payloadJson, err := json.Marshal(schema)
 	if err != nil {
 		return nil, fmt.Errorf("failed to encode JSON payload: %w", err)
 	}
 
-	url := fmt.Sprintf("%s://%s/%s/%s/kafka/%s/registry/subjects/%s", c.protocol, c.axonopsHost, axonops_api_version, c.orgid, clusterName, subject)
+	url := fmt.Sprintf("%s://%s/%s/%s/kafka/%s/registry/subjects/%s", c.protocol, c.axonopsHost, axonops_api_version, esc(c.orgid), esc(clusterName), esc(subject))
 
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer(payloadJson))
+	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(payloadJson))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create POST request: %w for url %v", err, url)
 	}
@@ -772,10 +872,10 @@ func (c *AxonopsHttpClient) CreateSchema(clusterName, subject string, schema Cre
 	}
 }
 
-func (c *AxonopsHttpClient) GetSchema(clusterName, subject string, version string) (*SchemaRegistryVersionedSchema, error) {
-	url := fmt.Sprintf("%s://%s/%s/%s/kafka/%s/registry/subjects/%s/%s", c.protocol, c.axonopsHost, axonops_api_version, c.orgid, clusterName, subject, version)
+func (c *AxonopsHttpClient) GetSchema(ctx context.Context, clusterName, subject string, version string) (*SchemaRegistryVersionedSchema, error) {
+	url := fmt.Sprintf("%s://%s/%s/%s/kafka/%s/registry/subjects/%s/%s", c.protocol, c.axonopsHost, axonops_api_version, esc(c.orgid), esc(clusterName), esc(subject), esc(version))
 
-	req, err := http.NewRequest("GET", url, nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create GET request: %w for url %v", err, url)
 	}
@@ -805,10 +905,10 @@ func (c *AxonopsHttpClient) GetSchema(clusterName, subject string, version strin
 	}
 }
 
-func (c *AxonopsHttpClient) DeleteSchema(clusterName, subject string) error {
-	url := fmt.Sprintf("%s://%s/%s/%s/kafka/%s/registry/subjects/%s", c.protocol, c.axonopsHost, axonops_api_version, c.orgid, clusterName, subject)
+func (c *AxonopsHttpClient) DeleteSchema(ctx context.Context, clusterName, subject string) error {
+	url := fmt.Sprintf("%s://%s/%s/%s/kafka/%s/registry/subjects/%s", c.protocol, c.axonopsHost, axonops_api_version, esc(c.orgid), esc(clusterName), esc(subject))
 
-	req, err := http.NewRequest("DELETE", url, nil)
+	req, err := http.NewRequestWithContext(ctx, "DELETE", url, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create DELETE request for url %v: %w", url, err)
 	}
@@ -848,10 +948,10 @@ type LogCollectorConfig struct {
 	Readonly            bool     `json:"readonly,omitempty"`
 }
 
-func (c *AxonopsHttpClient) GetLogCollectors(clusterType, clusterName string) ([]LogCollectorConfig, error) {
-	url := fmt.Sprintf("%s://%s/api/v1/logcollectors/%s/%s/%s", c.protocol, c.axonopsHost, c.orgid, clusterType, clusterName)
+func (c *AxonopsHttpClient) GetLogCollectors(ctx context.Context, clusterType, clusterName string) ([]LogCollectorConfig, error) {
+	url := fmt.Sprintf("%s://%s/api/v1/logcollectors/%s/%s/%s", c.protocol, c.axonopsHost, esc(c.orgid), esc(clusterType), esc(clusterName))
 
-	req, err := http.NewRequest("GET", url, nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create GET request: %w for url %v", err, url)
 	}
@@ -878,19 +978,19 @@ func (c *AxonopsHttpClient) GetLogCollectors(clusterType, clusterName string) ([
 	}
 }
 
-func (c *AxonopsHttpClient) UpdateLogCollectors(clusterType, clusterName string, collectors []LogCollectorConfig) error {
+func (c *AxonopsHttpClient) UpdateLogCollectors(ctx context.Context, clusterType, clusterName string, collectors []LogCollectorConfig) error {
 	collectorsJson, err := json.Marshal(collectors)
 	if err != nil {
 		return fmt.Errorf("failed to encode JSON payload: %w", err)
 	}
 
-	reqUrl := fmt.Sprintf("%s://%s/api/v1/logcollectors/%s/%s/%s", c.protocol, c.axonopsHost, c.orgid, clusterType, clusterName)
+	reqUrl := fmt.Sprintf("%s://%s/api/v1/logcollectors/%s/%s/%s", c.protocol, c.axonopsHost, esc(c.orgid), esc(clusterType), esc(clusterName))
 
 	// The API expects form-urlencoded data with addlogs parameter
 	// URL-encode the JSON to properly handle special characters
 	formData := "addlogs=" + url.QueryEscape(string(collectorsJson))
 
-	req, err := http.NewRequest("PUT", reqUrl, bytes.NewBufferString(formData))
+	req, err := http.NewRequestWithContext(ctx, "PUT", reqUrl, bytes.NewBufferString(formData))
 	if err != nil {
 		return fmt.Errorf("failed to create PUT request: %w for url %v", err, reqUrl)
 	}
@@ -967,13 +1067,13 @@ type HealthchecksResponse struct {
 	TCPChecks   []TCPHealthcheck   `json:"tcpchecks"`
 }
 
-func (c *AxonopsHttpClient) GetHealthchecks(clusterType, clusterName string) (*HealthchecksResponse, error) {
+func (c *AxonopsHttpClient) GetHealthchecks(ctx context.Context, clusterType, clusterName string) (*HealthchecksResponse, error) {
 	if clusterType == "" {
 		clusterType = "cassandra"
 	}
-	url := fmt.Sprintf("%s://%s/api/v1/healthchecks/%s/%s/%s", c.protocol, c.axonopsHost, c.orgid, clusterType, clusterName)
+	url := fmt.Sprintf("%s://%s/api/v1/healthchecks/%s/%s/%s", c.protocol, c.axonopsHost, esc(c.orgid), esc(clusterType), esc(clusterName))
 
-	req, err := http.NewRequest("GET", url, nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create GET request: %w for url %v", err, url)
 	}
@@ -1000,7 +1100,7 @@ func (c *AxonopsHttpClient) GetHealthchecks(clusterType, clusterName string) (*H
 	}
 }
 
-func (c *AxonopsHttpClient) UpdateHealthchecks(clusterType, clusterName string, healthchecks HealthchecksResponse) error {
+func (c *AxonopsHttpClient) UpdateHealthchecks(ctx context.Context, clusterType, clusterName string, healthchecks HealthchecksResponse) error {
 	if clusterType == "" {
 		clusterType = "cassandra"
 	}
@@ -1009,9 +1109,9 @@ func (c *AxonopsHttpClient) UpdateHealthchecks(clusterType, clusterName string, 
 		return fmt.Errorf("failed to encode JSON payload: %w", err)
 	}
 
-	reqUrl := fmt.Sprintf("%s://%s/api/v1/healthchecks/%s/%s/%s", c.protocol, c.axonopsHost, c.orgid, clusterType, clusterName)
+	reqUrl := fmt.Sprintf("%s://%s/api/v1/healthchecks/%s/%s/%s", c.protocol, c.axonopsHost, esc(c.orgid), esc(clusterType), esc(clusterName))
 
-	req, err := http.NewRequest("PUT", reqUrl, bytes.NewBuffer(payloadJson))
+	req, err := http.NewRequestWithContext(ctx, "PUT", reqUrl, bytes.NewBuffer(payloadJson))
 	if err != nil {
 		return fmt.Errorf("failed to create PUT request: %w for url %v", err, reqUrl)
 	}
@@ -1048,10 +1148,10 @@ type AdaptiveRepairSettings struct {
 	SegmentTargetSizeMB int      `json:"SegmentTargetSizeMB,omitempty"`
 }
 
-func (c *AxonopsHttpClient) GetCassandraAdaptiveRepair(clusterType, clusterName string) (*AdaptiveRepairSettings, error) {
-	url := fmt.Sprintf("%s://%s/%s/adaptiveRepair/%s/%s/%s", c.protocol, c.axonopsHost, axonops_api_version, c.orgid, clusterType, clusterName)
+func (c *AxonopsHttpClient) GetCassandraAdaptiveRepair(ctx context.Context, clusterType, clusterName string) (*AdaptiveRepairSettings, error) {
+	url := fmt.Sprintf("%s://%s/%s/adaptiveRepair/%s/%s/%s", c.protocol, c.axonopsHost, axonops_api_version, esc(c.orgid), esc(clusterType), esc(clusterName))
 
-	req, err := http.NewRequest("GET", url, nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create GET request: %w for url %v", err, url)
 	}
@@ -1068,7 +1168,10 @@ func (c *AxonopsHttpClient) GetCassandraAdaptiveRepair(clusterType, clusterName 
 	}
 	defer resp.Body.Close() //nolint:errcheck
 
-	bodyBytes, _ := io.ReadAll(resp.Body)
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %w", err)
+	}
 	debugResponse(resp, bodyBytes)
 
 	if resp.StatusCode == 200 {
@@ -1082,15 +1185,15 @@ func (c *AxonopsHttpClient) GetCassandraAdaptiveRepair(clusterType, clusterName 
 	}
 }
 
-func (c *AxonopsHttpClient) UpdateCassandraAdaptiveRepair(clusterType, clusterName string, settings AdaptiveRepairSettings) error {
+func (c *AxonopsHttpClient) UpdateCassandraAdaptiveRepair(ctx context.Context, clusterType, clusterName string, settings AdaptiveRepairSettings) error {
 	payloadJson, err := json.Marshal(settings)
 	if err != nil {
 		return fmt.Errorf("failed to encode JSON payload: %w", err)
 	}
 
-	url := fmt.Sprintf("%s://%s/%s/adaptiveRepair/%s/%s/%s", c.protocol, c.axonopsHost, axonops_api_version, c.orgid, clusterType, clusterName)
+	url := fmt.Sprintf("%s://%s/%s/adaptiveRepair/%s/%s/%s", c.protocol, c.axonopsHost, axonops_api_version, esc(c.orgid), esc(clusterType), esc(clusterName))
 
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer(payloadJson))
+	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(payloadJson))
 	if err != nil {
 		return fmt.Errorf("failed to create POST request for url %v: %w", url, err)
 	}
@@ -1108,7 +1211,10 @@ func (c *AxonopsHttpClient) UpdateCassandraAdaptiveRepair(clusterType, clusterNa
 	}
 	defer resp.Body.Close() //nolint:errcheck
 
-	bodyBytes, _ := io.ReadAll(resp.Body)
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read response body: %w", err)
+	}
 	debugResponse(resp, bodyBytes)
 
 	if resp.StatusCode == 200 || resp.StatusCode == 204 {
@@ -1156,10 +1262,10 @@ type CassandraScheduledParam struct {
 	BackupDetails string `json:"BackupDetails"`
 }
 
-func (c *AxonopsHttpClient) GetCassandraBackups(clusterType, clusterName string) ([]CassandraBackup, error) {
-	url := fmt.Sprintf("%s://%s/%s/cassandraScheduleSnapshot/%s/%s/%s", c.protocol, c.axonopsHost, axonops_api_version, c.orgid, clusterType, clusterName)
+func (c *AxonopsHttpClient) GetCassandraBackups(ctx context.Context, clusterType, clusterName string) ([]CassandraBackup, error) {
+	url := fmt.Sprintf("%s://%s/%s/cassandraScheduleSnapshot/%s/%s/%s", c.protocol, c.axonopsHost, axonops_api_version, esc(c.orgid), esc(clusterType), esc(clusterName))
 
-	req, err := http.NewRequest("GET", url, nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create GET request: %w for url %v", err, url)
 	}
@@ -1176,7 +1282,10 @@ func (c *AxonopsHttpClient) GetCassandraBackups(clusterType, clusterName string)
 	}
 	defer resp.Body.Close() //nolint:errcheck
 
-	bodyBytes, _ := io.ReadAll(resp.Body)
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %w", err)
+	}
 	debugResponse(resp, bodyBytes)
 
 	if resp.StatusCode != 200 {
@@ -1221,15 +1330,15 @@ func (c *AxonopsHttpClient) GetCassandraBackups(clusterType, clusterName string)
 	return backups, nil
 }
 
-func (c *AxonopsHttpClient) CreateCassandraBackup(clusterType, clusterName string, backup CassandraBackup) error {
+func (c *AxonopsHttpClient) CreateCassandraBackup(ctx context.Context, clusterType, clusterName string, backup CassandraBackup) error {
 	payloadJson, err := json.Marshal(backup)
 	if err != nil {
 		return fmt.Errorf("failed to encode JSON payload: %w", err)
 	}
 
-	url := fmt.Sprintf("%s://%s/%s/cassandraSnapshot/%s/%s/%s", c.protocol, c.axonopsHost, axonops_api_version, c.orgid, clusterType, clusterName)
+	url := fmt.Sprintf("%s://%s/%s/cassandraSnapshot/%s/%s/%s", c.protocol, c.axonopsHost, axonops_api_version, esc(c.orgid), esc(clusterType), esc(clusterName))
 
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer(payloadJson))
+	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(payloadJson))
 	if err != nil {
 		return fmt.Errorf("failed to create POST request for url %v: %w", url, err)
 	}
@@ -1247,7 +1356,10 @@ func (c *AxonopsHttpClient) CreateCassandraBackup(clusterType, clusterName strin
 	}
 	defer resp.Body.Close() //nolint:errcheck
 
-	bodyBytes, _ := io.ReadAll(resp.Body)
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read response body: %w", err)
+	}
 	debugResponse(resp, bodyBytes)
 
 	if resp.StatusCode == 200 || resp.StatusCode == 201 || resp.StatusCode == 204 {
@@ -1257,15 +1369,15 @@ func (c *AxonopsHttpClient) CreateCassandraBackup(clusterType, clusterName strin
 	}
 }
 
-func (c *AxonopsHttpClient) DeleteCassandraBackup(clusterType, clusterName string, backupIDs []string) error {
+func (c *AxonopsHttpClient) DeleteCassandraBackup(ctx context.Context, clusterType, clusterName string, backupIDs []string) error {
 	payloadJson, err := json.Marshal(backupIDs)
 	if err != nil {
 		return fmt.Errorf("failed to encode JSON payload: %w", err)
 	}
 
-	url := fmt.Sprintf("%s://%s/%s/cassandraScheduleSnapshot/%s/%s/%s", c.protocol, c.axonopsHost, axonops_api_version, c.orgid, clusterType, clusterName)
+	url := fmt.Sprintf("%s://%s/%s/cassandraScheduleSnapshot/%s/%s/%s", c.protocol, c.axonopsHost, axonops_api_version, esc(c.orgid), esc(clusterType), esc(clusterName))
 
-	req, err := http.NewRequest("DELETE", url, bytes.NewBuffer(payloadJson))
+	req, err := http.NewRequestWithContext(ctx, "DELETE", url, bytes.NewBuffer(payloadJson))
 	if err != nil {
 		return fmt.Errorf("failed to create DELETE request for url %v: %w", url, err)
 	}
@@ -1283,7 +1395,10 @@ func (c *AxonopsHttpClient) DeleteCassandraBackup(clusterType, clusterName strin
 	}
 	defer resp.Body.Close() //nolint:errcheck
 
-	bodyBytes, _ := io.ReadAll(resp.Body)
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read response body: %w", err)
+	}
 	debugResponse(resp, bodyBytes)
 
 	if isDeleteSuccess(resp.StatusCode) {
@@ -1348,10 +1463,10 @@ type AlertRulesResponse struct {
 	MetricRules []MetricAlertRule `json:"metricrules"`
 }
 
-func (c *AxonopsHttpClient) GetAlertRules(clusterType, clusterName string) ([]MetricAlertRule, error) {
-	url := fmt.Sprintf("%s://%s/%s/alert-rules/%s/%s/%s", c.protocol, c.axonopsHost, axonops_api_version, c.orgid, clusterType, clusterName)
+func (c *AxonopsHttpClient) GetAlertRules(ctx context.Context, clusterType, clusterName string) ([]MetricAlertRule, error) {
+	url := fmt.Sprintf("%s://%s/%s/alert-rules/%s/%s/%s", c.protocol, c.axonopsHost, axonops_api_version, esc(c.orgid), esc(clusterType), esc(clusterName))
 
-	req, err := http.NewRequest("GET", url, nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create GET request: %w for url %v", err, url)
 	}
@@ -1368,7 +1483,10 @@ func (c *AxonopsHttpClient) GetAlertRules(clusterType, clusterName string) ([]Me
 	}
 	defer resp.Body.Close() //nolint:errcheck
 
-	bodyBytes, _ := io.ReadAll(resp.Body)
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %w", err)
+	}
 	debugResponse(resp, bodyBytes)
 
 	if resp.StatusCode != 200 {
@@ -1383,15 +1501,15 @@ func (c *AxonopsHttpClient) GetAlertRules(clusterType, clusterName string) ([]Me
 	return response.MetricRules, nil
 }
 
-func (c *AxonopsHttpClient) CreateOrUpdateAlertRule(clusterType, clusterName string, rule MetricAlertRule) error {
+func (c *AxonopsHttpClient) CreateOrUpdateAlertRule(ctx context.Context, clusterType, clusterName string, rule MetricAlertRule) error {
 	payloadJson, err := json.Marshal(rule)
 	if err != nil {
 		return fmt.Errorf("failed to encode JSON payload: %w", err)
 	}
 
-	url := fmt.Sprintf("%s://%s/%s/alert-rules/%s/%s/%s", c.protocol, c.axonopsHost, axonops_api_version, c.orgid, clusterType, clusterName)
+	url := fmt.Sprintf("%s://%s/%s/alert-rules/%s/%s/%s", c.protocol, c.axonopsHost, axonops_api_version, esc(c.orgid), esc(clusterType), esc(clusterName))
 
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer(payloadJson))
+	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(payloadJson))
 	if err != nil {
 		return fmt.Errorf("failed to create POST request for url %v: %w", url, err)
 	}
@@ -1409,7 +1527,10 @@ func (c *AxonopsHttpClient) CreateOrUpdateAlertRule(clusterType, clusterName str
 	}
 	defer resp.Body.Close() //nolint:errcheck
 
-	bodyBytes, _ := io.ReadAll(resp.Body)
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read response body: %w", err)
+	}
 	debugResponse(resp, bodyBytes)
 
 	if resp.StatusCode == 200 || resp.StatusCode == 201 || resp.StatusCode == 204 {
@@ -1419,10 +1540,10 @@ func (c *AxonopsHttpClient) CreateOrUpdateAlertRule(clusterType, clusterName str
 	}
 }
 
-func (c *AxonopsHttpClient) DeleteAlertRule(clusterType, clusterName, alertID string) error {
-	url := fmt.Sprintf("%s://%s/%s/alert-rules/%s/%s/%s/%s", c.protocol, c.axonopsHost, axonops_api_version, c.orgid, clusterType, clusterName, alertID)
+func (c *AxonopsHttpClient) DeleteAlertRule(ctx context.Context, clusterType, clusterName, alertID string) error {
+	url := fmt.Sprintf("%s://%s/%s/alert-rules/%s/%s/%s/%s", c.protocol, c.axonopsHost, axonops_api_version, esc(c.orgid), esc(clusterType), esc(clusterName), esc(alertID))
 
-	req, err := http.NewRequest("DELETE", url, nil)
+	req, err := http.NewRequestWithContext(ctx, "DELETE", url, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create DELETE request for url %v: %w", url, err)
 	}
@@ -1439,7 +1560,10 @@ func (c *AxonopsHttpClient) DeleteAlertRule(clusterType, clusterName, alertID st
 	}
 	defer resp.Body.Close() //nolint:errcheck
 
-	bodyBytes, _ := io.ReadAll(resp.Body)
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read response body: %w", err)
+	}
 	debugResponse(resp, bodyBytes)
 
 	if isDeleteSuccess(resp.StatusCode) {
@@ -1475,10 +1599,10 @@ type DashboardPanelQuery struct {
 	Query string `json:"query"`
 }
 
-func (c *AxonopsHttpClient) GetDashboardTemplates(clusterType, clusterName string) (*DashboardTemplateResponse, error) {
-	url := fmt.Sprintf("%s://%s/%s/dashboardtemplate/%s/%s/%s", c.protocol, c.axonopsHost, axonops_api_version, c.orgid, clusterType, clusterName)
+func (c *AxonopsHttpClient) GetDashboardTemplates(ctx context.Context, clusterType, clusterName string) (*DashboardTemplateResponse, error) {
+	url := fmt.Sprintf("%s://%s/%s/dashboardtemplate/%s/%s/%s", c.protocol, c.axonopsHost, axonops_api_version, esc(c.orgid), esc(clusterType), esc(clusterName))
 
-	req, err := http.NewRequest("GET", url, nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create GET request: %w for url %v", err, url)
 	}
@@ -1495,7 +1619,10 @@ func (c *AxonopsHttpClient) GetDashboardTemplates(clusterType, clusterName strin
 	}
 	defer resp.Body.Close() //nolint:errcheck
 
-	bodyBytes, _ := io.ReadAll(resp.Body)
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %w", err)
+	}
 	debugResponse(resp, bodyBytes)
 
 	if resp.StatusCode != 200 {
@@ -1579,10 +1706,10 @@ type OverridePayload struct {
 	Value bool `json:"value"`
 }
 
-func (c *AxonopsHttpClient) GetIntegrations(clusterType, clusterName string) (*IntegrationsResponse, error) {
-	url := fmt.Sprintf("%s://%s/%s/integrations/%s/%s/%s", c.protocol, c.axonopsHost, axonops_api_version, c.orgid, clusterType, clusterName)
+func (c *AxonopsHttpClient) GetIntegrations(ctx context.Context, clusterType, clusterName string) (*IntegrationsResponse, error) {
+	url := fmt.Sprintf("%s://%s/%s/integrations/%s/%s/%s", c.protocol, c.axonopsHost, axonops_api_version, esc(c.orgid), esc(clusterType), esc(clusterName))
 
-	req, err := http.NewRequest("GET", url, nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create GET request: %w for url %v", err, url)
 	}
@@ -1599,7 +1726,10 @@ func (c *AxonopsHttpClient) GetIntegrations(clusterType, clusterName string) (*I
 	}
 	defer resp.Body.Close() //nolint:errcheck
 
-	bodyBytes, _ := io.ReadAll(resp.Body)
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %w", err)
+	}
 	debugResponse(resp, bodyBytes)
 
 	if resp.StatusCode == 200 {
@@ -1613,16 +1743,16 @@ func (c *AxonopsHttpClient) GetIntegrations(clusterType, clusterName string) (*I
 	}
 }
 
-func (c *AxonopsHttpClient) SetIntegrationOverride(clusterType, clusterName, routeType, severity string, value bool) error {
+func (c *AxonopsHttpClient) SetIntegrationOverride(ctx context.Context, clusterType, clusterName, routeType, severity string, value bool) error {
 	payload := OverridePayload{Value: value}
 	payloadJson, err := json.Marshal(payload)
 	if err != nil {
 		return fmt.Errorf("failed to encode JSON payload: %w", err)
 	}
 
-	url := fmt.Sprintf("%s://%s/%s/integrations-override/%s/%s/%s/%s/%s", c.protocol, c.axonopsHost, axonops_api_version, c.orgid, clusterType, clusterName, routeType, severity)
+	url := fmt.Sprintf("%s://%s/%s/integrations-override/%s/%s/%s/%s/%s", c.protocol, c.axonopsHost, axonops_api_version, esc(c.orgid), esc(clusterType), esc(clusterName), esc(routeType), esc(severity))
 
-	req, err := http.NewRequest("PUT", url, bytes.NewBuffer(payloadJson))
+	req, err := http.NewRequestWithContext(ctx, "PUT", url, bytes.NewBuffer(payloadJson))
 	if err != nil {
 		return fmt.Errorf("failed to create PUT request for url %v: %w", url, err)
 	}
@@ -1640,7 +1770,10 @@ func (c *AxonopsHttpClient) SetIntegrationOverride(clusterType, clusterName, rou
 	}
 	defer resp.Body.Close() //nolint:errcheck
 
-	bodyBytes, _ := io.ReadAll(resp.Body)
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read response body: %w", err)
+	}
 	debugResponse(resp, bodyBytes)
 
 	if resp.StatusCode == 204 || resp.StatusCode == 200 {
@@ -1650,10 +1783,10 @@ func (c *AxonopsHttpClient) SetIntegrationOverride(clusterType, clusterName, rou
 	}
 }
 
-func (c *AxonopsHttpClient) AddIntegrationRoute(clusterType, clusterName, routeType, severity, integrationID string) error {
-	url := fmt.Sprintf("%s://%s/%s/integrations-routing/%s/%s/%s/%s/%s/%s", c.protocol, c.axonopsHost, axonops_api_version, c.orgid, clusterType, clusterName, routeType, severity, integrationID)
+func (c *AxonopsHttpClient) AddIntegrationRoute(ctx context.Context, clusterType, clusterName, routeType, severity, integrationID string) error {
+	url := fmt.Sprintf("%s://%s/%s/integrations-routing/%s/%s/%s/%s/%s/%s", c.protocol, c.axonopsHost, axonops_api_version, esc(c.orgid), esc(clusterType), esc(clusterName), esc(routeType), esc(severity), esc(integrationID))
 
-	req, err := http.NewRequest("POST", url, nil)
+	req, err := http.NewRequestWithContext(ctx, "POST", url, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create POST request for url %v: %w", url, err)
 	}
@@ -1670,7 +1803,10 @@ func (c *AxonopsHttpClient) AddIntegrationRoute(clusterType, clusterName, routeT
 	}
 	defer resp.Body.Close() //nolint:errcheck
 
-	bodyBytes, _ := io.ReadAll(resp.Body)
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read response body: %w", err)
+	}
 	debugResponse(resp, bodyBytes)
 
 	if resp.StatusCode == 200 || resp.StatusCode == 201 || resp.StatusCode == 204 {
@@ -1680,10 +1816,10 @@ func (c *AxonopsHttpClient) AddIntegrationRoute(clusterType, clusterName, routeT
 	}
 }
 
-func (c *AxonopsHttpClient) RemoveIntegrationRoute(clusterType, clusterName, routeType, severity, integrationID string) error {
-	url := fmt.Sprintf("%s://%s/%s/integrations-routing/%s/%s/%s/%s/%s/%s", c.protocol, c.axonopsHost, axonops_api_version, c.orgid, clusterType, clusterName, routeType, severity, integrationID)
+func (c *AxonopsHttpClient) RemoveIntegrationRoute(ctx context.Context, clusterType, clusterName, routeType, severity, integrationID string) error {
+	url := fmt.Sprintf("%s://%s/%s/integrations-routing/%s/%s/%s/%s/%s/%s", c.protocol, c.axonopsHost, axonops_api_version, esc(c.orgid), esc(clusterType), esc(clusterName), esc(routeType), esc(severity), esc(integrationID))
 
-	req, err := http.NewRequest("DELETE", url, nil)
+	req, err := http.NewRequestWithContext(ctx, "DELETE", url, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create DELETE request for url %v: %w", url, err)
 	}
@@ -1700,7 +1836,10 @@ func (c *AxonopsHttpClient) RemoveIntegrationRoute(clusterType, clusterName, rou
 	}
 	defer resp.Body.Close() //nolint:errcheck
 
-	bodyBytes, _ := io.ReadAll(resp.Body)
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read response body: %w", err)
+	}
 	debugResponse(resp, bodyBytes)
 
 	if resp.StatusCode == 204 || resp.StatusCode == 200 {
@@ -1718,15 +1857,15 @@ type IntegrationPayload struct {
 	Params map[string]string `json:"params"`
 }
 
-func (c *AxonopsHttpClient) CreateOrUpdateIntegration(clusterType, clusterName string, payload IntegrationPayload) error {
+func (c *AxonopsHttpClient) CreateOrUpdateIntegration(ctx context.Context, clusterType, clusterName string, payload IntegrationPayload) error {
 	payloadJson, err := json.Marshal(payload)
 	if err != nil {
 		return fmt.Errorf("failed to encode JSON payload: %w", err)
 	}
 
-	url := fmt.Sprintf("%s://%s/%s/integrations/%s/%s/%s", c.protocol, c.axonopsHost, axonops_api_version, c.orgid, clusterType, clusterName)
+	url := fmt.Sprintf("%s://%s/%s/integrations/%s/%s/%s", c.protocol, c.axonopsHost, axonops_api_version, esc(c.orgid), esc(clusterType), esc(clusterName))
 
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer(payloadJson))
+	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(payloadJson))
 	if err != nil {
 		return fmt.Errorf("failed to create POST request for url %v: %w", url, err)
 	}
@@ -1744,7 +1883,10 @@ func (c *AxonopsHttpClient) CreateOrUpdateIntegration(clusterType, clusterName s
 	}
 	defer resp.Body.Close() //nolint:errcheck
 
-	bodyBytes, _ := io.ReadAll(resp.Body)
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read response body: %w", err)
+	}
 	debugResponse(resp, bodyBytes)
 
 	if resp.StatusCode == 200 || resp.StatusCode == 201 || resp.StatusCode == 204 {
@@ -1753,10 +1895,10 @@ func (c *AxonopsHttpClient) CreateOrUpdateIntegration(clusterType, clusterName s
 	return fmt.Errorf("failed to create/update integration: status %d for url %v, body: %s", resp.StatusCode, url, string(bodyBytes))
 }
 
-func (c *AxonopsHttpClient) DeleteIntegration(clusterType, clusterName, integrationID string) error {
-	url := fmt.Sprintf("%s://%s/%s/integrations/%s/%s/%s/%s", c.protocol, c.axonopsHost, axonops_api_version, c.orgid, clusterType, clusterName, integrationID)
+func (c *AxonopsHttpClient) DeleteIntegration(ctx context.Context, clusterType, clusterName, integrationID string) error {
+	url := fmt.Sprintf("%s://%s/%s/integrations/%s/%s/%s/%s", c.protocol, c.axonopsHost, axonops_api_version, esc(c.orgid), esc(clusterType), esc(clusterName), esc(integrationID))
 
-	req, err := http.NewRequest("DELETE", url, nil)
+	req, err := http.NewRequestWithContext(ctx, "DELETE", url, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create DELETE request for url %v: %w", url, err)
 	}
@@ -1773,7 +1915,10 @@ func (c *AxonopsHttpClient) DeleteIntegration(clusterType, clusterName, integrat
 	}
 	defer resp.Body.Close() //nolint:errcheck
 
-	bodyBytes, _ := io.ReadAll(resp.Body)
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read response body: %w", err)
+	}
 	debugResponse(resp, bodyBytes)
 
 	if isDeleteSuccess(resp.StatusCode) {
@@ -1823,10 +1968,10 @@ type scheduledRepairsResponseRaw struct {
 	ScheduledRepairs []scheduledRepairEntryRaw `json:"ScheduledRepairs"`
 }
 
-func (c *AxonopsHttpClient) GetScheduledRepairs(clusterName string) (*ScheduledRepairsResponse, error) {
-	reqURL := fmt.Sprintf("%s://%s/%s/repair/%s/cassandra/%s", c.protocol, c.axonopsHost, axonops_api_version, c.orgid, clusterName)
+func (c *AxonopsHttpClient) GetScheduledRepairs(ctx context.Context, clusterName string) (*ScheduledRepairsResponse, error) {
+	reqURL := fmt.Sprintf("%s://%s/%s/repair/%s/cassandra/%s", c.protocol, c.axonopsHost, axonops_api_version, esc(c.orgid), esc(clusterName))
 
-	req, err := http.NewRequest("GET", reqURL, nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", reqURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("creating GET request for %s: %w", reqURL, err)
 	}
@@ -1880,15 +2025,15 @@ func (c *AxonopsHttpClient) GetScheduledRepairs(clusterName string) (*ScheduledR
 	return result, nil
 }
 
-func (c *AxonopsHttpClient) CreateScheduledRepair(clusterName string, params ScheduledRepairParams) error {
+func (c *AxonopsHttpClient) CreateScheduledRepair(ctx context.Context, clusterName string, params ScheduledRepairParams) error {
 	payloadJSON, err := json.Marshal(params)
 	if err != nil {
 		return fmt.Errorf("failed to encode JSON payload: %w", err)
 	}
 
-	reqURL := fmt.Sprintf("%s://%s/%s/addrepair/%s/cassandra/%s", c.protocol, c.axonopsHost, axonops_api_version, c.orgid, clusterName)
+	reqURL := fmt.Sprintf("%s://%s/%s/addrepair/%s/cassandra/%s", c.protocol, c.axonopsHost, axonops_api_version, esc(c.orgid), esc(clusterName))
 
-	req, err := http.NewRequest("POST", reqURL, bytes.NewBuffer(payloadJSON))
+	req, err := http.NewRequestWithContext(ctx, "POST", reqURL, bytes.NewBuffer(payloadJSON))
 	if err != nil {
 		return fmt.Errorf("creating POST request for %s: %w", reqURL, err)
 	}
@@ -1918,11 +2063,11 @@ func (c *AxonopsHttpClient) CreateScheduledRepair(clusterName string, params Sch
 	return fmt.Errorf("failed to create scheduled repair: status %d for url %v, body: %s", resp.StatusCode, reqURL, string(bodyBytes))
 }
 
-func (c *AxonopsHttpClient) DeleteScheduledRepair(clusterName string, repairID string) error {
+func (c *AxonopsHttpClient) DeleteScheduledRepair(ctx context.Context, clusterName string, repairID string) error {
 	reqURL := fmt.Sprintf("%s://%s/%s/cassandrascheduledrepair/%s/cassandra/%s?id=%s",
-		c.protocol, c.axonopsHost, axonops_api_version, c.orgid, clusterName, url.QueryEscape(repairID))
+		c.protocol, c.axonopsHost, axonops_api_version, esc(c.orgid), esc(clusterName), url.QueryEscape(repairID))
 
-	req, err := http.NewRequest("DELETE", reqURL, nil)
+	req, err := http.NewRequestWithContext(ctx, "DELETE", reqURL, nil)
 	if err != nil {
 		return fmt.Errorf("creating DELETE request for %s: %w", reqURL, err)
 	}
@@ -1986,10 +2131,10 @@ type SilenceWindow struct {
 	DCs         []string `json:"DCs"`
 }
 
-func (c *AxonopsHttpClient) GetSilenceWindows(clusterType, clusterName string) ([]SilenceWindow, error) {
-	reqURL := fmt.Sprintf("%s://%s/%s/silenceWindow/%s/%s/%s", c.protocol, c.axonopsHost, axonops_api_version, c.orgid, clusterType, clusterName)
+func (c *AxonopsHttpClient) GetSilenceWindows(ctx context.Context, clusterType, clusterName string) ([]SilenceWindow, error) {
+	reqURL := fmt.Sprintf("%s://%s/%s/silenceWindow/%s/%s/%s", c.protocol, c.axonopsHost, axonops_api_version, esc(c.orgid), esc(clusterType), esc(clusterName))
 
-	req, err := http.NewRequest("GET", reqURL, nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", reqURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create GET request: %w for url %v", err, reqURL)
 	}
@@ -2006,7 +2151,10 @@ func (c *AxonopsHttpClient) GetSilenceWindows(clusterType, clusterName string) (
 	}
 	defer resp.Body.Close() //nolint:errcheck
 
-	bodyBytes, _ := io.ReadAll(resp.Body)
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %w", err)
+	}
 	debugResponse(resp, bodyBytes)
 
 	if resp.StatusCode != 200 {
@@ -2021,15 +2169,15 @@ func (c *AxonopsHttpClient) GetSilenceWindows(clusterType, clusterName string) (
 	return result, nil
 }
 
-func (c *AxonopsHttpClient) CreateSilenceWindow(clusterType, clusterName string, silence SilenceWindow) error {
+func (c *AxonopsHttpClient) CreateSilenceWindow(ctx context.Context, clusterType, clusterName string, silence SilenceWindow) error {
 	payloadJSON, err := json.Marshal(silence)
 	if err != nil {
 		return fmt.Errorf("failed to encode JSON payload: %w", err)
 	}
 
-	reqURL := fmt.Sprintf("%s://%s/%s/silenceWindow/%s/%s/%s", c.protocol, c.axonopsHost, axonops_api_version, c.orgid, clusterType, clusterName)
+	reqURL := fmt.Sprintf("%s://%s/%s/silenceWindow/%s/%s/%s", c.protocol, c.axonopsHost, axonops_api_version, esc(c.orgid), esc(clusterType), esc(clusterName))
 
-	req, err := http.NewRequest("POST", reqURL, bytes.NewBuffer(payloadJSON))
+	req, err := http.NewRequestWithContext(ctx, "POST", reqURL, bytes.NewBuffer(payloadJSON))
 	if err != nil {
 		return fmt.Errorf("failed to create POST request for url %v: %w", reqURL, err)
 	}
@@ -2047,7 +2195,10 @@ func (c *AxonopsHttpClient) CreateSilenceWindow(clusterType, clusterName string,
 	}
 	defer resp.Body.Close() //nolint:errcheck
 
-	bodyBytes, _ := io.ReadAll(resp.Body)
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read response body: %w", err)
+	}
 	debugResponse(resp, bodyBytes)
 
 	if resp.StatusCode == 200 || resp.StatusCode == 201 || resp.StatusCode == 204 {
@@ -2056,8 +2207,8 @@ func (c *AxonopsHttpClient) CreateSilenceWindow(clusterType, clusterName string,
 	return fmt.Errorf("failed to create silence window: status %d for url %v, body: %s", resp.StatusCode, reqURL, string(bodyBytes))
 }
 
-func (c *AxonopsHttpClient) DeleteSilenceWindow(clusterType, clusterName, silenceID string) error {
-	reqURL := fmt.Sprintf("%s://%s/%s/silenceWindow/%s/%s/%s/%s", c.protocol, c.axonopsHost, axonops_api_version, c.orgid, clusterType, clusterName, silenceID)
+func (c *AxonopsHttpClient) DeleteSilenceWindow(ctx context.Context, clusterType, clusterName, silenceID string) error {
+	reqURL := fmt.Sprintf("%s://%s/%s/silenceWindow/%s/%s/%s/%s", c.protocol, c.axonopsHost, axonops_api_version, esc(c.orgid), esc(clusterType), esc(clusterName), esc(silenceID))
 
 	// The API expects the ID in the body as an array
 	payloadJSON, err := json.Marshal([]string{silenceID})
@@ -2065,7 +2216,7 @@ func (c *AxonopsHttpClient) DeleteSilenceWindow(clusterType, clusterName, silenc
 		return fmt.Errorf("failed to encode JSON payload: %w", err)
 	}
 
-	req, err := http.NewRequest("DELETE", reqURL, bytes.NewBuffer(payloadJSON))
+	req, err := http.NewRequestWithContext(ctx, "DELETE", reqURL, bytes.NewBuffer(payloadJSON))
 	if err != nil {
 		return fmt.Errorf("failed to create DELETE request for url %v: %w", reqURL, err)
 	}
@@ -2083,7 +2234,10 @@ func (c *AxonopsHttpClient) DeleteSilenceWindow(clusterType, clusterName, silenc
 	}
 	defer resp.Body.Close() //nolint:errcheck
 
-	bodyBytes, _ := io.ReadAll(resp.Body)
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read response body: %w", err)
+	}
 	debugResponse(resp, bodyBytes)
 
 	if isDeleteSuccess(resp.StatusCode) {

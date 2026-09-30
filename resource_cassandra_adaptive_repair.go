@@ -161,7 +161,7 @@ func (r *cassandraAdaptiveRepairResource) Create(ctx context.Context, req resour
 		SegmentTargetSizeMB: int(data.SegmentTargetSizeMB.ValueInt64()),
 	}
 
-	err := r.client.UpdateCassandraAdaptiveRepair(data.ClusterType.ValueString(), data.ClusterName.ValueString(), settings)
+	err := r.client.UpdateCassandraAdaptiveRepair(ctx, data.ClusterType.ValueString(), data.ClusterName.ValueString(), settings)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to set adaptive repair settings: %s", err))
 		return
@@ -182,7 +182,7 @@ func (r *cassandraAdaptiveRepairResource) Read(ctx context.Context, req resource
 		return
 	}
 
-	settings, err := r.client.GetCassandraAdaptiveRepair(data.ClusterType.ValueString(), data.ClusterName.ValueString())
+	settings, err := r.client.GetCassandraAdaptiveRepair(ctx, data.ClusterType.ValueString(), data.ClusterName.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read adaptive repair settings: %s", err))
 		return
@@ -236,7 +236,7 @@ func (r *cassandraAdaptiveRepairResource) Update(ctx context.Context, req resour
 		SegmentTargetSizeMB: int(data.SegmentTargetSizeMB.ValueInt64()),
 	}
 
-	err := r.client.UpdateCassandraAdaptiveRepair(data.ClusterType.ValueString(), data.ClusterName.ValueString(), settings)
+	err := r.client.UpdateCassandraAdaptiveRepair(ctx, data.ClusterType.ValueString(), data.ClusterName.ValueString(), settings)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to update adaptive repair settings: %s", err))
 		return
@@ -269,7 +269,7 @@ func (r *cassandraAdaptiveRepairResource) Delete(ctx context.Context, req resour
 		SegmentTargetSizeMB: 256,
 	}
 
-	err := r.client.UpdateCassandraAdaptiveRepair(data.ClusterType.ValueString(), data.ClusterName.ValueString(), settings)
+	err := r.client.UpdateCassandraAdaptiveRepair(ctx, data.ClusterType.ValueString(), data.ClusterName.ValueString(), settings)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to reset adaptive repair settings: %s", err))
 		return
@@ -293,7 +293,7 @@ func (r *cassandraAdaptiveRepairResource) ImportState(ctx context.Context, req r
 	clusterType := parts[0]
 	clusterName := parts[1]
 
-	settings, err := r.client.GetCassandraAdaptiveRepair(clusterType, clusterName)
+	settings, err := r.client.GetCassandraAdaptiveRepair(ctx, clusterType, clusterName)
 	if err != nil {
 		resp.Diagnostics.AddError("Import Error", fmt.Sprintf("Unable to read adaptive repair settings: %s", err))
 		return

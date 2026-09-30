@@ -124,7 +124,7 @@ func (r *aclResource) Create(ctx context.Context, req resource.CreateRequest, re
 		PermissionType:      data.PermissionType.ValueString(),
 	}
 
-	err := r.client.CreateACL(data.ClusterName.ValueString(), acl)
+	err := r.client.CreateACL(ctx, data.ClusterName.ValueString(), acl)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create ACL, got error: %s", err))
 		return
@@ -182,7 +182,7 @@ func (r *aclResource) Update(ctx context.Context, req resource.UpdateRequest, re
 		PermissionType:      stateData.PermissionType.ValueString(),
 	}
 
-	err := r.client.DeleteACL(stateData.ClusterName.ValueString(), oldACL)
+	err := r.client.DeleteACL(ctx, stateData.ClusterName.ValueString(), oldACL)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete old ACL during update, got error: %s", err))
 		return
@@ -198,7 +198,7 @@ func (r *aclResource) Update(ctx context.Context, req resource.UpdateRequest, re
 		PermissionType:      planData.PermissionType.ValueString(),
 	}
 
-	err = r.client.CreateACL(planData.ClusterName.ValueString(), newACL)
+	err = r.client.CreateACL(ctx, planData.ClusterName.ValueString(), newACL)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create new ACL during update, got error: %s", err))
 		return
@@ -230,7 +230,7 @@ func (r *aclResource) Delete(ctx context.Context, req resource.DeleteRequest, re
 		PermissionType:      data.PermissionType.ValueString(),
 	}
 
-	err := r.client.DeleteACL(data.ClusterName.ValueString(), acl)
+	err := r.client.DeleteACL(ctx, data.ClusterName.ValueString(), acl)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete ACL, got error: %s", err))
 		return

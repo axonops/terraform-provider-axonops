@@ -262,14 +262,14 @@ func (r *cassandraScheduledRepairResource) Create(ctx context.Context, req resou
 		return
 	}
 
-	err := r.client.CreateScheduledRepair(data.ClusterName.ValueString(), params)
+	err := r.client.CreateScheduledRepair(ctx, data.ClusterName.ValueString(), params)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create scheduled repair: %s", err))
 		return
 	}
 
 	// Fetch the created repair to get its ID
-	repairs, err := r.client.GetScheduledRepairs(data.ClusterName.ValueString())
+	repairs, err := r.client.GetScheduledRepairs(ctx, data.ClusterName.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read scheduled repairs after creation: %s", err))
 		return
@@ -298,7 +298,7 @@ func (r *cassandraScheduledRepairResource) Read(ctx context.Context, req resourc
 		return
 	}
 
-	repairs, err := r.client.GetScheduledRepairs(data.ClusterName.ValueString())
+	repairs, err := r.client.GetScheduledRepairs(ctx, data.ClusterName.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read scheduled repairs: %s", err))
 		return
@@ -374,7 +374,7 @@ func (r *cassandraScheduledRepairResource) Update(ctx context.Context, req resou
 
 	// Delete existing repair by ID if we have one
 	if state.RepairID.ValueString() != "" {
-		err := r.client.DeleteScheduledRepair(state.ClusterName.ValueString(), state.RepairID.ValueString())
+		err := r.client.DeleteScheduledRepair(ctx, state.ClusterName.ValueString(), state.RepairID.ValueString())
 		if err != nil {
 			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete existing scheduled repair during update: %s", err))
 			return
@@ -386,7 +386,7 @@ func (r *cassandraScheduledRepairResource) Update(ctx context.Context, req resou
 		return
 	}
 
-	err := r.client.CreateScheduledRepair(data.ClusterName.ValueString(), params)
+	err := r.client.CreateScheduledRepair(ctx, data.ClusterName.ValueString(), params)
 	if err != nil {
 		// The old repair was already deleted; clear state so Terraform knows
 		resp.State.RemoveResource(ctx)
@@ -396,7 +396,7 @@ func (r *cassandraScheduledRepairResource) Update(ctx context.Context, req resou
 	}
 
 	// Fetch the new repair ID
-	repairs, err := r.client.GetScheduledRepairs(data.ClusterName.ValueString())
+	repairs, err := r.client.GetScheduledRepairs(ctx, data.ClusterName.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read scheduled repairs after update: %s", err))
 		return
@@ -426,14 +426,14 @@ func (r *cassandraScheduledRepairResource) Delete(ctx context.Context, req resou
 	}
 
 	if data.RepairID.ValueString() != "" {
-		err := r.client.DeleteScheduledRepair(data.ClusterName.ValueString(), data.RepairID.ValueString())
+		err := r.client.DeleteScheduledRepair(ctx, data.ClusterName.ValueString(), data.RepairID.ValueString())
 		if err != nil {
 			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete scheduled repair: %s", err))
 			return
 		}
 	} else {
 		// Try to find by tag and delete
-		repairs, err := r.client.GetScheduledRepairs(data.ClusterName.ValueString())
+		repairs, err := r.client.GetScheduledRepairs(ctx, data.ClusterName.ValueString())
 		if err != nil {
 			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read scheduled repairs: %s", err))
 			return
@@ -441,7 +441,7 @@ func (r *cassandraScheduledRepairResource) Delete(ctx context.Context, req resou
 
 		entry := axonopsClient.FindScheduledRepairByTag(repairs, data.Tag.ValueString())
 		if entry != nil {
-			err := r.client.DeleteScheduledRepair(data.ClusterName.ValueString(), entry.ID)
+			err := r.client.DeleteScheduledRepair(ctx, data.ClusterName.ValueString(), entry.ID)
 			if err != nil {
 				resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete scheduled repair: %s", err))
 				return
@@ -467,7 +467,7 @@ func (r *cassandraScheduledRepairResource) ImportState(ctx context.Context, req 
 	clusterName := parts[0]
 	tag := parts[1]
 
-	repairs, err := r.client.GetScheduledRepairs(clusterName)
+	repairs, err := r.client.GetScheduledRepairs(ctx, clusterName)
 	if err != nil {
 		resp.Diagnostics.AddError("Import Error", fmt.Sprintf("Unable to read scheduled repairs: %s", err))
 		return

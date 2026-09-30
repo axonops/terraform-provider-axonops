@@ -139,7 +139,7 @@ func (d *logCollectorDataSource) Read(ctx context.Context, req datasource.ReadRe
 		return
 	}
 
-	collectors, err := d.client.GetLogCollectors(data.ClusterType.ValueString(), data.ClusterName.ValueString())
+	collectors, err := d.client.GetLogCollectors(ctx, data.ClusterType.ValueString(), data.ClusterName.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read log collectors: %s", err))
 		return

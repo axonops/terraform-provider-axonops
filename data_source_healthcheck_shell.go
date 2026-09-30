@@ -108,7 +108,7 @@ func (d *shellHealthcheckDataSource) Read(ctx context.Context, req datasource.Re
 		return
 	}
 
-	healthchecks, err := d.client.GetHealthchecks(data.ClusterType.ValueString(), data.ClusterName.ValueString())
+	healthchecks, err := d.client.GetHealthchecks(ctx, data.ClusterType.ValueString(), data.ClusterName.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read healthchecks: %s", err))
 		return

@@ -168,7 +168,7 @@ func (d *cassandraBackupDataSource) Read(ctx context.Context, req datasource.Rea
 		clusterType = "cassandra"
 	}
 
-	backups, err := d.client.GetCassandraBackups(clusterType, data.ClusterName.ValueString())
+	backups, err := d.client.GetCassandraBackups(ctx, clusterType, data.ClusterName.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read backups: %s", err))
 		return

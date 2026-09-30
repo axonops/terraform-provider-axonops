@@ -131,7 +131,7 @@ func (r *tcpHealthcheckResource) Create(ctx context.Context, req resource.Create
 	}
 
 	// Get existing healthchecks
-	existing, err := r.client.GetHealthchecks(data.ClusterType.ValueString(), data.ClusterName.ValueString())
+	existing, err := r.client.GetHealthchecks(ctx, data.ClusterType.ValueString(), data.ClusterName.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to get existing healthchecks, got error: %s", err))
 		return
@@ -170,7 +170,7 @@ func (r *tcpHealthcheckResource) Create(ctx context.Context, req resource.Create
 	existing.TCPChecks = append(existing.TCPChecks, newCheck)
 
 	// Update all healthchecks
-	err = r.client.UpdateHealthchecks(data.ClusterType.ValueString(), data.ClusterName.ValueString(), *existing)
+	err = r.client.UpdateHealthchecks(ctx, data.ClusterType.ValueString(), data.ClusterName.ValueString(), *existing)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create TCP healthcheck, got error: %s", err))
 		return
@@ -196,7 +196,7 @@ func (r *tcpHealthcheckResource) Read(ctx context.Context, req resource.ReadRequ
 	}
 
 	// Get all healthchecks
-	healthchecks, err := r.client.GetHealthchecks(data.ClusterType.ValueString(), data.ClusterName.ValueString())
+	healthchecks, err := r.client.GetHealthchecks(ctx, data.ClusterType.ValueString(), data.ClusterName.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read healthchecks, got error: %s", err))
 		return
@@ -251,7 +251,7 @@ func (r *tcpHealthcheckResource) Update(ctx context.Context, req resource.Update
 	}
 
 	// Get existing healthchecks
-	existing, err := r.client.GetHealthchecks(planData.ClusterType.ValueString(), planData.ClusterName.ValueString())
+	existing, err := r.client.GetHealthchecks(ctx, planData.ClusterType.ValueString(), planData.ClusterName.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to get existing healthchecks, got error: %s", err))
 		return
@@ -290,7 +290,7 @@ func (r *tcpHealthcheckResource) Update(ctx context.Context, req resource.Update
 	}
 
 	// Update all healthchecks
-	err = r.client.UpdateHealthchecks(planData.ClusterType.ValueString(), planData.ClusterName.ValueString(), *existing)
+	err = r.client.UpdateHealthchecks(ctx, planData.ClusterType.ValueString(), planData.ClusterName.ValueString(), *existing)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to update TCP healthcheck, got error: %s", err))
 		return
@@ -316,7 +316,7 @@ func (r *tcpHealthcheckResource) Delete(ctx context.Context, req resource.Delete
 	}
 
 	// Get existing healthchecks
-	existing, err := r.client.GetHealthchecks(data.ClusterType.ValueString(), data.ClusterName.ValueString())
+	existing, err := r.client.GetHealthchecks(ctx, data.ClusterType.ValueString(), data.ClusterName.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to get existing healthchecks, got error: %s", err))
 		return
@@ -332,7 +332,7 @@ func (r *tcpHealthcheckResource) Delete(ctx context.Context, req resource.Delete
 	existing.TCPChecks = updatedChecks
 
 	// Update all healthchecks (without our deleted one)
-	err = r.client.UpdateHealthchecks(data.ClusterType.ValueString(), data.ClusterName.ValueString(), *existing)
+	err = r.client.UpdateHealthchecks(ctx, data.ClusterType.ValueString(), data.ClusterName.ValueString(), *existing)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete TCP healthcheck, got error: %s", err))
 		return
@@ -359,7 +359,7 @@ func (r *tcpHealthcheckResource) ImportState(ctx context.Context, req resource.I
 	healthcheckName := parts[2]
 
 	// Get all healthchecks
-	healthchecks, err := r.client.GetHealthchecks(clusterType, clusterName)
+	healthchecks, err := r.client.GetHealthchecks(ctx, clusterType, clusterName)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Import Error",

@@ -89,7 +89,7 @@ func (d *connectorDataSource) Read(ctx context.Context, req datasource.ReadReque
 		return
 	}
 
-	result, err := d.client.GetConnector(data.ClusterName.ValueString(), data.ConnectClusterName.ValueString(), data.Name.ValueString())
+	result, err := d.client.GetConnector(ctx, data.ClusterName.ValueString(), data.ConnectClusterName.ValueString(), data.Name.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read connector: %s", err))
 		return

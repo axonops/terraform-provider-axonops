@@ -172,7 +172,7 @@ func (r *logCollectorResource) Create(ctx context.Context, req resource.CreateRe
 	}
 
 	// Get existing log collectors
-	existingCollectors, err := r.client.GetLogCollectors(data.ClusterType.ValueString(), data.ClusterName.ValueString())
+	existingCollectors, err := r.client.GetLogCollectors(ctx, data.ClusterType.ValueString(), data.ClusterName.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to get existing log collectors, got error: %s", err))
 		return
@@ -210,7 +210,7 @@ func (r *logCollectorResource) Create(ctx context.Context, req resource.CreateRe
 	allCollectors := append(existingCollectors, newCollector)
 
 	// Update all collectors
-	err = r.client.UpdateLogCollectors(data.ClusterType.ValueString(), data.ClusterName.ValueString(), allCollectors)
+	err = r.client.UpdateLogCollectors(ctx, data.ClusterType.ValueString(), data.ClusterName.ValueString(), allCollectors)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create log collector, got error: %s", err))
 		return
@@ -236,7 +236,7 @@ func (r *logCollectorResource) Read(ctx context.Context, req resource.ReadReques
 	}
 
 	// Get all log collectors
-	collectors, err := r.client.GetLogCollectors(data.ClusterType.ValueString(), data.ClusterName.ValueString())
+	collectors, err := r.client.GetLogCollectors(ctx, data.ClusterType.ValueString(), data.ClusterName.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read log collectors, got error: %s", err))
 		return
@@ -322,7 +322,7 @@ func (r *logCollectorResource) Update(ctx context.Context, req resource.UpdateRe
 	}
 
 	// Get existing log collectors
-	existingCollectors, err := r.client.GetLogCollectors(planData.ClusterType.ValueString(), planData.ClusterName.ValueString())
+	existingCollectors, err := r.client.GetLogCollectors(ctx, planData.ClusterType.ValueString(), planData.ClusterName.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to get existing log collectors, got error: %s", err))
 		return
@@ -366,7 +366,7 @@ func (r *logCollectorResource) Update(ctx context.Context, req resource.UpdateRe
 	}
 
 	// Update all collectors
-	err = r.client.UpdateLogCollectors(planData.ClusterType.ValueString(), planData.ClusterName.ValueString(), existingCollectors)
+	err = r.client.UpdateLogCollectors(ctx, planData.ClusterType.ValueString(), planData.ClusterName.ValueString(), existingCollectors)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to update log collector, got error: %s", err))
 		return
@@ -392,7 +392,7 @@ func (r *logCollectorResource) Delete(ctx context.Context, req resource.DeleteRe
 	}
 
 	// Get existing log collectors
-	existingCollectors, err := r.client.GetLogCollectors(data.ClusterType.ValueString(), data.ClusterName.ValueString())
+	existingCollectors, err := r.client.GetLogCollectors(ctx, data.ClusterType.ValueString(), data.ClusterName.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to get existing log collectors, got error: %s", err))
 		return
@@ -407,7 +407,7 @@ func (r *logCollectorResource) Delete(ctx context.Context, req resource.DeleteRe
 	}
 
 	// Update all collectors (without our deleted one)
-	err = r.client.UpdateLogCollectors(data.ClusterType.ValueString(), data.ClusterName.ValueString(), updatedCollectors)
+	err = r.client.UpdateLogCollectors(ctx, data.ClusterType.ValueString(), data.ClusterName.ValueString(), updatedCollectors)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete log collector, got error: %s", err))
 		return
@@ -435,7 +435,7 @@ func (r *logCollectorResource) ImportState(ctx context.Context, req resource.Imp
 	filename := strings.Join(parts[2:], "/")
 
 	// Get all log collectors
-	collectors, err := r.client.GetLogCollectors(clusterType, clusterName)
+	collectors, err := r.client.GetLogCollectors(ctx, clusterType, clusterName)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Import Error",

@@ -142,7 +142,7 @@ func (r *alertRouteResource) Create(ctx context.Context, req resource.CreateRequ
 	}
 
 	// Get integrations to find the integration ID
-	integrations, err := r.client.GetIntegrations(data.ClusterType.ValueString(), data.ClusterName.ValueString())
+	integrations, err := r.client.GetIntegrations(ctx, data.ClusterType.ValueString(), data.ClusterName.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to get integrations: %s", err))
 		return
@@ -156,7 +156,7 @@ func (r *alertRouteResource) Create(ctx context.Context, req resource.CreateRequ
 
 	// Set override if non-global and enabled
 	if data.RouteType.ValueString() != "global" && data.EnableOverride.ValueBool() {
-		err = r.client.SetIntegrationOverride(data.ClusterType.ValueString(), data.ClusterName.ValueString(), apiRouteType, data.Severity.ValueString(), true)
+		err = r.client.SetIntegrationOverride(ctx, data.ClusterType.ValueString(), data.ClusterName.ValueString(), apiRouteType, data.Severity.ValueString(), true)
 		if err != nil {
 			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to set override: %s", err))
 			return
@@ -164,7 +164,7 @@ func (r *alertRouteResource) Create(ctx context.Context, req resource.CreateRequ
 	}
 
 	// Add the route
-	err = r.client.AddIntegrationRoute(data.ClusterType.ValueString(), data.ClusterName.ValueString(), apiRouteType, data.Severity.ValueString(), integrationID)
+	err = r.client.AddIntegrationRoute(ctx, data.ClusterType.ValueString(), data.ClusterName.ValueString(), apiRouteType, data.Severity.ValueString(), integrationID)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to add route: %s", err))
 		return
@@ -192,7 +192,7 @@ func (r *alertRouteResource) Read(ctx context.Context, req resource.ReadRequest,
 	}
 
 	// Get integrations
-	integrations, err := r.client.GetIntegrations(data.ClusterType.ValueString(), data.ClusterName.ValueString())
+	integrations, err := r.client.GetIntegrations(ctx, data.ClusterType.ValueString(), data.ClusterName.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to get integrations: %s", err))
 		return
@@ -260,7 +260,7 @@ func (r *alertRouteResource) Update(ctx context.Context, req resource.UpdateRequ
 		return
 	}
 
-	integrations, err := r.client.GetIntegrations(stateData.ClusterType.ValueString(), stateData.ClusterName.ValueString())
+	integrations, err := r.client.GetIntegrations(ctx, stateData.ClusterType.ValueString(), stateData.ClusterName.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to get integrations: %s", err))
 		return
@@ -268,7 +268,7 @@ func (r *alertRouteResource) Update(ctx context.Context, req resource.UpdateRequ
 
 	oldIntegrationID, err := r.findIntegrationID(integrations, stateData.IntegrationName.ValueString(), stateData.IntegrationType.ValueString())
 	if err == nil {
-		_ = r.client.RemoveIntegrationRoute(stateData.ClusterType.ValueString(), stateData.ClusterName.ValueString(), oldAPIRouteType, stateData.Severity.ValueString(), oldIntegrationID)
+		_ = r.client.RemoveIntegrationRoute(ctx, stateData.ClusterType.ValueString(), stateData.ClusterName.ValueString(), oldAPIRouteType, stateData.Severity.ValueString(), oldIntegrationID)
 	}
 
 	// Add new route
@@ -280,7 +280,7 @@ func (r *alertRouteResource) Update(ctx context.Context, req resource.UpdateRequ
 
 	// Re-fetch integrations if cluster changed
 	if planData.ClusterName.ValueString() != stateData.ClusterName.ValueString() || planData.ClusterType.ValueString() != stateData.ClusterType.ValueString() {
-		integrations, err = r.client.GetIntegrations(planData.ClusterType.ValueString(), planData.ClusterName.ValueString())
+		integrations, err = r.client.GetIntegrations(ctx, planData.ClusterType.ValueString(), planData.ClusterName.ValueString())
 		if err != nil {
 			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to get integrations: %s", err))
 			return
@@ -295,14 +295,14 @@ func (r *alertRouteResource) Update(ctx context.Context, req resource.UpdateRequ
 
 	// Set override
 	if planData.RouteType.ValueString() != "global" && planData.EnableOverride.ValueBool() {
-		err = r.client.SetIntegrationOverride(planData.ClusterType.ValueString(), planData.ClusterName.ValueString(), newAPIRouteType, planData.Severity.ValueString(), true)
+		err = r.client.SetIntegrationOverride(ctx, planData.ClusterType.ValueString(), planData.ClusterName.ValueString(), newAPIRouteType, planData.Severity.ValueString(), true)
 		if err != nil {
 			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to set override: %s", err))
 			return
 		}
 	}
 
-	err = r.client.AddIntegrationRoute(planData.ClusterType.ValueString(), planData.ClusterName.ValueString(), newAPIRouteType, planData.Severity.ValueString(), newIntegrationID)
+	err = r.client.AddIntegrationRoute(ctx, planData.ClusterType.ValueString(), planData.ClusterName.ValueString(), newAPIRouteType, planData.Severity.ValueString(), newIntegrationID)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to add route: %s", err))
 		return
@@ -329,7 +329,7 @@ func (r *alertRouteResource) Delete(ctx context.Context, req resource.DeleteRequ
 		return
 	}
 
-	integrations, err := r.client.GetIntegrations(data.ClusterType.ValueString(), data.ClusterName.ValueString())
+	integrations, err := r.client.GetIntegrations(ctx, data.ClusterType.ValueString(), data.ClusterName.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to get integrations: %s", err))
 		return
@@ -341,7 +341,7 @@ func (r *alertRouteResource) Delete(ctx context.Context, req resource.DeleteRequ
 		return
 	}
 
-	err = r.client.RemoveIntegrationRoute(data.ClusterType.ValueString(), data.ClusterName.ValueString(), apiRouteType, data.Severity.ValueString(), integrationID)
+	err = r.client.RemoveIntegrationRoute(ctx, data.ClusterType.ValueString(), data.ClusterName.ValueString(), apiRouteType, data.Severity.ValueString(), integrationID)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to remove route: %s", err))
 		return
@@ -377,7 +377,7 @@ func (r *alertRouteResource) ImportState(ctx context.Context, req resource.Impor
 	}
 
 	// Verify the integration exists
-	integrations, err := r.client.GetIntegrations(clusterType, clusterName)
+	integrations, err := r.client.GetIntegrations(ctx, clusterType, clusterName)
 	if err != nil {
 		resp.Diagnostics.AddError("Import Error", fmt.Sprintf("Unable to get integrations: %s", err))
 		return

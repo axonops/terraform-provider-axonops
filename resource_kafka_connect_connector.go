@@ -106,7 +106,7 @@ func (r *connectorResource) Create(ctx context.Context, req resource.CreateReque
 		Config: config,
 	}
 
-	result, err := r.client.CreateConnector(data.ClusterName.ValueString(), data.ConnectClusterName.ValueString(), connector)
+	result, err := r.client.CreateConnector(ctx, data.ClusterName.ValueString(), data.ConnectClusterName.ValueString(), connector)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create connector, got error: %s", err))
 		return
@@ -131,7 +131,7 @@ func (r *connectorResource) Read(ctx context.Context, req resource.ReadRequest, 
 		return
 	}
 
-	result, err := r.client.GetConnector(data.ClusterName.ValueString(), data.ConnectClusterName.ValueString(), data.Name.ValueString())
+	result, err := r.client.GetConnector(ctx, data.ClusterName.ValueString(), data.ConnectClusterName.ValueString(), data.Name.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read connector, got error: %s", err))
 		return
@@ -190,7 +190,7 @@ func (r *connectorResource) Update(ctx context.Context, req resource.UpdateReque
 		config[key] = value.ValueString()
 	}
 
-	result, err := r.client.UpdateConnectorConfig(planData.ClusterName.ValueString(), planData.ConnectClusterName.ValueString(), planData.Name.ValueString(), config)
+	result, err := r.client.UpdateConnectorConfig(ctx, planData.ClusterName.ValueString(), planData.ConnectClusterName.ValueString(), planData.Name.ValueString(), config)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to update connector, got error: %s", err))
 		return
@@ -215,7 +215,7 @@ func (r *connectorResource) Delete(ctx context.Context, req resource.DeleteReque
 		return
 	}
 
-	err := r.client.DeleteConnector(data.ClusterName.ValueString(), data.ConnectClusterName.ValueString(), data.Name.ValueString())
+	err := r.client.DeleteConnector(ctx, data.ClusterName.ValueString(), data.ConnectClusterName.ValueString(), data.Name.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete connector, got error: %s", err))
 		return
@@ -242,7 +242,7 @@ func (r *connectorResource) ImportState(ctx context.Context, req resource.Import
 	connectorName := parts[2]
 
 	// Get connector details from the API
-	connector, err := r.client.GetConnector(clusterName, connectClusterName, connectorName)
+	connector, err := r.client.GetConnector(ctx, clusterName, connectClusterName, connectorName)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Import Error",
