@@ -1,7 +1,7 @@
 // Copyright (c) AxonOps
 // SPDX-License-Identifier: Apache-2.0
 
-//go:generate go run github.com/hashicorp/terraform-plugin-docs/cmd/tfplugindocs generate --provider-name axonops
+//go:generate go tool tfplugindocs generate --provider-name axonops
 
 package main
 
