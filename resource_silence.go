@@ -164,7 +164,7 @@ func (r *silenceResource) Schema(ctx context.Context, req resource.SchemaRequest
 				Optional:    true,
 				Computed:    true,
 				Default:     stringdefault.StaticString(""),
-				Description: "Free-text note describing why the silence exists. Requires an AxonOps server newer than 2.0.39; older servers ignore it.",
+				Description: "Free-text note describing why the silence exists. Requires an AxonOps server newer than 2.0.39; older servers do not store it, so a non-empty note shows a diff on every plan.",
 			},
 		},
 	}
@@ -280,11 +280,7 @@ func (r *silenceResource) Read(ctx context.Context, req resource.ReadRequest, re
 	data.CronExpr = types.StringValue(found.CronExpr)
 	data.IsRecurring = types.BoolValue(found.IsRecurring)
 	data.Duration = types.StringValue(found.Duration)
-	// Servers up to 2.0.39 do not store notes, so an empty note from the API
-	// keeps the configured value instead of producing a perpetual diff.
-	if found.Note != "" || data.Note.IsNull() {
-		data.Note = types.StringValue(found.Note)
-	}
+	data.Note = types.StringValue(found.Note)
 
 	dcs := found.DCs
 	if dcs == nil {

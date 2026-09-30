@@ -22,6 +22,59 @@ func esc(s string) string {
 	return url.PathEscape(s)
 }
 
+const redacted = "***REDACTED***"
+
+// sensitiveKeyParts marks JSON keys whose values may hold credentials:
+// integration params (webhook URLs, API keys, passwords), connector configs
+// and backup remote configs.
+var sensitiveKeyParts = []string{"password", "secret", "token", "key", "config", "params", "url", "credential"}
+
+// redactBody returns body with values of sensitive JSON keys replaced, so
+// AXONOPS_DEBUG output never contains secrets. Non-JSON bodies are replaced
+// entirely.
+func redactBody(body []byte) string {
+	var v interface{}
+	if err := json.Unmarshal(body, &v); err != nil {
+		return fmt.Sprintf("<%d bytes, non-JSON body not shown>", len(body))
+	}
+	out, err := json.Marshal(redactValue(v))
+	if err != nil {
+		return fmt.Sprintf("<%d bytes, body not shown>", len(body))
+	}
+	return string(out)
+}
+
+func redactValue(v interface{}) interface{} {
+	switch t := v.(type) {
+	case map[string]interface{}:
+		for k, val := range t {
+			if isSensitiveKey(k) {
+				t[k] = redacted
+			} else {
+				t[k] = redactValue(val)
+			}
+		}
+		return t
+	case []interface{}:
+		for i := range t {
+			t[i] = redactValue(t[i])
+		}
+		return t
+	default:
+		return v
+	}
+}
+
+func isSensitiveKey(k string) bool {
+	lk := strings.ToLower(k)
+	for _, part := range sensitiveKeyParts {
+		if strings.Contains(lk, part) {
+			return true
+		}
+	}
+	return false
+}
+
 // debugRequest logs request details for debugging
 func debugRequest(req *http.Request, body []byte) {
 	if os.Getenv("AXONOPS_DEBUG") == "" {
@@ -33,20 +86,16 @@ func debugRequest(req *http.Request, body []byte) {
 	fmt.Printf("[AXONOPS DEBUG] Headers:\n")
 	for key, values := range req.Header {
 		for _, value := range values {
-			// Mask API key for security
+			// Never print credentials, not even partially.
 			if key == "Authorization" {
-				if len(value) > 20 {
-					fmt.Printf("[AXONOPS DEBUG]   %s: %s...%s\n", key, value[:15], value[len(value)-4:])
-				} else {
-					fmt.Printf("[AXONOPS DEBUG]   %s: %s\n", key, value)
-				}
+				fmt.Printf("[AXONOPS DEBUG]   %s: %s\n", key, redacted)
 			} else {
 				fmt.Printf("[AXONOPS DEBUG]   %s: %s\n", key, value)
 			}
 		}
 	}
 	if len(body) > 0 {
-		fmt.Printf("[AXONOPS DEBUG] Body: %s\n", string(body))
+		fmt.Printf("[AXONOPS DEBUG] Body: %s\n", redactBody(body))
 	}
 }
 
@@ -65,7 +114,7 @@ func debugResponse(resp *http.Response, body []byte) {
 	}
 	if len(body) > 0 {
 		// Truncate long responses
-		bodyStr := string(body)
+		bodyStr := redactBody(body)
 		if len(bodyStr) > 500 {
 			fmt.Printf("[AXONOPS DEBUG] Body (truncated): %s...\n", bodyStr[:500])
 		} else {
@@ -96,7 +145,7 @@ func CreateHTTPClient(protocol, axonopsHost, apiKey, orgid, tokenType string, tl
 		client: &http.Client{
 			Timeout: 10 * time.Second,
 			Transport: &http.Transport{
-				TLSClientConfig: &tls.Config{InsecureSkipVerify: tlsSkipVerify}, // #nosec G402 -- opt-in via tls_skip_verify; the provider emits a warning diagnostic
+				TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS12, InsecureSkipVerify: tlsSkipVerify}, // #nosec G402 -- opt-in via tls_skip_verify; the provider emits a warning diagnostic
 			},
 		},
 		orgid:     orgid,
@@ -676,7 +725,7 @@ func (c *AxonopsHttpClient) CreateConnector(ctx context.Context, clusterName, co
 		}
 		return &result, nil
 	} else {
-		return nil, fmt.Errorf("failed to create connector: status %d for url %v with connector:%+v, body: %s", resp.StatusCode, url, connector, string(bodyBytes))
+		return nil, fmt.Errorf("failed to create connector %q: status %d for url %v, body: %s", connector.Name, resp.StatusCode, url, string(bodyBytes))
 	}
 }
 

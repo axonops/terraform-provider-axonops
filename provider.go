@@ -64,7 +64,7 @@ func detectSAML(ctx context.Context, protocol, host string, tlsSkipVerify bool) 
 	tflog.Debug(ctx, "SAML detection: probing", map[string]interface{}{"url": probeURL})
 
 	tr := &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: tlsSkipVerify}, // #nosec G402 -- opt-in via tls_skip_verify; a warning diagnostic is emitted
+		TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS12, InsecureSkipVerify: tlsSkipVerify}, // #nosec G402 -- opt-in via tls_skip_verify; a warning diagnostic is emitted
 	}
 	c := &http.Client{
 		Timeout:   5 * time.Second,
