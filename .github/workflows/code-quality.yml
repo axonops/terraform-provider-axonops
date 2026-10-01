@@ -18,9 +18,11 @@ jobs:
         with:
           go-version-file: 'go.mod'
           cache: true
-      - uses: golangci/golangci-lint-action@v6
+      # golangci-lint v1 is built with Go 1.24 and cannot lint a Go 1.27
+      # module; v2 requires golangci-lint-action v7 or later.
+      - uses: golangci/golangci-lint-action@v8
         with:
-          version: latest
+          version: v2.13.1
           args: --timeout=5m
 
   fmt:
