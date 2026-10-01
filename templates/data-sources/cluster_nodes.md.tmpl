@@ -1,0 +1,18 @@
+---
+page_title: "{{.Name}} {{.Type}} - {{.ProviderName}}"
+subcategory: "Clusters"
+description: |-
+{{ .Description | plainmarkdown | trimspace | prefixlines "  " }}
+---
+
+# {{.Name}} ({{.Type}})
+
+{{ .Description | trimspace }}
+
+Use this data source to list the nodes (AxonOps agents) of a cluster, for example to find nodes that are down or to scope resources to one data centre. A node is `up` when its agent is connected to AxonOps.
+
+## Example Usage
+
+{{ tffile "examples/data-sources/axonops_cluster_nodes/data-source.tf" }}
+
+{{ .SchemaMarkdown | trimspace }}

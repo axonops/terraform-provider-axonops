@@ -1,0 +1,18 @@
+---
+page_title: "{{.Name}} {{.Type}} - {{.ProviderName}}"
+subcategory: "Kafka"
+description: |-
+{{ .Description | plainmarkdown | trimspace | prefixlines "  " }}
+---
+
+# {{.Name}} ({{.Type}})
+
+{{ .Description | trimspace }}
+
+Use this data source to discover schema registry subjects, optionally filtered with a regular expression, and pair it with `axonops_schema` to read individual schemas.
+
+## Example Usage
+
+{{ tffile "examples/data-sources/axonops_schemas/data-source.tf" }}
+
+{{ .SchemaMarkdown | trimspace }}

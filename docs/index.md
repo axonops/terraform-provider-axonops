@@ -158,13 +158,22 @@ provider "axonops" {
 
 ## Data Sources
 
+### Clusters
+- `axonops_clusters` - List clusters in the organisation, optionally by type
+- `axonops_cluster` - Look up a cluster by name (type, status, nodes, versions)
+- `axonops_cluster_nodes` - List the nodes of a cluster, filter by status or data centre
+
 ### Kafka
+- `axonops_kafka_topics` - List the topics of a Kafka cluster
+- `axonops_kafka_connectors` - List the connectors of a Kafka Connect cluster
+- `axonops_schemas` - List Schema Registry subjects
 - `axonops_kafka_topic` - Look up a Kafka topic
 - `axonops_kafka_acl` - Look up a specific Kafka ACL
 - `axonops_kafka_acl_list` - List all Kafka ACLs
 - `axonops_kafka_connect_connector` - Look up a Kafka Connect connector
 
 ### Cassandra/DSE
+- `axonops_cassandra_keyspaces` - List the keyspaces and tables of a cluster
 - `axonops_cassandra_backup` - Look up a backup
 - `axonops_cassandra_scheduled_repair` - Look up a repair schedule
 - `axonops_cassandra_adaptive_repair` - Look up adaptive repair settings
@@ -176,6 +185,7 @@ provider "axonops" {
 - `axonops_silence` - Look up a silence
 
 ### Integrations
+- `axonops_integrations` - List the integrations of a cluster, filter by type
 - `axonops_slack_integration` - Look up a Slack integration
 - `axonops_teams_integration` - Look up a Teams integration
 - `axonops_pagerduty_integration` - Look up a PagerDuty integration
