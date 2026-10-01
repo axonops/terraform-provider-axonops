@@ -1,0 +1,33 @@
+---
+page_title: "{{.Name}} {{.Type}} - {{.ProviderName}}"
+subcategory: "Monitoring"
+description: |-
+{{ .Description | plainmarkdown | trimspace | prefixlines "  " }}
+---
+
+# {{.Name}} ({{.Type}})
+
+{{ .Description | trimspace }}
+
+## Example Usage
+
+{{ tffile "examples/resources/axonops_silence/resource.tf" }}
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Import
+
+Silences can be imported using the format `cluster_type/cluster_name/silence_id`:
+
+{{ codefile "shell" "examples/resources/axonops_silence/import.sh" }}
+
+In Terraform v1.5.0 and later, use an [`import` block](https://developer.hashicorp.com/terraform/language/import) instead:
+
+{{ tffile "examples/resources/axonops_silence/import.tf" }}
+
+Where:
+- `cluster_type` - The type of cluster (cassandra, kafka, or dse)
+- `cluster_name` - The name of the cluster
+- `silence_id` - The UUID of the silence window, as returned by the AxonOps API
+
+> **Note:** The `note` attribute requires an AxonOps server newer than `2.0.39`. Against older servers the provider still accepts the attribute, but the server silently ignores it, so `terraform plan` shows a persistent diff. Omit `note` when targeting an AxonOps server `<= 2.0.39`.

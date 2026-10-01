@@ -7,15 +7,20 @@ import (
 
 	axonopsClient "terraform-provider-axonops/client"
 
+	"github.com/hashicorp/terraform-plugin-framework-validators/int32validator"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
 var _ resource.Resource = (*topicResource)(nil)
 var _ resource.ResourceWithImportState = (*topicResource)(nil)
+var _ resource.ResourceWithModifyPlan = (*topicResource)(nil)
 
 type topicResource struct {
 	client *axonopsClient.AxonopsHttpClient
@@ -52,22 +57,40 @@ func (e *topicResource) Metadata(_ context.Context, req resource.MetadataRequest
 
 func (e *topicResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
+		Description: "Manages a Kafka topic. Partitions can only be increased; replication factor changes trigger a reassignment.",
 		Attributes: map[string]schema.Attribute{
 			"name": schema.StringAttribute{
-				Required: true,
+				Required:    true,
+				Description: "Topic name. Changing this forces a new topic.",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
 			},
 			"partitions": schema.Int32Attribute{
-				Required: true,
+				Required:    true,
+				Description: "Number of partitions. Can be increased in place; decreasing is not supported by Kafka.",
+				Validators: []validator.Int32{
+					int32validator.AtLeast(1),
+				},
 			},
 			"replication_factor": schema.Int32Attribute{
-				Required: true,
+				Required:    true,
+				Description: "Replication factor. Changes are applied in place via partition reassignment.",
+				Validators: []validator.Int32{
+					int32validator.AtLeast(1),
+				},
 			},
 			"cluster_name": schema.StringAttribute{
-				Required: true,
+				Required:    true,
+				Description: "Kafka cluster name. Changing this forces a new topic.",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
 			},
 			"config": schema.MapAttribute{
 				Optional:    true,
 				ElementType: types.StringType,
+				Description: "Topic configuration. Use underscores instead of dots in keys (e.g. retention_ms).",
 			},
 		},
 	}
@@ -80,6 +103,27 @@ type topicResourceData struct {
 	ReplicationFactor types.Int32             `tfsdk:"replication_factor"`
 	ClusterName       types.String            `tfsdk:"cluster_name"`
 	Config            map[string]types.String `tfsdk:"config"`
+}
+
+// ModifyPlan rejects partition decreases at plan time, since Kafka cannot
+// reduce the partition count of an existing topic.
+func (e *topicResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
+	if req.State.Raw.IsNull() || req.Plan.Raw.IsNull() {
+		return
+	}
+
+	var planPartitions, statePartitions types.Int32
+	resp.Diagnostics.Append(req.Plan.GetAttribute(ctx, path.Root("partitions"), &planPartitions)...)
+	resp.Diagnostics.Append(req.State.GetAttribute(ctx, path.Root("partitions"), &statePartitions)...)
+	if resp.Diagnostics.HasError() || planPartitions.IsUnknown() || statePartitions.IsNull() {
+		return
+	}
+
+	if planPartitions.ValueInt32() < statePartitions.ValueInt32() {
+		resp.Diagnostics.AddAttributeError(path.Root("partitions"), "Cannot Decrease Partitions",
+			fmt.Sprintf("Kafka does not support reducing partitions (current %d, planned %d). Recreate the topic instead.",
+				statePartitions.ValueInt32(), planPartitions.ValueInt32()))
+	}
 }
 
 func (e *topicResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
@@ -98,14 +142,44 @@ func (e *topicResource) Create(ctx context.Context, req resource.CreateRequest, 
 		configList = append(configList, axonopsClient.KafkaTopicConfig{Name: strings.ReplaceAll(key, "_", "."), Value: value.ValueString()})
 	}
 
-	err := e.client.CreateTopic(data.Name.ValueString(), data.ClusterName.ValueString(), data.Partitions.ValueInt32(), data.ReplicationFactor.ValueInt32(), configList)
+	err := e.client.CreateTopic(ctx, data.Name.ValueString(), data.ClusterName.ValueString(), data.Partitions.ValueInt32(), data.ReplicationFactor.ValueInt32(), configList)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create topic, got error: %s", err))
 		return
 	}
 
+	if err := e.confirmTopic(ctx, &data, true); err != nil {
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to confirm topic was created: %s", err))
+		return
+	}
+
 	diags = resp.State.Set(ctx, &data)
 	resp.Diagnostics.Append(diags...)
+}
+
+// confirmTopic waits until the topic is listed with the planned partition
+// count and config values. The replication factor is compared only when
+// checkRF is set: on update, Kafka reassigns replicas in the background and a
+// large topic can take far longer than the confirmation timeout to converge.
+func (e *topicResource) confirmTopic(ctx context.Context, data *topicResourceData, checkRF bool) error {
+	_, err := confirmWrite(ctx, fmt.Sprintf("topic %q", data.Name.ValueString()), func(ctx context.Context) (struct{}, bool, error) {
+		topic, err := e.client.GetTopic(ctx, data.Name.ValueString(), data.ClusterName.ValueString())
+		if err != nil || topic == nil {
+			return struct{}{}, false, err
+		}
+		if topic.Partitions != data.Partitions.ValueInt32() ||
+			(checkRF && topic.ReplicationFactor != data.ReplicationFactor.ValueInt32()) {
+			return struct{}{}, false, nil
+		}
+		got := refreshTopicConfig(data.Config, topic.Config)
+		for key, want := range data.Config {
+			if !got[key].Equal(want) {
+				return struct{}{}, false, nil
+			}
+		}
+		return struct{}{}, true, nil
+	})
+	return err
 }
 
 func (e *topicResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
@@ -117,10 +191,44 @@ func (e *topicResource) Read(ctx context.Context, req resource.ReadRequest, resp
 		return
 	}
 
-	// Read resource using 3rd party API.
+	topic, err := e.client.GetTopic(ctx, data.Name.ValueString(), data.ClusterName.ValueString())
+	if err != nil {
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read topic, got error: %s", err))
+		return
+	}
+	if topic == nil {
+		tflog.Warn(ctx, fmt.Sprintf("Topic %s not found in cluster %s, removing from state", data.Name.ValueString(), data.ClusterName.ValueString()))
+		resp.State.RemoveResource(ctx)
+		return
+	}
+
+	data.Partitions = types.Int32Value(topic.Partitions)
+	data.ReplicationFactor = types.Int32Value(topic.ReplicationFactor)
+	data.Config = refreshTopicConfig(data.Config, topic.Config)
 
 	diags = resp.State.Set(ctx, &data)
 	resp.Diagnostics.Append(diags...)
+}
+
+// refreshTopicConfig updates the managed config keys with values from the API.
+// Only keys already in state are tracked, so broker-side explicit configs the
+// user never declared do not cause diffs. A managed key missing from the API
+// response is dropped so Terraform plans to set it again.
+func refreshTopicConfig(managed map[string]types.String, remote []axonopsClient.KafkaTopicConfig) map[string]types.String {
+	if managed == nil {
+		return nil
+	}
+	remoteByKey := make(map[string]string, len(remote))
+	for _, c := range remote {
+		remoteByKey[strings.ReplaceAll(c.Name, ".", "_")] = c.Value
+	}
+	refreshed := make(map[string]types.String, len(managed))
+	for key := range managed {
+		if v, ok := remoteByKey[key]; ok {
+			refreshed[key] = types.StringValue(v)
+		}
+	}
+	return refreshed
 }
 
 func (e *topicResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
@@ -141,24 +249,48 @@ func (e *topicResource) Update(ctx context.Context, req resource.UpdateRequest, 
 		return
 	}
 
-	if planData.Partitions != stateData.Partitions {
-		resp.Diagnostics.AddError("Module Error", "Changing of Partitions not supported yet")
-		return
+	topicName := planData.Name.ValueString()
+	clusterName := planData.ClusterName.ValueString()
+
+	if planData.Partitions.ValueInt32() != stateData.Partitions.ValueInt32() {
+		if planData.Partitions.ValueInt32() < stateData.Partitions.ValueInt32() {
+			resp.Diagnostics.AddError("Cannot Decrease Partitions", "Kafka does not support reducing the partition count of a topic")
+			return
+		}
+		if err := e.client.SetTopicPartitions(ctx, topicName, clusterName, planData.Partitions.ValueInt32()); err != nil {
+			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to increase partitions, got error: %s", err))
+			return
+		}
 	}
 
-	if planData.ReplicationFactor != stateData.ReplicationFactor {
-		resp.Diagnostics.AddError("Module Error", "Changing of Replication Factor not supported yet")
-		return
+	if planData.ReplicationFactor.ValueInt32() != stateData.ReplicationFactor.ValueInt32() {
+		if err := e.client.SetTopicReplicationFactor(ctx, topicName, clusterName, planData.ReplicationFactor.ValueInt32()); err != nil {
+			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to change replication factor, got error: %s", err))
+			return
+		}
 	}
 
 	var configList []axonopsClient.KafkaUpdateTopicConfig
 	for key, value := range planData.Config {
 		configList = append(configList, axonopsClient.KafkaUpdateTopicConfig{Key: strings.ReplaceAll(key, "_", "."), Value: value.ValueString(), Op: "SET"})
 	}
+	// Reset configs removed from the plan back to the broker default.
+	for key := range stateData.Config {
+		if _, ok := planData.Config[key]; !ok {
+			configList = append(configList, axonopsClient.KafkaUpdateTopicConfig{Key: strings.ReplaceAll(key, "_", "."), Op: "DELETE"})
+		}
+	}
 
-	err := e.client.UpdateTopicConfig(planData.Name.ValueString(), planData.ClusterName.ValueString(), planData.Partitions.ValueInt32(), planData.ReplicationFactor.ValueInt32(), configList)
-	if err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to update topic, got error: %s", err))
+	if len(configList) > 0 {
+		err := e.client.UpdateTopicConfig(ctx, topicName, clusterName, planData.Partitions.ValueInt32(), planData.ReplicationFactor.ValueInt32(), configList)
+		if err != nil {
+			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to update topic, got error: %s", err))
+			return
+		}
+	}
+
+	if err := e.confirmTopic(ctx, &planData, false); err != nil {
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to confirm topic was updated: %s", err))
 		return
 	}
 
@@ -171,25 +303,22 @@ func (e *topicResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 
 	diags := req.State.Get(ctx, &data)
 	resp.Diagnostics.Append(diags...)
-
-	err := e.client.DeleteTopic(data.Name.ValueString(), data.ClusterName.ValueString())
-	if err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete topic, got error: %s", err))
-		return
-	}
-
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	// Delete resource using 3rd party API.
+	err := e.client.DeleteTopic(ctx, data.Name.ValueString(), data.ClusterName.ValueString())
+	if err != nil {
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete topic, got error: %s", err))
+		return
+	}
 }
 
 // ImportState imports an existing topic into Terraform state.
 // Import ID format: cluster_name/topic_name
 func (e *topicResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	// Parse the import ID (format: cluster_name/topic_name)
-	parts := strings.Split(req.ID, "/")
+	parts := strings.SplitN(req.ID, "/", 2)
 	if len(parts) != 2 {
 		resp.Diagnostics.AddError(
 			"Invalid Import ID",
@@ -202,7 +331,7 @@ func (e *topicResource) ImportState(ctx context.Context, req resource.ImportStat
 	topicName := parts[1]
 
 	// Get topic details from the API
-	topic, err := e.client.GetTopic(topicName, clusterName)
+	topic, err := e.client.GetTopic(ctx, topicName, clusterName)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Import Error",
@@ -210,9 +339,13 @@ func (e *topicResource) ImportState(ctx context.Context, req resource.ImportStat
 		)
 		return
 	}
+	if topic == nil {
+		resp.Diagnostics.AddError("Import Error", fmt.Sprintf("Topic %s not found in cluster %s", topicName, clusterName))
+		return
+	}
 
 	// Set the state
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("name"), topic.Name)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("name"), topicName)...)
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("cluster_name"), clusterName)...)
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("partitions"), topic.Partitions)...)
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("replication_factor"), topic.ReplicationFactor)...)

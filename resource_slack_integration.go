@@ -13,9 +13,16 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
+
+// integrationImportSecretWarning is the diagnostic shown when ImportState
+// intentionally leaves a sensitive attribute unset because the AxonOps API
+// only ever returns masked secret values.
+const integrationImportSecretWarning = "The AxonOps API returns a masked value for this field, " +
+	"so it was not imported. Set it explicitly in your configuration; the next plan will show it being applied."
 
 var _ resource.Resource = (*slackIntegrationResource)(nil)
 var _ resource.ResourceWithImportState = (*slackIntegrationResource)(nil)
@@ -51,6 +58,9 @@ func (r *slackIntegrationResource) Schema(ctx context.Context, req resource.Sche
 			"id": schema.StringAttribute{
 				Computed:    true,
 				Description: "The integration ID.",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"cluster_name": schema.StringAttribute{
 				Required:    true,
@@ -62,6 +72,7 @@ func (r *slackIntegrationResource) Schema(ctx context.Context, req resource.Sche
 			"cluster_type": schema.StringAttribute{
 				Required:    true,
 				Description: "The cluster type (cassandra, kafka, or dse).",
+				Validators:  []validator.String{clusterTypeValidator()},
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},
@@ -122,22 +133,15 @@ func (r *slackIntegrationResource) Create(ctx context.Context, req resource.Crea
 		},
 	}
 
-	err := r.client.CreateOrUpdateIntegration(data.ClusterType.ValueString(), data.ClusterName.ValueString(), payload)
+	err := r.client.CreateOrUpdateIntegration(ctx, data.ClusterType.ValueString(), data.ClusterName.ValueString(), payload)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create Slack integration: %s", err))
 		return
 	}
 
-	// Read back to get the ID
-	integrations, err := r.client.GetIntegrations(data.ClusterType.ValueString(), data.ClusterName.ValueString())
+	def, err := confirmIntegration(ctx, r.client, data.ClusterType.ValueString(), data.ClusterName.ValueString(), payload, "url")
 	if err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read integrations: %s", err))
-		return
-	}
-
-	def := axonopsClient.FindIntegrationByNameAndType(integrations, data.Name.ValueString(), "slack")
-	if def == nil {
-		resp.Diagnostics.AddError("Client Error", "Integration was created but could not be found")
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to confirm Slack integration was created: %s", err))
 		return
 	}
 	data.ID = types.StringValue(def.ID)
@@ -155,7 +159,7 @@ func (r *slackIntegrationResource) Read(ctx context.Context, req resource.ReadRe
 		return
 	}
 
-	integrations, err := r.client.GetIntegrations(data.ClusterType.ValueString(), data.ClusterName.ValueString())
+	integrations, err := r.client.GetIntegrations(ctx, data.ClusterType.ValueString(), data.ClusterName.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to get integrations: %s", err))
 		return
@@ -200,13 +204,18 @@ func (r *slackIntegrationResource) Update(ctx context.Context, req resource.Upda
 		},
 	}
 
-	err := r.client.CreateOrUpdateIntegration(planData.ClusterType.ValueString(), planData.ClusterName.ValueString(), payload)
+	err := r.client.CreateOrUpdateIntegration(ctx, planData.ClusterType.ValueString(), planData.ClusterName.ValueString(), payload)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to update Slack integration: %s", err))
 		return
 	}
 
-	planData.ID = stateData.ID
+	def, err := confirmIntegration(ctx, r.client, planData.ClusterType.ValueString(), planData.ClusterName.ValueString(), payload, "url")
+	if err != nil {
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to confirm Slack integration was updated: %s", err))
+		return
+	}
+	planData.ID = types.StringValue(def.ID)
 
 	tflog.Info(ctx, "Updated Slack integration resource")
 	diags = resp.State.Set(ctx, &planData)
@@ -221,7 +230,7 @@ func (r *slackIntegrationResource) Delete(ctx context.Context, req resource.Dele
 		return
 	}
 
-	err := r.client.DeleteIntegration(data.ClusterType.ValueString(), data.ClusterName.ValueString(), data.ID.ValueString())
+	err := r.client.DeleteIntegration(ctx, data.ClusterType.ValueString(), data.ClusterName.ValueString(), data.ID.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete Slack integration: %s", err))
 		return
@@ -242,7 +251,7 @@ func (r *slackIntegrationResource) ImportState(ctx context.Context, req resource
 	clusterName := parts[1]
 	name := parts[2]
 
-	integrations, err := r.client.GetIntegrations(clusterType, clusterName)
+	integrations, err := r.client.GetIntegrations(ctx, clusterType, clusterName)
 	if err != nil {
 		resp.Diagnostics.AddError("Import Error", fmt.Sprintf("Unable to get integrations: %s", err))
 		return
@@ -258,7 +267,8 @@ func (r *slackIntegrationResource) ImportState(ctx context.Context, req resource
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("cluster_type"), clusterType)...)
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("cluster_name"), clusterName)...)
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("name"), def.Params["name"])...)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("webhook_url"), def.Params["url"])...)
+	// webhook_url is masked by the AxonOps API; do not persist it from import.
+	resp.Diagnostics.AddWarning("Sensitive Value Not Imported", integrationImportSecretWarning)
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("channel"), def.Params["channel"])...)
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("axonops_url"), def.Params["axondashUrl"])...)
 

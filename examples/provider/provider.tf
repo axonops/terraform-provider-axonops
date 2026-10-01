@@ -1,45 +1,36 @@
-# Provider Configuration for AxonOps SaaS
-provider "axonops" {
-  # Organization ID (required)
-  org_id = "your-org-id"
-
-  # API key for authentication (required for SaaS)
-  api_key = "your-api-key-here"
+terraform {
+  required_providers {
+    axonops = {
+      source  = "axonops/axonops"
+      version = "~> 0.1"
+    }
+  }
 }
 
-# Provider Configuration for AxonOps SaaS with SAML
-# provider "axonops" {
-#   # Organization ID (required)
-#   org_id = "your-org-id"
-#
-#   # API key for authentication
-#   api_key = "your-api-key-here"
-#
-#   # Enable SAML authentication mode
-#   # Uses tenant-specific URL: https://{org_id}.axonops.cloud/dashboard
-#   use_saml = true
-# }
+variable "axonops_api_key" {
+  description = "AxonOps API key for authentication"
+  type        = string
+  sensitive   = true
+}
 
-# Provider Configuration for Self-Hosted AxonOps
+variable "axonops_org_id" {
+  description = "AxonOps organization ID"
+  type        = string
+}
+
+# Provider Configuration for AxonOps SaaS (SAML auto-detected)
+provider "axonops" {
+  org_id  = var.axonops_org_id
+  api_key = var.axonops_api_key
+}
+
+# Provider Configuration for AxonOps Self-Hosted Deployment
+# SAML is automatically detected; no explicit configuration needed.
 # provider "axonops" {
-#   # Organization ID (required)
-#   org_id = "your-org-id"
-#
-#   # API key for authentication
-#   api_key = "your-api-key-here"
-#
-#   # Self-hosted server hostname
-#   axonops_host = "axonops.example.com"
-#
-#   # Protocol (http or https)
-#   axonops_protocol = "https"
-#
-#   # Token type for Authorization header: 'Bearer' (default) or 'AxonApi'
-#   token_type = "Bearer"
-#
-#   # Skip TLS certificate verification (for self-signed certificates)
-#   tls_skip_verify = false
-#
-#   # Enable SAML if using SAML authentication on self-hosted
-#   # use_saml = true
+#   org_id             = var.axonops_org_id
+#   api_key            = var.axonops_api_key
+#   axonops_host       = "axonops.example.com"
+#   axonops_protocol   = "https"
+#   token_type         = "Bearer"
+#   tls_skip_verify    = false  # Only for self-signed certificates in non-production
 # }

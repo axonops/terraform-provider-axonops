@@ -14,6 +14,11 @@ Use this resource to configure a PagerDuty Events API v2 integration key that Ax
 ## Example Usage
 
 ```terraform
+variable "pagerduty_integration_key" {
+  type      = string
+  sensitive = true
+}
+
 resource "axonops_pagerduty_integration" "oncall" {
   cluster_name    = "production-kafka"
   cluster_type    = "kafka"
@@ -51,10 +56,21 @@ resource "axonops_alert_route" "pagerduty_global" {
 PagerDuty integrations can be imported using the format `cluster_type/cluster_name/name`:
 
 ```shell
-terraform import axonops_pagerduty_integration.example kafka/production-kafka/pagerduty-oncall
+terraform import axonops_pagerduty_integration.example kafka/my-kafka-cluster/pagerduty-oncall
+```
+
+In Terraform v1.5.0 and later, use an [`import` block](https://developer.hashicorp.com/terraform/language/import) instead:
+
+```terraform
+import {
+  to = axonops_pagerduty_integration.example
+  id = "kafka/my-kafka-cluster/pagerduty-oncall"
+}
 ```
 
 Where:
 - `cluster_type` - The type of cluster (`cassandra`, `kafka`, or `dse`)
 - `cluster_name` - The name of the cluster
 - `name` - The name of the integration
+
+> **Note:** `integration_key` is masked by the AxonOps API and is never returned by reads, so import leaves it unset in state. Set it explicitly in configuration after import; the next `terraform plan` shows it being applied.

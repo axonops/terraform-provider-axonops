@@ -19,6 +19,7 @@ This directory contains example Terraform configurations for the AxonOps Terrafo
 | [integrations.tf](integrations.tf) | Alerting integration examples (Slack, Teams, PagerDuty, OpsGenie, ServiceNow) |
 | [alert_routes.tf](alert_routes.tf) | Alert route configuration examples |
 | [metric_alerts.tf](metric_alerts.tf) | Metric alert rule examples |
+| [silence.tf](silence.tf) | Silence window examples |
 | [complete-setup.tf](complete-setup.tf) | Complete example combining multiple resource types |
 
 ## Usage
@@ -70,6 +71,8 @@ terraform apply
 ## Notes
 
 - Replace placeholder values (e.g., `my-kafka-cluster`, `my-cassandra-cluster`) with actual values
-- Topic `partitions` and `replication_factor` cannot be changed after creation
+- Topic `partitions` can be increased in place; decreasing fails at `terraform plan`, since Kafka does not support removing partitions. `replication_factor` changes are applied in place via partition reassignment. `name` and `cluster_name` each force replacement.
 - Config keys in topics use underscores in Terraform (converted to dots for Kafka API)
-- Scheduled repair updates are performed as delete-then-create since the API does not support in-place updates
+- Scheduled repair and backup updates are performed as delete-then-create since the API does not support in-place updates; both resources get a new `id` on every update
+- Integration secrets (`webhook_url`, `integration_key`, `opsgenie_key`, `password`) are masked by the AxonOps API and are never imported — set them explicitly in configuration after `terraform import`
+- `axonops_kafka_connect_connector.config` is `Sensitive` and may contain credentials embedded in the connector config; store state in an encrypted, access-controlled backend

@@ -7,12 +7,19 @@ import (
 
 	axonopsClient "terraform-provider-axonops/client"
 
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
+
+// validSchemaTypes lists the schema_type values accepted by the Schema Registry.
+var validSchemaTypes = []string{"AVRO", "JSON", "PROTOBUF"}
 
 var _ resource.Resource = (*schemaResource)(nil)
 var _ resource.ResourceWithImportState = (*schemaResource)(nil)
@@ -55,10 +62,16 @@ func (r *schemaResource) Schema(ctx context.Context, req resource.SchemaRequest,
 			"cluster_name": schema.StringAttribute{
 				Required:    true,
 				Description: "The name of the Kafka cluster.",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
 			},
 			"subject": schema.StringAttribute{
 				Required:    true,
 				Description: "The subject name (e.g., topic-name-value or topic-name-key).",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
 			},
 			"schema": schema.StringAttribute{
 				Required:    true,
@@ -67,6 +80,9 @@ func (r *schemaResource) Schema(ctx context.Context, req resource.SchemaRequest,
 			"schema_type": schema.StringAttribute{
 				Required:    true,
 				Description: "The schema type. Valid values: AVRO, PROTOBUF, JSON.",
+				Validators: []validator.String{
+					stringvalidator.OneOf(validSchemaTypes...),
+				},
 			},
 			"schema_id": schema.Int64Attribute{
 				Computed:    true,
@@ -104,7 +120,7 @@ func (r *schemaResource) Create(ctx context.Context, req resource.CreateRequest,
 		SchemaType: data.SchemaType.ValueString(),
 	}
 
-	result, err := r.client.CreateSchema(data.ClusterName.ValueString(), data.Subject.ValueString(), schemaReq)
+	result, err := r.client.CreateSchema(ctx, data.ClusterName.ValueString(), data.Subject.ValueString(), schemaReq)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create schema, got error: %s", err))
 		return
@@ -113,21 +129,30 @@ func (r *schemaResource) Create(ctx context.Context, req resource.CreateRequest,
 	// Set the schema ID from the response
 	data.SchemaId = types.Int64Value(int64(result.Id))
 
-	// Read back to get the version
-	schemaInfo, err := r.client.GetSchema(data.ClusterName.ValueString(), data.Subject.ValueString(), "latest")
+	// Confirm the new schema is the latest version and capture it.
+	schemaInfo, err := r.confirmSchema(ctx, data.ClusterName.ValueString(), data.Subject.ValueString(), result.Id)
 	if err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read schema after creation, got error: %s", err))
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to confirm schema was created: %s", err))
 		return
 	}
-
-	if schemaInfo != nil {
-		data.Version = types.Int64Value(int64(schemaInfo.Version))
-	}
+	data.Version = types.Int64Value(int64(schemaInfo.Version))
 
 	tflog.Info(ctx, "Created schema resource")
 
 	diags = resp.State.Set(ctx, &data)
 	resp.Diagnostics.Append(diags...)
+}
+
+// confirmSchema waits until the latest version of subject is the schema with
+// id returned by the create call.
+func (r *schemaResource) confirmSchema(ctx context.Context, clusterName, subject string, id int) (*axonopsClient.SchemaRegistryVersionedSchema, error) {
+	return confirmWrite(ctx, fmt.Sprintf("schema subject %q", subject), func(ctx context.Context) (*axonopsClient.SchemaRegistryVersionedSchema, bool, error) {
+		info, err := r.client.GetSchema(ctx, clusterName, subject, "latest")
+		if err != nil || info == nil {
+			return nil, false, err
+		}
+		return info, info.Id == id, nil
+	})
 }
 
 func (r *schemaResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
@@ -140,7 +165,7 @@ func (r *schemaResource) Read(ctx context.Context, req resource.ReadRequest, res
 		return
 	}
 
-	result, err := r.client.GetSchema(data.ClusterName.ValueString(), data.Subject.ValueString(), "latest")
+	result, err := r.client.GetSchema(ctx, data.ClusterName.ValueString(), data.Subject.ValueString(), "latest")
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read schema, got error: %s", err))
 		return
@@ -179,7 +204,7 @@ func (r *schemaResource) Update(ctx context.Context, req resource.UpdateRequest,
 		SchemaType: planData.SchemaType.ValueString(),
 	}
 
-	result, err := r.client.CreateSchema(planData.ClusterName.ValueString(), planData.Subject.ValueString(), schemaReq)
+	result, err := r.client.CreateSchema(ctx, planData.ClusterName.ValueString(), planData.Subject.ValueString(), schemaReq)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to update schema, got error: %s", err))
 		return
@@ -188,16 +213,13 @@ func (r *schemaResource) Update(ctx context.Context, req resource.UpdateRequest,
 	// Set the new schema ID
 	planData.SchemaId = types.Int64Value(int64(result.Id))
 
-	// Read back to get the new version
-	schemaInfo, err := r.client.GetSchema(planData.ClusterName.ValueString(), planData.Subject.ValueString(), "latest")
+	// Confirm the new schema is the latest version and capture it.
+	schemaInfo, err := r.confirmSchema(ctx, planData.ClusterName.ValueString(), planData.Subject.ValueString(), result.Id)
 	if err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read schema after update, got error: %s", err))
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to confirm schema was updated: %s", err))
 		return
 	}
-
-	if schemaInfo != nil {
-		planData.Version = types.Int64Value(int64(schemaInfo.Version))
-	}
+	planData.Version = types.Int64Value(int64(schemaInfo.Version))
 
 	tflog.Info(ctx, "Updated schema resource")
 
@@ -215,7 +237,7 @@ func (r *schemaResource) Delete(ctx context.Context, req resource.DeleteRequest,
 		return
 	}
 
-	err := r.client.DeleteSchema(data.ClusterName.ValueString(), data.Subject.ValueString())
+	err := r.client.DeleteSchema(ctx, data.ClusterName.ValueString(), data.Subject.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete schema, got error: %s", err))
 		return
@@ -225,10 +247,12 @@ func (r *schemaResource) Delete(ctx context.Context, req resource.DeleteRequest,
 }
 
 // ImportState imports an existing schema into Terraform state.
-// Import ID format: cluster_name/subject
+// Import ID format: cluster_name/subject. Subject may itself contain "/", so
+// the ID is split into exactly 2 fields with SplitN, letting the subject
+// absorb everything after the first "/".
 func (r *schemaResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	// Parse the import ID
-	parts := strings.Split(req.ID, "/")
+	parts := strings.SplitN(req.ID, "/", 2)
 	if len(parts) != 2 {
 		resp.Diagnostics.AddError(
 			"Invalid Import ID",
@@ -241,7 +265,7 @@ func (r *schemaResource) ImportState(ctx context.Context, req resource.ImportSta
 	subject := parts[1]
 
 	// Get schema details from the API
-	schemaInfo, err := r.client.GetSchema(clusterName, subject, "latest")
+	schemaInfo, err := r.client.GetSchema(ctx, clusterName, subject, "latest")
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Import Error",

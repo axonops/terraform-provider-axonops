@@ -115,7 +115,7 @@ func (d *aclDataSource) Read(ctx context.Context, req datasource.ReadRequest, re
 		return
 	}
 
-	aclResponse, err := d.client.GetACLs(data.ClusterName.ValueString())
+	aclResponse, err := d.client.GetACLs(ctx, data.ClusterName.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read ACLs: %s", err))
 		return

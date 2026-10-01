@@ -8,6 +8,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
@@ -55,6 +56,7 @@ func (d *cassandraAdaptiveRepairDataSource) Schema(ctx context.Context, req data
 				Optional:    true,
 				Computed:    true,
 				Description: "The cluster type (cassandra or dse). Default: cassandra",
+				Validators:  []validator.String{clusterTypeValidator()},
 			},
 			"active": schema.BoolAttribute{
 				Computed:    true,
@@ -120,7 +122,7 @@ func (d *cassandraAdaptiveRepairDataSource) Read(ctx context.Context, req dataso
 		clusterType = "cassandra"
 	}
 
-	settings, err := d.client.GetCassandraAdaptiveRepair(clusterType, data.ClusterName.ValueString())
+	settings, err := d.client.GetCassandraAdaptiveRepair(ctx, clusterType, data.ClusterName.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read adaptive repair settings: %s", err))
 		return

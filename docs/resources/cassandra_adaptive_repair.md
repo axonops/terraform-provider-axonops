@@ -23,7 +23,7 @@ resource "axonops_cassandra_adaptive_repair" "custom" {
   cluster_name       = "my-cassandra-cluster"
   active             = true
   parallelism        = 5
-  gc_grace_threshold = 43200  # 12 hours
+  gc_grace_threshold = 43200 # 12 hours
   segment_retries    = 5
 }
 
@@ -64,5 +64,14 @@ resource "axonops_cassandra_adaptive_repair" "with_exclusions" {
 Cassandra adaptive repair settings can be imported using the format `cluster_type/cluster_name`:
 
 ```shell
-terraform import axonops_cassandra_adaptive_repair.example cassandra/my-cluster
+terraform import axonops_cassandra_adaptive_repair.example cassandra/my-cassandra-cluster
+```
+
+In Terraform v1.5.0 and later, use an [`import` block](https://developer.hashicorp.com/terraform/language/import) instead:
+
+```terraform
+import {
+  to = axonops_cassandra_adaptive_repair.example
+  id = "cassandra/my-cassandra-cluster"
+}
 ```

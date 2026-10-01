@@ -11,44 +11,11 @@ description: |-
 
 ## Example Usage
 
-```terraform
-# Basic daily backup
-resource "axonops_cassandra_backup" "daily" {
-  cluster_name    = "my-cassandra-cluster"
-  tag             = "daily-backup"
-  datacenters     = ["dc1"]
-  schedule        = true
-  schedule_expr   = "0 1 * * *"  # Daily at 1 AM
-  local_retention = "10d"
-}
+{{ tffile "examples/resources/axonops_cassandra_backup/resource.tf" }}
 
-# Backup with S3 remote storage
-resource "axonops_cassandra_backup" "remote_s3" {
-  cluster_name     = "my-cassandra-cluster"
-  tag              = "s3-backup"
-  datacenters      = ["dc1"]
-  schedule         = true
-  schedule_expr    = "0 0 * * *"
-  local_retention  = "3d"
-  remote           = true
-  remote_type      = "s3"
-  remote_path      = "my-bucket/cassandra-backups"
-  remote_retention = "90d"
-  remote_config    = "access_key_id=AKIAEXAMPLE\nsecret_access_key=SECRET\nregion=us-east-1"
-}
+## Update Behaviour
 
-# Selective backup
-resource "axonops_cassandra_backup" "selective" {
-  cluster_name    = "my-cassandra-cluster"
-  tag             = "selective-backup"
-  datacenters     = ["dc1"]
-  schedule        = true
-  schedule_expr   = "0 2 * * *"
-  local_retention = "7d"
-  keyspaces       = ["my_keyspace"]
-  tables          = ["my_keyspace.users", "my_keyspace.orders"]
-}
-```
+The AxonOps API has no in-place update endpoint for backup schedules. `Update` therefore deletes the existing schedule and creates a new one with the planned configuration. The resource's `id` changes on every update, even when the change is a single attribute such as `local_retention`. Any external system keyed on the old `id` (e.g. a dashboard link or a second Terraform resource referencing `axonops_cassandra_backup.example.id`) MUST be updated after every apply that touches this resource.
 
 {{ .SchemaMarkdown | trimspace }}
 
@@ -56,6 +23,8 @@ resource "axonops_cassandra_backup" "selective" {
 
 Cassandra backup schedules can be imported using the format `cluster_type/cluster_name/tag`:
 
-```shell
-terraform import axonops_cassandra_backup.example cassandra/my-cluster/daily-backup
-```
+{{ codefile "shell" "examples/resources/axonops_cassandra_backup/import.sh" }}
+
+In Terraform v1.5.0 and later, use an [`import` block](https://developer.hashicorp.com/terraform/language/import) instead:
+
+{{ tffile "examples/resources/axonops_cassandra_backup/import.tf" }}

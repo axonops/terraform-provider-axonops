@@ -143,7 +143,6 @@ resource "axonops_metric_alert_rule" "kafka_request_latency" {
   critical_value = 500
   duration       = "10m"
   group_by       = ["host_id"]
-  request        = ["Produce"]
   annotations = {
     description = "Kafka produce request latency is too high"
   }

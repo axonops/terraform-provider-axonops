@@ -69,7 +69,7 @@ func (d *servicenowIntegrationDataSource) Schema(ctx context.Context, req dataso
 			"password": schema.StringAttribute{
 				Computed:    true,
 				Sensitive:   true,
-				Description: "The ServiceNow password.",
+				Description: "Not returned by the API (masked). Always null.",
 			},
 		},
 	}
@@ -93,7 +93,7 @@ func (d *servicenowIntegrationDataSource) Read(ctx context.Context, req datasour
 		return
 	}
 
-	integrations, err := d.client.GetIntegrations(data.ClusterType.ValueString(), data.ClusterName.ValueString())
+	integrations, err := d.client.GetIntegrations(ctx, data.ClusterType.ValueString(), data.ClusterName.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to get integrations: %s", err))
 		return
@@ -108,7 +108,8 @@ func (d *servicenowIntegrationDataSource) Read(ctx context.Context, req datasour
 	data.ID = types.StringValue(def.ID)
 	data.InstanceName = types.StringValue(def.Params["instance_name"])
 	data.User = types.StringValue(def.Params["user"])
-	data.Password = types.StringValue(def.Params["password"])
+	// password is masked by the AxonOps API; always return null.
+	data.Password = types.StringNull()
 
 	diags = resp.State.Set(ctx, &data)
 	resp.Diagnostics.Append(diags...)

@@ -9,6 +9,7 @@ import (
 
 	axonopsClient "terraform-provider-axonops/client"
 
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -16,7 +17,10 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/listdefault"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
@@ -24,6 +28,16 @@ import (
 
 var _ resource.Resource = (*metricAlertRuleResource)(nil)
 var _ resource.ResourceWithImportState = (*metricAlertRuleResource)(nil)
+
+// validAlertOperators lists the comparison operators accepted for alert rule
+// thresholds.
+var validAlertOperators = []string{">", ">=", "=", "!=", "<=", "<"}
+
+// alertOperatorValidator restricts the operator attribute to a supported
+// comparison operator.
+func alertOperatorValidator() validator.String {
+	return stringvalidator.OneOf(validAlertOperators...)
+}
 
 var annotationsAttrTypes = map[string]attr.Type{
 	"summary":     types.StringType,
@@ -123,6 +137,7 @@ func (r *metricAlertRuleResource) Schema(ctx context.Context, req resource.Schem
 			"cluster_type": schema.StringAttribute{
 				Required:    true,
 				Description: "The cluster type (cassandra, kafka, or dse).",
+				Validators:  []validator.String{clusterTypeValidator()},
 			},
 			"id": schema.StringAttribute{
 				Computed: true,
@@ -130,6 +145,9 @@ func (r *metricAlertRuleResource) Schema(ctx context.Context, req resource.Schem
 					"org, cluster type, cluster name, rule name, and rule type — the same configuration " +
 					"always produces the same ID, which makes Create idempotent across state loss and " +
 					"transient API retries.",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"name": schema.StringAttribute{
 				Required:    true,
@@ -143,6 +161,7 @@ func (r *metricAlertRuleResource) Schema(ctx context.Context, req resource.Schem
 			"operator": schema.StringAttribute{
 				Required:    true,
 				Description: "Comparison operator: >, >=, =, !=, <=, <",
+				Validators:  []validator.String{alertOperatorValidator()},
 			},
 			"warning_value": schema.Float64Attribute{
 				Required:    true,
@@ -155,6 +174,7 @@ func (r *metricAlertRuleResource) Schema(ctx context.Context, req resource.Schem
 			"duration": schema.StringAttribute{
 				Required:    true,
 				Description: "Duration before triggering (e.g., 15m, 1h).",
+				Validators:  []validator.String{durationValidator()},
 			},
 			"dashboard": schema.StringAttribute{
 				Required:    true,
@@ -379,9 +399,20 @@ type chartResolution struct {
 	ChartQuery    string // raw query from the chart's first query, empty if none
 }
 
+// keepDollarEscaped returns prior when it is the "$$"-escaped spelling of
+// the API name, otherwise the API name. resolveDashboardChart accepts "$$"
+// for a literal "$", so overwriting the configured spelling with the API one
+// would show a diff on every plan.
+func keepDollarEscaped(prior types.String, apiName string) types.String {
+	if !prior.IsNull() && !prior.IsUnknown() && strings.ReplaceAll(prior.ValueString(), "$$", "$") == apiName {
+		return prior
+	}
+	return types.StringValue(apiName)
+}
+
 // resolveDashboardChart resolves dashboard and chart names to UUIDs using the dashboard template API.
-func (r *metricAlertRuleResource) resolveDashboardChart(clusterType, clusterName, dashboardName, chartTitle string) (*chartResolution, error) {
-	templates, err := r.client.GetDashboardTemplates(clusterType, clusterName)
+func (r *metricAlertRuleResource) resolveDashboardChart(ctx context.Context, clusterType, clusterName, dashboardName, chartTitle string) (*chartResolution, error) {
+	templates, err := r.client.GetDashboardTemplates(ctx, clusterType, clusterName)
 	if err != nil {
 		return nil, fmt.Errorf("unable to fetch dashboard templates: %s", err)
 	}
@@ -434,8 +465,8 @@ func cleanChartQuery(query string) string {
 }
 
 // reverseLookupDashboardChart resolves a correlationId (chart UUID) back to dashboard/chart names.
-func (r *metricAlertRuleResource) reverseLookupDashboardChart(clusterType, clusterName, correlationId string) (string, string, error) {
-	templates, err := r.client.GetDashboardTemplates(clusterType, clusterName)
+func (r *metricAlertRuleResource) reverseLookupDashboardChart(ctx context.Context, clusterType, clusterName, correlationId string) (string, string, error) {
+	templates, err := r.client.GetDashboardTemplates(ctx, clusterType, clusterName)
 	if err != nil {
 		return "", "", fmt.Errorf("unable to fetch dashboard templates: %s", err)
 	}
@@ -519,7 +550,7 @@ func (r *metricAlertRuleResource) Create(ctx context.Context, req resource.Creat
 	// AxonOps generates server-side IDs and ignores client-supplied UUIDs
 	// when no record matches. Adopt any existing rule's ID to keep Create
 	// idempotent across state-loss; otherwise seed with a deterministic id.
-	existingRules, err := r.client.GetAlertRules(clusterType, clusterName)
+	existingRules, err := r.client.GetAlertRules(ctx, clusterType, clusterName)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to look up existing alert rules: %s", err))
 		return
@@ -533,7 +564,7 @@ func (r *metricAlertRuleResource) Create(ctx context.Context, req resource.Creat
 	}
 
 	// Resolve dashboard/chart names to UUIDs
-	resolved, err := r.resolveDashboardChart(
+	resolved, err := r.resolveDashboardChart(ctx,
 		data.ClusterType.ValueString(), data.ClusterName.ValueString(),
 		data.Dashboard.ValueString(), data.Chart.ValueString(),
 	)
@@ -574,18 +605,19 @@ func (r *metricAlertRuleResource) Create(ctx context.Context, req resource.Creat
 		"expr": rule.Expr,
 	})
 
-	err = r.client.CreateOrUpdateAlertRule(clusterType, clusterName, rule)
+	err = r.client.CreateOrUpdateAlertRule(ctx, clusterType, clusterName, rule)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create alert rule: %s", err))
 		return
 	}
 
-	// Re-fetch to capture the canonical server-assigned ID.
-	if rules, err := r.client.GetAlertRules(clusterType, clusterName); err == nil {
-		if found := findAlertRuleByName(rules, alertName, isMetricAlertRule); found != nil {
-			data.ID = types.StringValue(found.ID)
-		}
+	// Confirm the write and capture the canonical server-assigned ID.
+	found, err := confirmAlertRule(ctx, r.client, clusterType, clusterName, rule, isMetricAlertRule)
+	if err != nil {
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to confirm alert rule was created: %s", err))
+		return
 	}
+	data.ID = types.StringValue(found.ID)
 
 	// Write computed annotations/integrations back to state
 	data.Annotations, diags = buildAnnotationsObject(ctx, rule.Annotations)
@@ -608,7 +640,7 @@ func (r *metricAlertRuleResource) Read(ctx context.Context, req resource.ReadReq
 		return
 	}
 
-	rules, err := r.client.GetAlertRules(data.ClusterType.ValueString(), data.ClusterName.ValueString())
+	rules, err := r.client.GetAlertRules(ctx, data.ClusterType.ValueString(), data.ClusterName.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read alert rules: %s", err))
 		return
@@ -649,14 +681,14 @@ func (r *metricAlertRuleResource) Read(ctx context.Context, req resource.ReadReq
 
 	// Reverse-resolve correlation ID to dashboard/chart names
 	if found.CorrelationId != "" {
-		dashName, chartName, err := r.reverseLookupDashboardChart(
+		dashName, chartName, err := r.reverseLookupDashboardChart(ctx,
 			data.ClusterType.ValueString(), data.ClusterName.ValueString(), found.CorrelationId,
 		)
 		if err != nil {
 			tflog.Warn(ctx, fmt.Sprintf("Could not resolve dashboard/chart names from correlation ID: %s", err))
 		} else {
-			data.Dashboard = types.StringValue(dashName)
-			data.Chart = types.StringValue(chartName)
+			data.Dashboard = keepDollarEscaped(data.Dashboard, dashName)
+			data.Chart = keepDollarEscaped(data.Chart, chartName)
 		}
 	}
 
@@ -713,7 +745,7 @@ func (r *metricAlertRuleResource) Update(ctx context.Context, req resource.Updat
 	planData.ID = stateData.ID
 
 	// Resolve dashboard/chart names to UUIDs
-	resolved, err := r.resolveDashboardChart(
+	resolved, err := r.resolveDashboardChart(ctx,
 		planData.ClusterType.ValueString(), planData.ClusterName.ValueString(),
 		planData.Dashboard.ValueString(), planData.Chart.ValueString(),
 	)
@@ -748,20 +780,20 @@ func (r *metricAlertRuleResource) Update(ctx context.Context, req resource.Updat
 
 	clusterType := planData.ClusterType.ValueString()
 	clusterName := planData.ClusterName.ValueString()
-	alertName := planData.Name.ValueString()
 
-	err = r.client.CreateOrUpdateAlertRule(clusterType, clusterName, rule)
+	err = r.client.CreateOrUpdateAlertRule(ctx, clusterType, clusterName, rule)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to update alert rule: %s", err))
 		return
 	}
 
-	// Capture the canonical server-assigned ID after the upsert.
-	if rules, err := r.client.GetAlertRules(clusterType, clusterName); err == nil {
-		if found := findAlertRuleByName(rules, alertName, isMetricAlertRule); found != nil {
-			planData.ID = types.StringValue(found.ID)
-		}
+	// Confirm the write and capture the canonical server-assigned ID.
+	found, err := confirmAlertRule(ctx, r.client, clusterType, clusterName, rule, isMetricAlertRule)
+	if err != nil {
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to confirm alert rule was updated: %s", err))
+		return
 	}
+	planData.ID = types.StringValue(found.ID)
 
 	// Write computed annotations/integrations back to state
 	planData.Annotations, diags = buildAnnotationsObject(ctx, rule.Annotations)
@@ -789,13 +821,13 @@ func (r *metricAlertRuleResource) Delete(ctx context.Context, req resource.Delet
 	id := data.ID.ValueString()
 
 	// Resolve the canonical id by alert name in case state has drifted.
-	if rules, err := r.client.GetAlertRules(clusterType, clusterName); err == nil {
+	if rules, err := r.client.GetAlertRules(ctx, clusterType, clusterName); err == nil {
 		if found := findAlertRuleByName(rules, data.Name.ValueString(), isMetricAlertRule); found != nil {
 			id = found.ID
 		}
 	}
 
-	if err := r.client.DeleteAlertRule(clusterType, clusterName, id); err != nil {
+	if err := r.client.DeleteAlertRule(ctx, clusterType, clusterName, id); err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete alert rule: %s", err))
 		return
 	}
@@ -819,7 +851,7 @@ func (r *metricAlertRuleResource) ImportState(ctx context.Context, req resource.
 	clusterName := parts[1]
 	alertID := parts[2]
 
-	rules, err := r.client.GetAlertRules(clusterType, clusterName)
+	rules, err := r.client.GetAlertRules(ctx, clusterType, clusterName)
 	if err != nil {
 		resp.Diagnostics.AddError("Import Error", fmt.Sprintf("Unable to read alert rules: %s", err))
 		return
@@ -849,17 +881,22 @@ func (r *metricAlertRuleResource) ImportState(ctx context.Context, req resource.
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("duration"), found.For)...)
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("correlation_id"), found.CorrelationId)...)
 
-	// Reverse-resolve correlation ID to dashboard/chart names
-	if found.CorrelationId != "" {
-		dashName, chartName, err := r.reverseLookupDashboardChart(clusterType, clusterName, found.CorrelationId)
-		if err != nil {
-			resp.Diagnostics.AddWarning("Dashboard Resolution Warning",
-				fmt.Sprintf("Could not resolve dashboard/chart names from correlation ID: %s", err))
-		} else {
-			resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("dashboard"), dashName)...)
-			resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("chart"), chartName)...)
-		}
+	// Reverse-resolve correlation ID to dashboard/chart names. dashboard and
+	// chart are Required attributes, so failure to resolve them must block
+	// the import rather than leave the resource in an invalid state.
+	if found.CorrelationId == "" {
+		resp.Diagnostics.AddError("Dashboard Resolution Error",
+			"Alert rule has no correlation ID; unable to determine the required dashboard and chart attributes.")
+		return
 	}
+	dashName, chartName, err := r.reverseLookupDashboardChart(ctx, clusterType, clusterName, found.CorrelationId)
+	if err != nil {
+		resp.Diagnostics.AddError("Dashboard Resolution Error",
+			fmt.Sprintf("Could not resolve dashboard/chart names from correlation ID: %s", err))
+		return
+	}
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("dashboard"), dashName)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("chart"), chartName)...)
 
 	annObj, diags := buildAnnotationsObject(ctx, found.Annotations)
 	resp.Diagnostics.Append(diags...)

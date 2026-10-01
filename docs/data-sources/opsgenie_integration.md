@@ -37,4 +37,4 @@ output "opsgenie_integration_id" {
 ### Read-Only
 
 - `id` (String) The integration ID.
-- `opsgenie_key` (String, Sensitive) The OpsGenie API key.
+- `opsgenie_key` (String, Sensitive) Not returned by the API (masked). Always null.

@@ -90,9 +90,13 @@ func (d *topicDataSource) Read(ctx context.Context, req datasource.ReadRequest, 
 		return
 	}
 
-	topic, err := d.client.GetTopic(data.Name.ValueString(), data.ClusterName.ValueString())
+	topic, err := d.client.GetTopic(ctx, data.Name.ValueString(), data.ClusterName.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read topic: %s", err))
+		return
+	}
+	if topic == nil {
+		resp.Diagnostics.AddError("Not Found", fmt.Sprintf("Topic '%s' not found in cluster '%s'", data.Name.ValueString(), data.ClusterName.ValueString()))
 		return
 	}
 

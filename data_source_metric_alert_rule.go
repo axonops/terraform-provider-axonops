@@ -276,7 +276,7 @@ func (d *metricAlertRuleDataSource) Read(ctx context.Context, req datasource.Rea
 		return
 	}
 
-	rules, err := d.client.GetAlertRules(data.ClusterType.ValueString(), data.ClusterName.ValueString())
+	rules, err := d.client.GetAlertRules(ctx, data.ClusterType.ValueString(), data.ClusterName.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read alert rules: %s", err))
 		return
@@ -306,7 +306,7 @@ func (d *metricAlertRuleDataSource) Read(ctx context.Context, req datasource.Rea
 
 	// Reverse-resolve correlation ID to dashboard/chart names
 	if found.CorrelationId != "" {
-		templates, err := d.client.GetDashboardTemplates(data.ClusterType.ValueString(), data.ClusterName.ValueString())
+		templates, err := d.client.GetDashboardTemplates(ctx, data.ClusterType.ValueString(), data.ClusterName.ValueString())
 		if err != nil {
 			tflog.Warn(ctx, fmt.Sprintf("Could not fetch dashboard templates: %s", err))
 		} else {

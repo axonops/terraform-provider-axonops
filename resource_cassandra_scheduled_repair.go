@@ -7,6 +7,8 @@ import (
 
 	axonopsClient "terraform-provider-axonops/client"
 
+	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -16,6 +18,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64default"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/listdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
@@ -96,6 +99,7 @@ func (r *cassandraScheduledRepairResource) Schema(ctx context.Context, req resou
 				Computed:    true,
 				Default:     int64default.StaticInt64(1),
 				Description: "Number of segments per node. Default: 1",
+				Validators:  []validator.Int64{int64validator.AtLeast(1)},
 			},
 			"segmented": schema.BoolAttribute{
 				Optional:    true,
@@ -114,10 +118,12 @@ func (r *cassandraScheduledRepairResource) Schema(ctx context.Context, req resou
 				Computed:    true,
 				Default:     int64default.StaticInt64(1),
 				Description: "Number of job threads. Default: 1",
+				Validators:  []validator.Int64{int64validator.AtLeast(1)},
 			},
 			"schedule_expr": schema.StringAttribute{
 				Required:    true,
 				Description: "Cron expression for the repair schedule (e.g. '0 0 1 * *' for the first day of each month at midnight).",
+				Validators:  []validator.String{cronValidator()},
 			},
 			"primary_range": schema.BoolAttribute{
 				Optional:    true,
@@ -130,6 +136,7 @@ func (r *cassandraScheduledRepairResource) Schema(ctx context.Context, req resou
 				Computed:    true,
 				Default:     stringdefault.StaticString("Parallel"),
 				Description: "Repair parallelism mode. Valid values: Parallel, Sequential, DC-Aware. Default: Parallel",
+				Validators:  []validator.String{stringvalidator.OneOf("Parallel", "Sequential", "DC-Aware")},
 			},
 			"optimise_streams": schema.BoolAttribute{
 				Optional:    true,
@@ -262,23 +269,16 @@ func (r *cassandraScheduledRepairResource) Create(ctx context.Context, req resou
 		return
 	}
 
-	err := r.client.CreateScheduledRepair(data.ClusterName.ValueString(), params)
+	err := r.client.CreateScheduledRepair(ctx, data.ClusterName.ValueString(), params)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create scheduled repair: %s", err))
 		return
 	}
 
-	// Fetch the created repair to get its ID
-	repairs, err := r.client.GetScheduledRepairs(data.ClusterName.ValueString())
+	// Confirm the repair is listed and capture its ID.
+	entry, err := r.confirmScheduledRepair(ctx, data.ClusterName.ValueString(), data.Tag.ValueString(), "")
 	if err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read scheduled repairs after creation: %s", err))
-		return
-	}
-
-	entry := axonopsClient.FindScheduledRepairByTag(repairs, data.Tag.ValueString())
-	if entry == nil {
-		resp.Diagnostics.AddError("Consistency Error",
-			fmt.Sprintf("Scheduled repair was created but could not be found by tag %q", data.Tag.ValueString()))
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to confirm scheduled repair was created: %s", err))
 		return
 	}
 	data.RepairID = types.StringValue(entry.ID)
@@ -287,6 +287,23 @@ func (r *cassandraScheduledRepairResource) Create(ctx context.Context, req resou
 
 	diags = resp.State.Set(ctx, &data)
 	resp.Diagnostics.Append(diags...)
+}
+
+// confirmScheduledRepair waits until a scheduled repair with tag is listed,
+// ignoring the entry with excludeID.
+func (r *cassandraScheduledRepairResource) confirmScheduledRepair(ctx context.Context, clusterName, tag, excludeID string) (*axonopsClient.ScheduledRepairEntry, error) {
+	return confirmWrite(ctx, fmt.Sprintf("scheduled repair %q", tag), func(ctx context.Context) (*axonopsClient.ScheduledRepairEntry, bool, error) {
+		repairs, err := r.client.GetScheduledRepairs(ctx, clusterName)
+		if err != nil || repairs == nil {
+			return nil, false, err
+		}
+		for i, repair := range repairs.ScheduledRepairs {
+			if repair.ID != excludeID && len(repair.Params) > 0 && repair.Params[0].Tag == tag {
+				return &repairs.ScheduledRepairs[i], true, nil
+			}
+		}
+		return nil, false, nil
+	})
 }
 
 func (r *cassandraScheduledRepairResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
@@ -298,7 +315,7 @@ func (r *cassandraScheduledRepairResource) Read(ctx context.Context, req resourc
 		return
 	}
 
-	repairs, err := r.client.GetScheduledRepairs(data.ClusterName.ValueString())
+	repairs, err := r.client.GetScheduledRepairs(ctx, data.ClusterName.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read scheduled repairs: %s", err))
 		return
@@ -374,9 +391,27 @@ func (r *cassandraScheduledRepairResource) Update(ctx context.Context, req resou
 
 	// Delete existing repair by ID if we have one
 	if state.RepairID.ValueString() != "" {
-		err := r.client.DeleteScheduledRepair(state.ClusterName.ValueString(), state.RepairID.ValueString())
+		err := r.client.DeleteScheduledRepair(ctx, state.ClusterName.ValueString(), state.RepairID.ValueString())
 		if err != nil {
 			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete existing scheduled repair during update: %s", err))
+			return
+		}
+		_, err = confirmWrite(ctx, fmt.Sprintf("deletion of scheduled repair %q", state.RepairID.ValueString()), func(ctx context.Context) (struct{}, bool, error) {
+			repairs, err := r.client.GetScheduledRepairs(ctx, state.ClusterName.ValueString())
+			if err != nil {
+				return struct{}{}, false, err
+			}
+			if repairs != nil {
+				for _, repair := range repairs.ScheduledRepairs {
+					if repair.ID == state.RepairID.ValueString() {
+						return struct{}{}, false, nil
+					}
+				}
+			}
+			return struct{}{}, true, nil
+		})
+		if err != nil {
+			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to confirm existing scheduled repair was deleted before replacing it: %s", err))
 			return
 		}
 	}
@@ -386,7 +421,7 @@ func (r *cassandraScheduledRepairResource) Update(ctx context.Context, req resou
 		return
 	}
 
-	err := r.client.CreateScheduledRepair(data.ClusterName.ValueString(), params)
+	err := r.client.CreateScheduledRepair(ctx, data.ClusterName.ValueString(), params)
 	if err != nil {
 		// The old repair was already deleted; clear state so Terraform knows
 		resp.State.RemoveResource(ctx)
@@ -395,17 +430,11 @@ func (r *cassandraScheduledRepairResource) Update(ctx context.Context, req resou
 		return
 	}
 
-	// Fetch the new repair ID
-	repairs, err := r.client.GetScheduledRepairs(data.ClusterName.ValueString())
+	// Confirm the replacement is listed. The deleted repair has the same
+	// tag, so ignore it in case its deletion is not yet visible.
+	entry, err := r.confirmScheduledRepair(ctx, data.ClusterName.ValueString(), data.Tag.ValueString(), state.RepairID.ValueString())
 	if err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read scheduled repairs after update: %s", err))
-		return
-	}
-
-	entry := axonopsClient.FindScheduledRepairByTag(repairs, data.Tag.ValueString())
-	if entry == nil {
-		resp.Diagnostics.AddError("Consistency Error",
-			fmt.Sprintf("Scheduled repair was created but could not be found by tag %q", data.Tag.ValueString()))
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to confirm scheduled repair was updated: %s", err))
 		return
 	}
 	data.RepairID = types.StringValue(entry.ID)
@@ -426,14 +455,14 @@ func (r *cassandraScheduledRepairResource) Delete(ctx context.Context, req resou
 	}
 
 	if data.RepairID.ValueString() != "" {
-		err := r.client.DeleteScheduledRepair(data.ClusterName.ValueString(), data.RepairID.ValueString())
+		err := r.client.DeleteScheduledRepair(ctx, data.ClusterName.ValueString(), data.RepairID.ValueString())
 		if err != nil {
 			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete scheduled repair: %s", err))
 			return
 		}
 	} else {
 		// Try to find by tag and delete
-		repairs, err := r.client.GetScheduledRepairs(data.ClusterName.ValueString())
+		repairs, err := r.client.GetScheduledRepairs(ctx, data.ClusterName.ValueString())
 		if err != nil {
 			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read scheduled repairs: %s", err))
 			return
@@ -441,7 +470,7 @@ func (r *cassandraScheduledRepairResource) Delete(ctx context.Context, req resou
 
 		entry := axonopsClient.FindScheduledRepairByTag(repairs, data.Tag.ValueString())
 		if entry != nil {
-			err := r.client.DeleteScheduledRepair(data.ClusterName.ValueString(), entry.ID)
+			err := r.client.DeleteScheduledRepair(ctx, data.ClusterName.ValueString(), entry.ID)
 			if err != nil {
 				resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete scheduled repair: %s", err))
 				return
@@ -453,21 +482,37 @@ func (r *cassandraScheduledRepairResource) Delete(ctx context.Context, req resou
 }
 
 // ImportState imports an existing scheduled repair.
-// Import ID format: cluster_name/tag
+// Import ID format: cluster_name/tag (legacy, 2 parts) or
+// cluster_type/cluster_name/tag (3 parts, for consistency with sibling
+// resources). Both are accepted for backward compatibility; this resource
+// has no cluster_type attribute, so when the 3-part form is used the
+// leading cluster_type segment is only used to route the API lookup and is
+// otherwise discarded. Since tag is a free-text field that may itself
+// contain "/", only a single "/" in the ID is treated as the legacy
+// cluster_name/tag form -- two or more "/" are treated as the 3-part form,
+// with the remainder (which may still contain "/") taken as the tag.
 func (r *cassandraScheduledRepairResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	parts := strings.Split(req.ID, "/")
-	if len(parts) != 2 {
+	var clusterName, tag string
+
+	switch strings.Count(req.ID, "/") {
+	case 0:
 		resp.Diagnostics.AddError(
 			"Invalid Import ID",
-			fmt.Sprintf("Expected import ID format: cluster_name/tag, got: %s", req.ID),
+			fmt.Sprintf("Expected import ID format: cluster_name/tag or cluster_type/cluster_name/tag, got: %s", req.ID),
 		)
 		return
+	case 1:
+		parts := strings.SplitN(req.ID, "/", 2)
+		clusterName = parts[0]
+		tag = parts[1]
+	default:
+		parts := strings.SplitN(req.ID, "/", 3)
+		// parts[0] is cluster_type, used only to look up the repair below.
+		clusterName = parts[1]
+		tag = parts[2]
 	}
 
-	clusterName := parts[0]
-	tag := parts[1]
-
-	repairs, err := r.client.GetScheduledRepairs(clusterName)
+	repairs, err := r.client.GetScheduledRepairs(ctx, clusterName)
 	if err != nil {
 		resp.Diagnostics.AddError("Import Error", fmt.Sprintf("Unable to read scheduled repairs: %s", err))
 		return

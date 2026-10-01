@@ -93,7 +93,7 @@ func (d *schemaDataSource) Read(ctx context.Context, req datasource.ReadRequest,
 		return
 	}
 
-	result, err := d.client.GetSchema(data.ClusterName.ValueString(), data.Subject.ValueString(), "latest")
+	result, err := d.client.GetSchema(ctx, data.ClusterName.ValueString(), data.Subject.ValueString(), "latest")
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read schema: %s", err))
 		return

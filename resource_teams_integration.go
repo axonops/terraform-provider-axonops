@@ -12,6 +12,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
@@ -50,6 +51,9 @@ func (r *teamsIntegrationResource) Schema(ctx context.Context, req resource.Sche
 			"id": schema.StringAttribute{
 				Computed:    true,
 				Description: "The integration ID.",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"cluster_name": schema.StringAttribute{
 				Required:    true,
@@ -61,6 +65,7 @@ func (r *teamsIntegrationResource) Schema(ctx context.Context, req resource.Sche
 			"cluster_type": schema.StringAttribute{
 				Required:    true,
 				Description: "The cluster type (cassandra, kafka, or dse).",
+				Validators:  []validator.String{clusterTypeValidator()},
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},
@@ -105,21 +110,15 @@ func (r *teamsIntegrationResource) Create(ctx context.Context, req resource.Crea
 		},
 	}
 
-	err := r.client.CreateOrUpdateIntegration(data.ClusterType.ValueString(), data.ClusterName.ValueString(), payload)
+	err := r.client.CreateOrUpdateIntegration(ctx, data.ClusterType.ValueString(), data.ClusterName.ValueString(), payload)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create Teams integration: %s", err))
 		return
 	}
 
-	integrations, err := r.client.GetIntegrations(data.ClusterType.ValueString(), data.ClusterName.ValueString())
+	def, err := confirmIntegration(ctx, r.client, data.ClusterType.ValueString(), data.ClusterName.ValueString(), payload, "webHookURL")
 	if err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read integrations: %s", err))
-		return
-	}
-
-	def := axonopsClient.FindIntegrationByNameAndType(integrations, data.Name.ValueString(), "microsoft_teams")
-	if def == nil {
-		resp.Diagnostics.AddError("Client Error", "Integration was created but could not be found")
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to confirm Teams integration was created: %s", err))
 		return
 	}
 	data.ID = types.StringValue(def.ID)
@@ -137,7 +136,7 @@ func (r *teamsIntegrationResource) Read(ctx context.Context, req resource.ReadRe
 		return
 	}
 
-	integrations, err := r.client.GetIntegrations(data.ClusterType.ValueString(), data.ClusterName.ValueString())
+	integrations, err := r.client.GetIntegrations(ctx, data.ClusterType.ValueString(), data.ClusterName.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to get integrations: %s", err))
 		return
@@ -177,13 +176,18 @@ func (r *teamsIntegrationResource) Update(ctx context.Context, req resource.Upda
 		},
 	}
 
-	err := r.client.CreateOrUpdateIntegration(planData.ClusterType.ValueString(), planData.ClusterName.ValueString(), payload)
+	err := r.client.CreateOrUpdateIntegration(ctx, planData.ClusterType.ValueString(), planData.ClusterName.ValueString(), payload)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to update Teams integration: %s", err))
 		return
 	}
 
-	planData.ID = stateData.ID
+	def, err := confirmIntegration(ctx, r.client, planData.ClusterType.ValueString(), planData.ClusterName.ValueString(), payload, "webHookURL")
+	if err != nil {
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to confirm Teams integration was updated: %s", err))
+		return
+	}
+	planData.ID = types.StringValue(def.ID)
 
 	tflog.Info(ctx, "Updated Teams integration resource")
 	diags = resp.State.Set(ctx, &planData)
@@ -198,7 +202,7 @@ func (r *teamsIntegrationResource) Delete(ctx context.Context, req resource.Dele
 		return
 	}
 
-	err := r.client.DeleteIntegration(data.ClusterType.ValueString(), data.ClusterName.ValueString(), data.ID.ValueString())
+	err := r.client.DeleteIntegration(ctx, data.ClusterType.ValueString(), data.ClusterName.ValueString(), data.ID.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete Teams integration: %s", err))
 		return
@@ -219,7 +223,7 @@ func (r *teamsIntegrationResource) ImportState(ctx context.Context, req resource
 	clusterName := parts[1]
 	name := parts[2]
 
-	integrations, err := r.client.GetIntegrations(clusterType, clusterName)
+	integrations, err := r.client.GetIntegrations(ctx, clusterType, clusterName)
 	if err != nil {
 		resp.Diagnostics.AddError("Import Error", fmt.Sprintf("Unable to get integrations: %s", err))
 		return
@@ -235,7 +239,8 @@ func (r *teamsIntegrationResource) ImportState(ctx context.Context, req resource
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("cluster_type"), clusterType)...)
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("cluster_name"), clusterName)...)
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("name"), def.Params["name"])...)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("webhook_url"), def.Params["webHookURL"])...)
+	// webhook_url is masked by the AxonOps API; do not persist it from import.
+	resp.Diagnostics.AddWarning("Sensitive Value Not Imported", integrationImportSecretWarning)
 
 	tflog.Info(ctx, fmt.Sprintf("Imported Teams integration '%s' for %s/%s", name, clusterType, clusterName))
 }

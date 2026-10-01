@@ -8,6 +8,7 @@ import (
 	axonopsClient "terraform-provider-axonops/client"
 
 	"github.com/google/uuid"
+	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -16,7 +17,10 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64default"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/listdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/mapdefault"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
@@ -68,6 +72,7 @@ func (r *httpHealthcheckResource) Schema(ctx context.Context, req resource.Schem
 				Computed:    true,
 				Default:     stringdefault.StaticString("cassandra"),
 				Description: "The cluster type (e.g. cassandra, kafka). Defaults to cassandra.",
+				Validators:  []validator.String{clusterTypeValidator()},
 			},
 			"name": schema.StringAttribute{
 				Required:    true,
@@ -76,6 +81,9 @@ func (r *httpHealthcheckResource) Schema(ctx context.Context, req resource.Schem
 			"id": schema.StringAttribute{
 				Computed:    true,
 				Description: "The unique identifier for the healthcheck (auto-generated).",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"url": schema.StringAttribute{
 				Required:    true,
@@ -105,18 +113,21 @@ func (r *httpHealthcheckResource) Schema(ctx context.Context, req resource.Schem
 				Computed:    true,
 				Default:     int64default.StaticInt64(200),
 				Description: "The expected HTTP status code. Default: 200",
+				Validators:  []validator.Int64{int64validator.Between(100, 599)},
 			},
 			"interval": schema.StringAttribute{
 				Optional:    true,
 				Computed:    true,
 				Default:     stringdefault.StaticString("1m"),
 				Description: "The interval between checks (e.g., 1m, 30s). Default: 1m",
+				Validators:  []validator.String{durationValidator()},
 			},
 			"timeout": schema.StringAttribute{
 				Optional:    true,
 				Computed:    true,
 				Default:     stringdefault.StaticString("1m"),
 				Description: "The timeout for the check (e.g., 1m, 30s). Default: 1m",
+				Validators:  []validator.String{durationValidator()},
 			},
 			"readonly": schema.BoolAttribute{
 				Optional:    true,
@@ -161,8 +172,13 @@ func (r *httpHealthcheckResource) Create(ctx context.Context, req resource.Creat
 		return
 	}
 
+	// Serialize read-modify-write against the shared healthchecks document
+	// for this cluster (see cluster_lock.go).
+	unlock := lockCluster("healthchecks", data.ClusterType.ValueString(), data.ClusterName.ValueString())
+	defer unlock()
+
 	// Get existing healthchecks
-	existing, err := r.client.GetHealthchecks(data.ClusterType.ValueString(), data.ClusterName.ValueString())
+	existing, err := r.client.GetHealthchecks(ctx, data.ClusterType.ValueString(), data.ClusterName.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to get existing healthchecks, got error: %s", err))
 		return
@@ -213,9 +229,15 @@ func (r *httpHealthcheckResource) Create(ctx context.Context, req resource.Creat
 	existing.HTTPChecks = append(existing.HTTPChecks, newCheck)
 
 	// Update all healthchecks
-	err = r.client.UpdateHealthchecks(data.ClusterType.ValueString(), data.ClusterName.ValueString(), *existing)
+	err = r.client.UpdateHealthchecks(ctx, data.ClusterType.ValueString(), data.ClusterName.ValueString(), *existing)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create HTTP healthcheck, got error: %s", err))
+		return
+	}
+
+	if err := confirmHealthcheck(ctx, r.client, data.ClusterType.ValueString(), data.ClusterName.ValueString(), "http",
+		data.Name.ValueString(), data.Interval.ValueString(), data.Timeout.ValueString()); err != nil {
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to confirm HTTP healthcheck was created: %s", err))
 		return
 	}
 
@@ -239,7 +261,7 @@ func (r *httpHealthcheckResource) Read(ctx context.Context, req resource.ReadReq
 	}
 
 	// Get all healthchecks
-	healthchecks, err := r.client.GetHealthchecks(data.ClusterType.ValueString(), data.ClusterName.ValueString())
+	healthchecks, err := r.client.GetHealthchecks(ctx, data.ClusterType.ValueString(), data.ClusterName.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read healthchecks, got error: %s", err))
 		return
@@ -271,7 +293,12 @@ func (r *httpHealthcheckResource) Read(ctx context.Context, req resource.ReadReq
 	data.Readonly = types.BoolValue(found.Readonly)
 
 	// Convert headers to map
-	data.Headers, diags = types.MapValueFrom(ctx, types.StringType, found.Headers)
+	// The API omits empty headers; normalise to the schema default {}.
+	foundHeaders := found.Headers
+	if foundHeaders == nil {
+		foundHeaders = map[string]string{}
+	}
+	data.Headers, diags = types.MapValueFrom(ctx, types.StringType, foundHeaders)
 	resp.Diagnostics.Append(diags...)
 
 	// Convert supported agent types to list
@@ -300,8 +327,13 @@ func (r *httpHealthcheckResource) Update(ctx context.Context, req resource.Updat
 		return
 	}
 
+	// Serialize read-modify-write against the shared healthchecks document
+	// for this cluster (see cluster_lock.go).
+	unlock := lockCluster("healthchecks", planData.ClusterType.ValueString(), planData.ClusterName.ValueString())
+	defer unlock()
+
 	// Get existing healthchecks
-	existing, err := r.client.GetHealthchecks(planData.ClusterType.ValueString(), planData.ClusterName.ValueString())
+	existing, err := r.client.GetHealthchecks(ctx, planData.ClusterType.ValueString(), planData.ClusterName.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to get existing healthchecks, got error: %s", err))
 		return
@@ -352,9 +384,15 @@ func (r *httpHealthcheckResource) Update(ctx context.Context, req resource.Updat
 	}
 
 	// Update all healthchecks
-	err = r.client.UpdateHealthchecks(planData.ClusterType.ValueString(), planData.ClusterName.ValueString(), *existing)
+	err = r.client.UpdateHealthchecks(ctx, planData.ClusterType.ValueString(), planData.ClusterName.ValueString(), *existing)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to update HTTP healthcheck, got error: %s", err))
+		return
+	}
+
+	if err := confirmHealthcheck(ctx, r.client, planData.ClusterType.ValueString(), planData.ClusterName.ValueString(), "http",
+		planData.Name.ValueString(), planData.Interval.ValueString(), planData.Timeout.ValueString()); err != nil {
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to confirm HTTP healthcheck was updated: %s", err))
 		return
 	}
 
@@ -377,8 +415,13 @@ func (r *httpHealthcheckResource) Delete(ctx context.Context, req resource.Delet
 		return
 	}
 
+	// Serialize read-modify-write against the shared healthchecks document
+	// for this cluster (see cluster_lock.go).
+	unlock := lockCluster("healthchecks", data.ClusterType.ValueString(), data.ClusterName.ValueString())
+	defer unlock()
+
 	// Get existing healthchecks
-	existing, err := r.client.GetHealthchecks(data.ClusterType.ValueString(), data.ClusterName.ValueString())
+	existing, err := r.client.GetHealthchecks(ctx, data.ClusterType.ValueString(), data.ClusterName.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to get existing healthchecks, got error: %s", err))
 		return
@@ -394,7 +437,7 @@ func (r *httpHealthcheckResource) Delete(ctx context.Context, req resource.Delet
 	existing.HTTPChecks = updatedChecks
 
 	// Update all healthchecks (without our deleted one)
-	err = r.client.UpdateHealthchecks(data.ClusterType.ValueString(), data.ClusterName.ValueString(), *existing)
+	err = r.client.UpdateHealthchecks(ctx, data.ClusterType.ValueString(), data.ClusterName.ValueString(), *existing)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete HTTP healthcheck, got error: %s", err))
 		return
@@ -421,7 +464,7 @@ func (r *httpHealthcheckResource) ImportState(ctx context.Context, req resource.
 	healthcheckName := parts[2]
 
 	// Get all healthchecks
-	healthchecks, err := r.client.GetHealthchecks(clusterType, clusterName)
+	healthchecks, err := r.client.GetHealthchecks(ctx, clusterType, clusterName)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Import Error",
@@ -454,7 +497,11 @@ func (r *httpHealthcheckResource) ImportState(ctx context.Context, req resource.
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), found.ID)...)
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("url"), found.URL)...)
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("method"), found.Method)...)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("headers"), found.Headers)...)
+	importHeaders := found.Headers
+	if importHeaders == nil {
+		importHeaders = map[string]string{}
+	}
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("headers"), importHeaders)...)
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("body"), found.Body)...)
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("expected_status"), int64(found.ExpectedStatus))...)
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("interval"), found.Interval)...)

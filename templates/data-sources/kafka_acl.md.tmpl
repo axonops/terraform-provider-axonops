@@ -1,0 +1,18 @@
+---
+page_title: "{{.Name}} {{.Type}} - {{.ProviderName}}"
+subcategory: "Kafka"
+description: |-
+{{ .Description | plainmarkdown | trimspace | prefixlines "  " }}
+---
+
+# {{.Name}} ({{.Type}})
+
+{{ .Description | trimspace }}
+
+~> **Note:** This data source returns a single ACL entry and errors if no matching ACL is found. To list all ACLs matching partial criteria, use the [`axonops_kafka_acl_list`](kafka_acl_list.md) data source instead.
+
+## Example Usage
+
+{{ tffile "examples/data-sources/axonops_kafka_acl/data-source.tf" }}
+
+{{ .SchemaMarkdown | trimspace }}

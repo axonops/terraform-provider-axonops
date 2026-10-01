@@ -5,20 +5,24 @@ on:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   test:
     name: Unit Tests
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        go-version: ['1.23', '1.24']
+        # go.mod requires Go 1.27.1; also test against the latest stable release.
+        go-version: ['1.27.1', 'stable']
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
           go-version: ${{ matrix.go-version }}
           cache: true
-      - run: go test -v -cover ./...
+      - run: go test -v -race -cover ./...
 
   acceptance-tests:
     name: Acceptance Tests
@@ -29,4 +33,9 @@ jobs:
         with:
           go-version-file: 'go.mod'
           cache: true
+      - uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_wrapper: false
+      # Acceptance tests run against an in-process mock AxonOps API, so no
+      # credentials or live cluster are required.
       - run: TF_ACC=1 go test -v -cover -timeout 10m ./...

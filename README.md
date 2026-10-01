@@ -1,48 +1,21 @@
+<div align="center">
+
+<img src="https://digitalis-marketplace-assets.s3.us-east-1.amazonaws.com/AxonopsDigitalMaster_AxonopsFullLogoBlue.jpg" alt="AxonOps" width="300">
+
 # AxonOps Terraform Provider
 
-A Terraform provider for managing resources through the AxonOps platform. This provider enables Infrastructure as Code (IaC) management of Kafka topics, ACLs, connectors, schemas, Cassandra backups, healthchecks, alerting, and more.
+**Infrastructure as Code for Apache Cassandra, Apache Kafka, and DSE clusters managed through [AxonOps](https://axonops.com)**
 
-## Features
+[![Tests](https://github.com/axonops/terraform-provider-axonops/actions/workflows/test.yml/badge.svg)](https://github.com/axonops/terraform-provider-axonops/actions/workflows/test.yml)
+[![Documentation](https://img.shields.io/badge/docs-registry.terraform.io-blue)](https://registry.terraform.io/providers/axonops/axonops/latest/docs)
+[![License](https://img.shields.io/github/license/axonops/terraform-provider-axonops)](LICENSE)
+[![Go Version](https://img.shields.io/github/go-mod/go-version/axonops/terraform-provider-axonops)](go.mod)
 
-- **Topics**: Create, update, and delete Kafka topics with custom configurations
-- **ACLs**: Manage Kafka Access Control Lists for fine-grained permissions
-- **Connectors**: Deploy and manage Kafka Connect connectors
-- **Schemas**: Register and version schemas in Schema Registry (AVRO, Protobuf, JSON)
-- **Integrations**: Configure Slack, Microsoft Teams, PagerDuty, OpsGenie, and ServiceNow alerting integrations
-- **Alert routes**: Route alerts by category and severity to any configured integration
+</div>
 
-## Requirements
+A Terraform provider for managing resources through the AxonOps platform: Kafka topics, ACLs, connectors, and schemas; Cassandra backups and repairs; health checks, log collectors, metric and log alert rules, alert routes, silences, and alerting integrations (Slack, Microsoft Teams, PagerDuty, OpsGenie, ServiceNow).
 
-- [Terraform](https://www.terraform.io/downloads.html) >= 1.0
-- [Go](https://golang.org/doc/install) >= 1.23 (for building from source)
-- Access to an AxonOps instance
-
-## Installation
-
-### Building from Source
-
-```bash
-git clone https://github.com/axonops/axonops-tf.git
-cd axonops-tf
-go build -o terraform-provider-axonops
-```
-
-### Development Override
-
-For local development, add to `~/.terraformrc`:
-
-```hcl
-provider_installation {
-  dev_overrides {
-    "axonops/axonops" = "/path/to/axonops-tf"
-  }
-  direct {}
-}
-```
-
-### Install from Terraform Registry
-
-Add the provider to your Terraform configuration and run `terraform init`:
+## Quick Start
 
 ```hcl
 terraform {
@@ -54,460 +27,262 @@ terraform {
 }
 
 provider "axonops" {
-  api_key = "your-api-key"  # Required for AxonOps SaaS
-  org_id  = "your-org-id"   # Required
-}
-```
-
-```bash
-terraform init
-```
-
-## Provider Configuration
-
-```hcl
-provider "axonops" {
-  api_key          = "your-api-key"        # Required for AxonOps SaaS
-  axonops_host     = "axonops.example.com" # Default: dash.axonops.cloud/<org_id>
-  axonops_protocol = "https"               # Default: https
-  org_id           = "your-org-id"         # Required
-  token_type       = "Bearer"              # Options: Bearer (default), AxonApi
-}
-```
-
-| Attribute | Type | Required | Default | Description |
-|-----------|------|----------|---------|-------------|
-| `api_key` | string | No* | - | API key for authentication (*required for SaaS) |
-| `axonops_host` | string | No | dash.axonops.cloud/\<org_id\> | AxonOps server hostname |
-| `axonops_protocol` | string | No | https | Protocol (http/https) |
-| `org_id` | string | Yes | - | Organization ID |
-| `token_type` | string | No | Bearer | Authorization header type |
-
-## Resources
-
-### axonops_kafka_topic
-
-Manages Kafka topics.
-
-```hcl
-resource "axonops_kafka_topic" "example" {
-  name               = "my-topic"
-  partitions         = 3
-  replication_factor = 2
-  cluster_name       = "my-kafka-cluster"
-  config = {
-    cleanup_policy      = "delete"
-    retention_ms        = "604800000"
-    delete_retention_ms = "86400000"
-  }
-}
-```
-
-| Attribute | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `name` | string | Yes | Topic name |
-| `partitions` | int | Yes | Number of partitions (cannot be changed after creation) |
-| `replication_factor` | int | Yes | Replication factor (cannot be changed after creation) |
-| `cluster_name` | string | Yes | Kafka cluster name |
-| `config` | map | No | Topic configurations (use underscores, converted to dots) |
-
-### axonops_acl
-
-Manages Kafka ACLs.
-
-```hcl
-resource "axonops_kafka_acl" "example" {
-  cluster_name          = "my-kafka-cluster"
-  resource_type         = "TOPIC"
-  resource_name         = "my-topic"
-  resource_pattern_type = "LITERAL"
-  principal             = "User:alice"
-  host                  = "*"
-  operation             = "READ"
-  permission_type       = "ALLOW"
-}
-```
-
-| Attribute | Type | Required | Default | Description |
-|-----------|------|----------|---------|-------------|
-| `cluster_name` | string | Yes | - | Kafka cluster name |
-| `resource_type` | string | Yes | - | ANY, TOPIC, GROUP, CLUSTER, TRANSACTIONAL_ID, DELEGATION_TOKEN, USER |
-| `resource_name` | string | Yes | - | Name of the resource |
-| `resource_pattern_type` | string | No | LITERAL | ANY, MATCH, LITERAL, PREFIXED |
-| `principal` | string | Yes | - | Principal (e.g., User:alice) |
-| `host` | string | No | * | Host pattern |
-| `operation` | string | Yes | - | READ, WRITE, CREATE, DELETE, ALTER, DESCRIBE, etc. |
-| `permission_type` | string | Yes | - | ANY, DENY, ALLOW |
-
-### axonops_connector
-
-Manages Kafka Connect connectors.
-
-```hcl
-resource "axonops_kafka_connect_connector" "example" {
-  cluster_name         = "my-kafka-cluster"
-  connect_cluster_name = "my-connect-cluster"
-  name                 = "my-connector"
-  config = {
-    "connector.class" = "org.apache.kafka.connect.file.FileStreamSourceConnector"
-    "tasks.max"       = "1"
-    "file"            = "/tmp/input.txt"
-    "topic"           = "my-topic"
-  }
-}
-```
-
-| Attribute | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `cluster_name` | string | Yes | Kafka cluster name |
-| `connect_cluster_name` | string | Yes | Kafka Connect cluster name |
-| `name` | string | Yes | Connector name |
-| `config` | map | Yes | Connector configuration |
-| `type` | string | Computed | Connector type (source/sink) |
-
-### axonops_slack_integration
-
-Manages a Slack alerting integration. AxonOps delivers alerts to the configured Slack channel via an incoming webhook.
-
-```hcl
-resource "axonops_slack_integration" "ops_alerts" {
-  cluster_name = "production-cassandra"
-  cluster_type = "cassandra"
-  name         = "ops-slack-alerts"
-  webhook_url  = var.slack_webhook_url
-  channel      = "#ops-alerts"
-}
-```
-
-| Attribute | Type | Required | Default | Description |
-|-----------|------|----------|---------|-------------|
-| `cluster_name` | string | Yes | - | Name of the cluster |
-| `cluster_type` | string | Yes | - | Cluster type: `cassandra`, `kafka`, or `dse` |
-| `name` | string | Yes | - | Unique name for this integration |
-| `webhook_url` | string (sensitive) | Yes | - | Slack incoming webhook URL |
-| `channel` | string | No | `""` | Slack channel name (e.g. `#ops-alerts`). When empty, the channel on the webhook is used |
-| `axonops_url` | string | No | `""` | AxonOps dashboard URL override included in alert messages |
-| `id` | string | Computed | - | Integration ID assigned by AxonOps |
-
-### axonops_teams_integration
-
-Manages a Microsoft Teams alerting integration. AxonOps delivers alerts to the configured Teams channel via an incoming webhook.
-
-```hcl
-resource "axonops_teams_integration" "ops_alerts" {
-  cluster_name = "production-cassandra"
-  cluster_type = "cassandra"
-  name         = "ops-teams-alerts"
-  webhook_url  = var.teams_webhook_url
-}
-```
-
-| Attribute | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `cluster_name` | string | Yes | Name of the cluster |
-| `cluster_type` | string | Yes | Cluster type: `cassandra`, `kafka`, or `dse` |
-| `name` | string | Yes | Unique name for this integration |
-| `webhook_url` | string (sensitive) | Yes | Microsoft Teams incoming webhook URL |
-| `id` | string | Computed | Integration ID assigned by AxonOps |
-
-### axonops_pagerduty_integration
-
-Manages a PagerDuty alerting integration. AxonOps creates PagerDuty incidents via the Events API v2 when alerts fire.
-
-```hcl
-resource "axonops_pagerduty_integration" "oncall" {
-  cluster_name    = "production-kafka"
-  cluster_type    = "kafka"
-  name            = "pagerduty-oncall"
-  integration_key = var.pagerduty_integration_key
-}
-```
-
-| Attribute | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `cluster_name` | string | Yes | Name of the cluster |
-| `cluster_type` | string | Yes | Cluster type: `cassandra`, `kafka`, or `dse` |
-| `name` | string | Yes | Unique name for this integration |
-| `integration_key` | string (sensitive) | Yes | PagerDuty Events API v2 integration key |
-| `id` | string | Computed | Integration ID assigned by AxonOps |
-
-### axonops_opsgenie_integration
-
-Manages an OpsGenie alerting integration. AxonOps creates OpsGenie alerts using the configured API key.
-
-```hcl
-resource "axonops_opsgenie_integration" "oncall" {
-  cluster_name = "production-cassandra"
-  cluster_type = "cassandra"
-  name         = "opsgenie-oncall"
-  opsgenie_key = var.opsgenie_api_key
-}
-```
-
-| Attribute | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `cluster_name` | string | Yes | Name of the cluster |
-| `cluster_type` | string | Yes | Cluster type: `cassandra`, `kafka`, or `dse` |
-| `name` | string | Yes | Unique name for this integration |
-| `opsgenie_key` | string (sensitive) | Yes | OpsGenie API key |
-| `id` | string | Computed | Integration ID assigned by AxonOps |
-
-### axonops_servicenow_integration
-
-Manages a ServiceNow alerting integration. AxonOps creates ServiceNow incidents using the configured instance credentials.
-
-> **Warning:** Store `password` in a secrets manager and reference it via a Terraform variable. Do not commit plaintext passwords in `.tf` files.
-
-```hcl
-resource "axonops_servicenow_integration" "incidents" {
-  cluster_name  = "production-cassandra"
-  cluster_type  = "cassandra"
-  name          = "servicenow-incidents"
-  instance_name = "mycompany"
-  user          = "axonops-svc"
-  password      = var.servicenow_password
-}
-```
-
-| Attribute | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `cluster_name` | string | Yes | Name of the cluster |
-| `cluster_type` | string | Yes | Cluster type: `cassandra`, `kafka`, or `dse` |
-| `name` | string | Yes | Unique name for this integration |
-| `instance_name` | string | Yes | ServiceNow instance name (subdomain of `<instance>.service-now.com`) |
-| `user` | string | Yes | ServiceNow username |
-| `password` | string (sensitive) | Yes | ServiceNow password for the configured user |
-| `id` | string | Computed | Integration ID assigned by AxonOps |
-
-### axonops_schema
-
-Manages Schema Registry schemas.
-
-```hcl
-resource "axonops_schema" "example" {
-  cluster_name = "my-kafka-cluster"
-  subject      = "my-topic-value"
-  schema_type  = "AVRO"
-  schema       = jsonencode({
-    type      = "record"
-    name      = "MyRecord"
-    namespace = "com.example"
-    fields    = [
-      { name = "id", type = "int" },
-      { name = "name", type = "string" }
-    ]
-  })
-}
-```
-
-| Attribute | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `cluster_name` | string | Yes | Kafka cluster name |
-| `subject` | string | Yes | Schema subject (e.g., topic-name-value) |
-| `schema` | string | Yes | Schema definition |
-| `schema_type` | string | Yes | AVRO, PROTOBUF, or JSON |
-| `schema_id` | int | Computed | Schema ID from registry |
-| `version` | int | Computed | Schema version number |
-
-### axonops_cassandra_scheduled_repair
-
-Manages Cassandra scheduled repair configuration. Updates are performed as delete-then-create since the API does not support in-place updates.
-
-```hcl
-resource "axonops_cassandra_scheduled_repair" "weekly" {
-  cluster_name  = "my-cassandra-cluster"
-  tag           = "weekly-repair"
-  schedule_expr = "0 2 * * 0"
-  parallelism   = "DC-Aware"
-  incremental   = true
-}
-```
-
-| Attribute | Type | Required | Default | Description |
-|-----------|------|----------|---------|-------------|
-| `cluster_name` | string | Yes | - | Cassandra cluster name |
-| `tag` | string | Yes | - | Unique tag to identify this repair |
-| `schedule_expr` | string | Yes | - | Cron expression for the schedule |
-| `keyspace` | string | No | `""` | Keyspace to repair (empty = all) |
-| `tables` | list | No | `[]` | Tables to repair (empty = all) |
-| `blacklisted_tables` | list | No | `[]` | Tables to exclude |
-| `nodes` | list | No | `[]` | Specific nodes to repair |
-| `segments_per_node` | int | No | `1` | Segments per node |
-| `segmented` | bool | No | `false` | Use segmented repair |
-| `incremental` | bool | No | `false` | Use incremental repair |
-| `job_threads` | int | No | `1` | Number of job threads |
-| `primary_range` | bool | No | `false` | Use primary range repair |
-| `parallelism` | string | No | `Parallel` | Parallel, Sequential, or DC-Aware |
-| `optimise_streams` | bool | No | `false` | Optimise repair streams |
-| `specific_data_centers` | list | No | `[]` | Specific data centers to repair |
-| `skip_paxos` | bool | No | `false` | Skip Paxos repair |
-| `paxos_only` | bool | No | `false` | Only run Paxos repair |
-| `repair_id` | string | Computed | - | Repair ID assigned by AxonOps |
-
-## Example Usage
-
-```hcl
-terraform {
-  required_providers {
-    axonops = {
-      source = "axonops/axonops"
-    }
-  }
+  org_id  = "my-organization"    # Required
+  api_key = var.axonops_api_key  # Required for AxonOps SaaS
 }
 
-provider "axonops" {
-  api_key  = var.axonops_api_key
-  org_id   = "my-organization"
-  # axonops_host defaults to dash.axonops.cloud/<org_id>
-  # token_type defaults to Bearer
-}
-
-# Create a topic
 resource "axonops_kafka_topic" "events" {
   name               = "user-events"
   partitions         = 6
   replication_factor = 3
   cluster_name       = "production-kafka"
+
   config = {
     retention_ms   = "604800000"
     cleanup_policy = "delete"
   }
 }
-
-# Create an ACL for the topic
-resource "axonops_kafka_acl" "events_read" {
-  cluster_name          = "production-kafka"
-  resource_type         = "TOPIC"
-  resource_name         = axonops_kafka_topic.events.name
-  resource_pattern_type = "LITERAL"
-  principal             = "User:consumer-app"
-  operation             = "READ"
-  permission_type       = "ALLOW"
-}
-
-# Register a schema for the topic
-resource "axonops_schema" "events_value" {
-  cluster_name = "production-kafka"
-  subject      = "${axonops_kafka_topic.events.name}-value"
-  schema_type  = "AVRO"
-  schema       = jsonencode({
-    type      = "record"
-    name      = "UserEvent"
-    namespace = "com.example.events"
-    fields    = [
-      { name = "user_id", type = "string" },
-      { name = "event_type", type = "string" },
-      { name = "timestamp", type = "long" }
-    ]
-  })
-}
 ```
 
-## Importing Existing Resources
-
-All resources support importing existing configurations into Terraform state.
-
-### Import ID Formats
-
-| Resource | Import ID Format |
-|----------|------------------|
-| `axonops_kafka_topic` | `cluster_name/topic_name` |
-| `axonops_kafka_acl` | `cluster_name/resource_type/resource_name/resource_pattern_type/principal/host/operation/permission_type` |
-| `axonops_kafka_connect_connector` | `cluster_name/connect_cluster_name/connector_name` |
-| `axonops_schema` | `cluster_name/subject` |
-| `axonops_logcollector` | `cluster_name/log_collector_name` |
-| `axonops_healthcheck_tcp` | `cluster_name/healthcheck_name` |
-| `axonops_healthcheck_http` | `cluster_name/healthcheck_name` |
-| `axonops_healthcheck_shell` | `cluster_name/healthcheck_name` |
-| `axonops_slack_integration` | `cluster_type/cluster_name/name` |
-| `axonops_teams_integration` | `cluster_type/cluster_name/name` |
-| `axonops_pagerduty_integration` | `cluster_type/cluster_name/name` |
-| `axonops_opsgenie_integration` | `cluster_type/cluster_name/name` |
-| `axonops_servicenow_integration` | `cluster_type/cluster_name/name` |
-| `axonops_cassandra_scheduled_repair` | `cluster_name/tag` |
-
-### Import Examples
-
 ```bash
-# Import a topic
-terraform import axonops_kafka_topic.my_topic "my-cluster/my-topic"
-
-# Import an ACL
-terraform import axonops_kafka_acl.my_acl "my-cluster/TOPIC/my-topic/LITERAL/User:alice/*/READ/ALLOW"
-
-# Import a connector
-terraform import axonops_kafka_connect_connector.my_connector "my-cluster/my-connect-cluster/my-connector"
-
-# Import a schema
-terraform import axonops_schema.my_schema "my-cluster/my-topic-value"
-
-# Import a log collector
-terraform import axonops_logcollector.my_logs "my-cluster/My Log Collector"
-
-# Import healthchecks
-terraform import axonops_healthcheck_tcp.my_check "my-cluster/My TCP Check"
-terraform import axonops_healthcheck_http.my_http "my-cluster/My HTTP Check"
-terraform import axonops_healthcheck_shell.my_shell "my-cluster/My Shell Check"
-
-# Import integrations (format: cluster_type/cluster_name/name)
-terraform import axonops_slack_integration.my_slack "cassandra/my-cluster/ops-slack-alerts"
-terraform import axonops_teams_integration.my_teams "cassandra/my-cluster/ops-teams-alerts"
-terraform import axonops_pagerduty_integration.my_pagerduty "kafka/my-cluster/pagerduty-oncall"
-terraform import axonops_opsgenie_integration.my_opsgenie "cassandra/my-cluster/opsgenie-oncall"
-terraform import axonops_servicenow_integration.my_servicenow "cassandra/my-cluster/servicenow-incidents"
-
-# Import a scheduled repair
-terraform import axonops_cassandra_scheduled_repair.my_repair "my-cluster/weekly-repair"
-```
-
-### Bulk Import Script
-
-For importing an entire cluster, use the provided import script:
-
-```bash
-# Usage
-./scripts/import-cluster.sh <axonops_host> <org_id> <cluster_name> <api_key> [output_dir]
-
-# Example
-./scripts/import-cluster.sh axonops.example.com:8080 myorg mycluster abc123 ./imported
-
-# The script will:
-# 1. Generate .tf files for all resources (topics, ACLs, log collectors, healthchecks)
-# 2. Create an import_commands.sh script with all terraform import commands
-# 3. Generate a provider.tf with your configuration
-```
-
-After running the script:
-1. Review the generated `.tf` files in the output directory
-2. Set your API key: `export TF_VAR_axonops_api_key='your-api-key'`
-3. Initialize Terraform: `terraform init`
-4. Run the import commands: `bash import_commands.sh`
-5. Verify the state: `terraform plan` (should show no changes)
-
-## Development
-
-### Building
-
-```bash
-make build
-```
-
-### Testing
-
-```bash
-# Configure main.tf with your settings
 terraform init
 terraform plan
 terraform apply
 ```
 
+## Requirements
+
+- [Terraform](https://www.terraform.io/downloads.html) >= 1.0
+- [Go](https://golang.org/doc/install) >= 1.27.1 (for building from source)
+- Access to an AxonOps instance (SaaS or self-hosted)
+
+## Installation
+
+### From the Terraform Registry
+
+```hcl
+terraform {
+  required_providers {
+    axonops = {
+      source = "axonops/axonops"
+    }
+  }
+}
+```
+
+```bash
+terraform init
+```
+
+### Building from Source
+
+```bash
+git clone https://github.com/axonops/terraform-provider-axonops.git
+cd terraform-provider-axonops
+go build -o terraform-provider-axonops
+```
+
+### Development Override
+
+To point Terraform at a locally built binary instead of the registry, add to `~/.terraformrc`:
+
+```hcl
+provider_installation {
+  dev_overrides {
+    "axonops/axonops" = "/path/to/terraform-provider-axonops"
+  }
+  direct {}
+}
+```
+
+## Features
+
+- **Kafka** — topics, ACLs, Kafka Connect connectors, Schema Registry schemas (AVRO, Protobuf, JSON)
+- **Cassandra/DSE** — adaptive repair, scheduled repair, backups
+- **Health checks** — TCP, HTTP, and shell health checks
+- **Log collection** — log collector configuration (on-prem only)
+- **Alerting** — metric alert rules, log alert rules, alert routes, silences
+- **Integrations** — Slack, Microsoft Teams, PagerDuty, OpsGenie, ServiceNow
+
+## Configuration Reference
+
+```hcl
+provider "axonops" {
+  org_id           = "your-org-id"          # Required
+  api_key          = var.axonops_api_key    # Required for AxonOps SaaS
+  axonops_host     = "axonops.example.com"  # Optional, defaults to auto-detected SaaS routing
+  axonops_protocol = "https"                # Optional
+  token_type       = "Bearer"               # Optional
+  tls_skip_verify  = false                  # Optional
+}
+```
+
+| Attribute | Type | Required | Default | Environment Variable | Example |
+|-----------|------|----------|---------|----------------------|---------|
+| `org_id` | string | Yes | — | — | `"my-organization"` |
+| `api_key` | string, sensitive | Required for SaaS | — | `AXONOPS_API_KEY` | `var.axonops_api_key` |
+| `axonops_host` | string | No | Auto-detected: `dash.axonops.cloud/<org_id>` (SaaS) or `<org_id>.axonops.cloud/dashboard` (SAML) | `AXONOPS_HOST` | `"axonops.example.com"` |
+| `axonops_protocol` | string | No | `https` | `AXONOPS_PROTOCOL` | `"https"` |
+| `token_type` | string | No | `Bearer` | `AXONOPS_TOKEN_TYPE` | `"AxonApi"` (on-premise) |
+| `tls_skip_verify` | bool | No | `false` | `AXONOPS_TLS_SKIP_VERIFY` | `false` |
+
+> **Warning:** `tls_skip_verify` MUST NOT be set to `true` against a production AxonOps server. It disables TLS certificate verification, exposing `api_key` and all provider traffic to man-in-the-middle interception. The provider emits a `TLS Certificate Verification Disabled` warning on every plan/apply while it is enabled. Reserve it for test environments with self-signed certificates.
+
+A statically configured attribute always overrides its environment variable. SAML organizations are detected automatically by probing `{host}/dashboard` — there is no `use_saml` attribute to set.
+
+Full attribute documentation: [registry.terraform.io/providers/axonops/axonops/latest/docs](https://registry.terraform.io/providers/axonops/axonops/latest/docs).
+
+## Resources
+
+| Resource | Description |
+|----------|--------------|
+| [`axonops_kafka_topic`](docs/resources/kafka_topic.md) | Kafka topic: partitions, replication factor, topic config |
+| [`axonops_kafka_acl`](docs/resources/kafka_acl.md) | Kafka Access Control List entry |
+| [`axonops_kafka_connect_connector`](docs/resources/kafka_connect_connector.md) | Kafka Connect source/sink connector |
+| [`axonops_schema`](docs/resources/schema.md) | Schema Registry schema (AVRO, Protobuf, JSON) |
+| [`axonops_cassandra_adaptive_repair`](docs/resources/cassandra_adaptive_repair.md) | Cassandra adaptive repair settings |
+| [`axonops_cassandra_scheduled_repair`](docs/resources/cassandra_scheduled_repair.md) | Cassandra scheduled repair job |
+| [`axonops_cassandra_backup`](docs/resources/cassandra_backup.md) | Cassandra backup schedule |
+| [`axonops_healthcheck_tcp`](docs/resources/healthcheck_tcp.md) | TCP connectivity health check |
+| [`axonops_healthcheck_http`](docs/resources/healthcheck_http.md) | HTTP endpoint health check |
+| [`axonops_healthcheck_shell`](docs/resources/healthcheck_shell.md) | Shell script health check |
+| [`axonops_logcollector`](docs/resources/logcollector.md) | Log collector configuration (on-prem only) |
+| [`axonops_metric_alert_rule`](docs/resources/metric_alert_rule.md) | Dashboard-linked metric alert rule |
+| [`axonops_log_alert_rule`](docs/resources/log_alert_rule.md) | Log content-based alert rule |
+| [`axonops_alert_route`](docs/resources/alert_route.md) | Route alerts to an integration |
+| [`axonops_silence`](docs/resources/silence.md) | Silence window (one-off or recurring) |
+| [`axonops_slack_integration`](docs/resources/slack_integration.md) | Slack incoming webhook integration |
+| [`axonops_teams_integration`](docs/resources/teams_integration.md) | Microsoft Teams incoming webhook integration |
+| [`axonops_pagerduty_integration`](docs/resources/pagerduty_integration.md) | PagerDuty Events API v2 integration |
+| [`axonops_opsgenie_integration`](docs/resources/opsgenie_integration.md) | OpsGenie alerting integration |
+| [`axonops_servicenow_integration`](docs/resources/servicenow_integration.md) | ServiceNow incident integration |
+
+## Data Sources
+
+| Data Source | Description |
+|-------------|--------------|
+| [`axonops_kafka_topic`](docs/data-sources/kafka_topic.md) | Read an existing Kafka topic |
+| [`axonops_kafka_acl`](docs/data-sources/kafka_acl.md) | Read a single Kafka ACL matching exact identity fields |
+| [`axonops_kafka_acl_list`](docs/data-sources/kafka_acl_list.md) | List Kafka ACLs matching partial criteria |
+| [`axonops_kafka_connect_connector`](docs/data-sources/kafka_connect_connector.md) | Read an existing Kafka Connect connector |
+| [`axonops_schema`](docs/data-sources/schema.md) | Read an existing Schema Registry schema |
+| [`axonops_cassandra_adaptive_repair`](docs/data-sources/cassandra_adaptive_repair.md) | Read adaptive repair settings |
+| [`axonops_cassandra_scheduled_repair`](docs/data-sources/cassandra_scheduled_repair.md) | Read a scheduled repair job |
+| [`axonops_cassandra_backup`](docs/data-sources/cassandra_backup.md) | Read a backup schedule |
+| [`axonops_healthcheck_tcp`](docs/data-sources/healthcheck_tcp.md) | Read a TCP health check |
+| [`axonops_healthcheck_http`](docs/data-sources/healthcheck_http.md) | Read an HTTP health check |
+| [`axonops_healthcheck_shell`](docs/data-sources/healthcheck_shell.md) | Read a shell health check |
+| [`axonops_logcollector`](docs/data-sources/logcollector.md) | Read a log collector configuration |
+| [`axonops_metric_alert_rule`](docs/data-sources/metric_alert_rule.md) | Read a metric alert rule |
+| [`axonops_log_alert_rule`](docs/data-sources/log_alert_rule.md) | Read a log alert rule |
+| [`axonops_alert_route`](docs/data-sources/alert_route.md) | Read an alert route |
+| [`axonops_silence`](docs/data-sources/silence.md) | Read a silence window |
+| [`axonops_slack_integration`](docs/data-sources/slack_integration.md) | Read a Slack integration (secret returned as `null`) |
+| [`axonops_teams_integration`](docs/data-sources/teams_integration.md) | Read a Teams integration (secret returned as `null`) |
+| [`axonops_pagerduty_integration`](docs/data-sources/pagerduty_integration.md) | Read a PagerDuty integration (secret returned as `null`) |
+| [`axonops_opsgenie_integration`](docs/data-sources/opsgenie_integration.md) | Read an OpsGenie integration (secret returned as `null`) |
+| [`axonops_servicenow_integration`](docs/data-sources/servicenow_integration.md) | Read a ServiceNow integration (secret returned as `null`) |
+
+More usage examples, per-resource attribute tables, and import details live in [`docs/`](docs/) and [`examples/`](examples/).
+
+## Behaviour Notes
+
+These behaviours are not obvious from the attribute tables alone and MUST be understood before relying on them in production:
+
+- **Integration secrets are never imported.** `webhook_url`, `integration_key`, `opsgenie_key`, and `password` are masked by the AxonOps API on read, so `terraform import` leaves them unset and emits a `Sensitive Value Not Imported` warning. Set them explicitly in configuration immediately after import, or the next `terraform plan` shows the secret being applied.
+- **`axonops_kafka_topic.partitions`** MAY be increased in place; decreasing it fails at `terraform plan` with `Cannot Decrease Partitions`, because Kafka does not support removing partitions. `replication_factor` changes are applied in place via partition reassignment. `name` and `cluster_name` force replacement.
+- **`axonops_kafka_connect_connector.config`** is `Sensitive` and only tracks the keys present in your Terraform configuration; server-injected keys (e.g. `name`) are ignored. Because connector configs commonly embed credentials, store state in an encrypted, access-controlled backend.
+- **`axonops_silence.note`** requires an AxonOps server newer than `2.0.39`. Against older servers the attribute is silently ignored server-side, producing a persistent `terraform plan` diff — omit it when targeting an older server.
+- **`axonops_alert_route`** identity fields (`cluster_name`, `cluster_type`, `type`, `severity`, `integration_type`, `integration_name`) all force replacement; only `enable_override` updates in place.
+- **`axonops_cassandra_backup` updates are delete-then-create.** The AxonOps API has no in-place update for backup schedules, so every update changes the resource's `id`, even for a single-attribute change.
+- **Health checks and log collectors share one document per cluster.** The provider serializes writes across sibling resources on the same `cluster_type`/`cluster_name` within a single `terraform apply`, preventing intra-process lost updates. This protection does NOT extend across separate `apply` processes (e.g. two CI pipelines) or concurrent edits via the AxonOps UI — those can still race.
+- **`tls_skip_verify`** MUST NOT be used against production servers — see [Configuration Reference](#configuration-reference).
+- **`api_key`** is `Sensitive` in Terraform output, but is still stored in plaintext in the state file. Use an encrypted, access-controlled state backend.
+
+## Importing Existing Resources
+
+All resources support `terraform import`.
+
+| Resource | Import ID Format |
+|----------|-------------------|
+| `axonops_kafka_topic` | `cluster_name/topic_name` |
+| `axonops_kafka_acl` | `cluster_name/resource_type/resource_name/resource_pattern_type/principal/host/operation/permission_type` (`principal` may contain `/`) |
+| `axonops_kafka_connect_connector` | `cluster_name/connect_cluster_name/connector_name` (`connector_name` may contain `/`) |
+| `axonops_schema` | `cluster_name/subject` |
+| `axonops_cassandra_adaptive_repair` | `cluster_type/cluster_name` |
+| `axonops_cassandra_scheduled_repair` | `cluster_type/cluster_name/tag` (or legacy `cluster_name/tag`) |
+| `axonops_cassandra_backup` | `cluster_type/cluster_name/tag` |
+| `axonops_healthcheck_tcp` | `cluster_type/cluster_name/healthcheck_name` |
+| `axonops_healthcheck_http` | `cluster_type/cluster_name/healthcheck_name` |
+| `axonops_healthcheck_shell` | `cluster_type/cluster_name/healthcheck_name` |
+| `axonops_logcollector` | `cluster_type/cluster_name/filename` (`filename` is the collector's `filename` attribute, not its `name`, and may itself start with `/`) |
+| `axonops_metric_alert_rule` | `cluster_type/cluster_name/alert_id` |
+| `axonops_log_alert_rule` | `cluster_type/cluster_name/alert_id` |
+| `axonops_alert_route` | `cluster_type/cluster_name/type/severity/integration_type/integration_name` (6 parts, in this order) |
+| `axonops_silence` | `cluster_type/cluster_name/silence_id` |
+| `axonops_slack_integration` | `cluster_type/cluster_name/name` |
+| `axonops_teams_integration` | `cluster_type/cluster_name/name` |
+| `axonops_pagerduty_integration` | `cluster_type/cluster_name/name` |
+| `axonops_opsgenie_integration` | `cluster_type/cluster_name/name` |
+| `axonops_servicenow_integration` | `cluster_type/cluster_name/name` |
+
+```bash
+# Kafka topic
+terraform import axonops_kafka_topic.events "production-kafka/user-events"
+
+# Kafka ACL
+terraform import axonops_kafka_acl.events_read "production-kafka/TOPIC/user-events/LITERAL/User:consumer-app/*/READ/ALLOW"
+
+# Alert route (6 parts: cluster_type/cluster_name/type/severity/integration_type/integration_name)
+terraform import axonops_alert_route.pagerduty_global "cassandra/production-cassandra/global/error/pagerduty/pagerduty-oncall"
+
+# Log collector (filename starts with "/", producing a double slash after cluster_name)
+terraform import axonops_logcollector.server_log "kafka/production-kafka//var/log/kafka/server.log"
+
+# Integration (secret is left unset — set it in configuration after import)
+terraform import axonops_slack_integration.ops_alerts "cassandra/production-cassandra/ops-slack-alerts"
+```
+
+### Bulk Import Script
+
+To import an entire cluster, use the provided Python script:
+
+```bash
+python3 scripts/import-cluster.py <axonops_host> <org_id> <cluster_name> <api_key> [output_dir]
+
+# Example
+python3 scripts/import-cluster.py axonops.example.com myorg mycluster abc123 ./imported
+```
+
+The script generates `.tf` files for the cluster's resources, an `import_commands.sh` script with the matching `terraform import` commands, and a `provider.tf`.
+
+After running it:
+1. Review the generated `.tf` files in the output directory.
+2. Set your API key: `export TF_VAR_axonops_api_key='your-api-key'`.
+3. `terraform init`
+4. `bash import_commands.sh`
+5. `terraform plan` — this MUST show no changes; any diff means the generated configuration and the live resource disagree.
+
+## Development
+
+```bash
+make build      # go build -o terraform-provider-axonops
+make test       # go test -v -cover ./...
+make testacc    # acceptance tests (TF_ACC=1); talks to a real or mocked AxonOps API
+make lint       # golangci-lint run
+make docs       # go generate ./... — regenerates docs/ from templates/ and examples/
+make fmt        # gofmt -s -w .
+```
+
+`docs/` is generated from `templates/` and `examples/` via [tfplugindocs](https://github.com/hashicorp/terraform-plugin-docs) — do not hand-edit files under `docs/`. After changing a resource's schema or an example under `examples/`, run `make docs` and commit the regenerated output alongside your change.
+
 ## License
 
-Apache License 2.0
+Apache License 2.0 — see [LICENSE](LICENSE).
 
-## Contributing
+## Support
 
-Contributions are welcome! Please open an issue or submit a pull request.
+Maintained by [AxonOps](https://axonops.com). For support, visit [axonops.com/contact](https://axonops.com/contact).
 
 ***
 

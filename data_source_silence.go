@@ -81,6 +81,10 @@ func (d *silenceDataSource) Schema(ctx context.Context, req datasource.SchemaReq
 				Computed:    true,
 				Description: "List of datacenters or nodes the silence applies to.",
 			},
+			"note": schema.StringAttribute{
+				Computed:    true,
+				Description: "Free-text note describing the silence.",
+			},
 		},
 	}
 }
@@ -94,6 +98,7 @@ type silenceDataSourceData struct {
 	CronExpr    types.String `tfsdk:"cron_expr"`
 	Duration    types.String `tfsdk:"duration"`
 	Datacenters types.List   `tfsdk:"datacenters"`
+	Note        types.String `tfsdk:"note"`
 }
 
 func (d *silenceDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
@@ -105,7 +110,7 @@ func (d *silenceDataSource) Read(ctx context.Context, req datasource.ReadRequest
 		return
 	}
 
-	silences, err := d.client.GetSilenceWindows(data.ClusterType.ValueString(), data.ClusterName.ValueString())
+	silences, err := d.client.GetSilenceWindows(ctx, data.ClusterType.ValueString(), data.ClusterName.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read silences: %s", err))
 		return
@@ -126,6 +131,7 @@ func (d *silenceDataSource) Read(ctx context.Context, req datasource.ReadRequest
 	if dcs == nil {
 		dcs = []string{}
 	}
+	data.Note = types.StringValue(found.Note)
 	data.Datacenters, diags = types.ListValueFrom(ctx, types.StringType, dcs)
 	resp.Diagnostics.Append(diags...)
 

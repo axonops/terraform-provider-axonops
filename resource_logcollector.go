@@ -8,6 +8,7 @@ import (
 	axonopsClient "terraform-provider-axonops/client"
 
 	"github.com/google/uuid"
+	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -15,7 +16,10 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64default"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/listdefault"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
@@ -63,8 +67,11 @@ func (r *logCollectorResource) Schema(ctx context.Context, req resource.SchemaRe
 				Description: "The name of the cluster.",
 			},
 			"cluster_type": schema.StringAttribute{
-				Required:    true,
-				Description: "The type of cluster (e.g., cassandra, kafka, dse).",
+				Optional:    true,
+				Computed:    true,
+				Default:     stringdefault.StaticString("cassandra"),
+				Description: "The type of cluster (e.g., cassandra, kafka, dse). Defaults to cassandra.",
+				Validators:  []validator.String{clusterTypeValidator()},
 			},
 			"name": schema.StringAttribute{
 				Required:    true,
@@ -73,6 +80,9 @@ func (r *logCollectorResource) Schema(ctx context.Context, req resource.SchemaRe
 			"uuid": schema.StringAttribute{
 				Computed:    true,
 				Description: "The unique identifier for the log collector (auto-generated).",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"filename": schema.StringAttribute{
 				Required:    true,
@@ -120,18 +130,21 @@ func (r *logCollectorResource) Schema(ctx context.Context, req resource.SchemaRe
 				Computed:    true,
 				Default:     int64default.StaticInt64(0),
 				Description: "Threshold for error alerts. Default: 0",
+				Validators:  []validator.Int64{int64validator.AtLeast(0)},
 			},
 			"interval": schema.StringAttribute{
 				Optional:    true,
 				Computed:    true,
 				Default:     stringdefault.StaticString("5s"),
 				Description: "Interval for log collection. Default: 5s",
+				Validators:  []validator.String{durationValidator()},
 			},
 			"timeout": schema.StringAttribute{
 				Optional:    true,
 				Computed:    true,
 				Default:     stringdefault.StaticString("1m"),
 				Description: "Timeout for log collection. Default: 1m",
+				Validators:  []validator.String{durationValidator()},
 			},
 			"readonly": schema.BoolAttribute{
 				Optional:    true,
@@ -171,8 +184,13 @@ func (r *logCollectorResource) Create(ctx context.Context, req resource.CreateRe
 		return
 	}
 
+	// Serialize read-modify-write against the shared log collectors
+	// document for this cluster (see cluster_lock.go).
+	unlock := lockCluster("logcollectors", data.ClusterType.ValueString(), data.ClusterName.ValueString())
+	defer unlock()
+
 	// Get existing log collectors
-	existingCollectors, err := r.client.GetLogCollectors(data.ClusterType.ValueString(), data.ClusterName.ValueString())
+	existingCollectors, err := r.client.GetLogCollectors(ctx, data.ClusterType.ValueString(), data.ClusterName.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to get existing log collectors, got error: %s", err))
 		return
@@ -210,9 +228,15 @@ func (r *logCollectorResource) Create(ctx context.Context, req resource.CreateRe
 	allCollectors := append(existingCollectors, newCollector)
 
 	// Update all collectors
-	err = r.client.UpdateLogCollectors(data.ClusterType.ValueString(), data.ClusterName.ValueString(), allCollectors)
+	err = r.client.UpdateLogCollectors(ctx, data.ClusterType.ValueString(), data.ClusterName.ValueString(), allCollectors)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create log collector, got error: %s", err))
+		return
+	}
+
+	if err := r.confirmCollector(ctx, data.ClusterType.ValueString(), data.ClusterName.ValueString(),
+		data.Filename.ValueString(), data.Name.ValueString(), data.DateFormat.ValueString()); err != nil {
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to confirm log collector was created: %s", err))
 		return
 	}
 
@@ -223,6 +247,24 @@ func (r *logCollectorResource) Create(ctx context.Context, req resource.CreateRe
 
 	diags = resp.State.Set(ctx, &data)
 	resp.Diagnostics.Append(diags...)
+}
+
+// confirmCollector waits until a log collector for filename is listed with
+// the name and date format that were sent.
+func (r *logCollectorResource) confirmCollector(ctx context.Context, clusterType, clusterName, filename, name, dateFormat string) error {
+	_, err := confirmWrite(ctx, fmt.Sprintf("log collector %q", filename), func(ctx context.Context) (struct{}, bool, error) {
+		collectors, err := r.client.GetLogCollectors(ctx, clusterType, clusterName)
+		if err != nil {
+			return struct{}{}, false, err
+		}
+		for _, c := range collectors {
+			if c.Filename == filename && c.Name == name && c.DateFormat == dateFormat {
+				return struct{}{}, true, nil
+			}
+		}
+		return struct{}{}, false, nil
+	})
+	return err
 }
 
 func (r *logCollectorResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
@@ -236,7 +278,7 @@ func (r *logCollectorResource) Read(ctx context.Context, req resource.ReadReques
 	}
 
 	// Get all log collectors
-	collectors, err := r.client.GetLogCollectors(data.ClusterType.ValueString(), data.ClusterName.ValueString())
+	collectors, err := r.client.GetLogCollectors(ctx, data.ClusterType.ValueString(), data.ClusterName.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read log collectors, got error: %s", err))
 		return
@@ -321,8 +363,13 @@ func (r *logCollectorResource) Update(ctx context.Context, req resource.UpdateRe
 		return
 	}
 
+	// Serialize read-modify-write against the shared log collectors
+	// document for this cluster (see cluster_lock.go).
+	unlock := lockCluster("logcollectors", planData.ClusterType.ValueString(), planData.ClusterName.ValueString())
+	defer unlock()
+
 	// Get existing log collectors
-	existingCollectors, err := r.client.GetLogCollectors(planData.ClusterType.ValueString(), planData.ClusterName.ValueString())
+	existingCollectors, err := r.client.GetLogCollectors(ctx, planData.ClusterType.ValueString(), planData.ClusterName.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to get existing log collectors, got error: %s", err))
 		return
@@ -366,9 +413,15 @@ func (r *logCollectorResource) Update(ctx context.Context, req resource.UpdateRe
 	}
 
 	// Update all collectors
-	err = r.client.UpdateLogCollectors(planData.ClusterType.ValueString(), planData.ClusterName.ValueString(), existingCollectors)
+	err = r.client.UpdateLogCollectors(ctx, planData.ClusterType.ValueString(), planData.ClusterName.ValueString(), existingCollectors)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to update log collector, got error: %s", err))
+		return
+	}
+
+	if err := r.confirmCollector(ctx, planData.ClusterType.ValueString(), planData.ClusterName.ValueString(),
+		planData.Filename.ValueString(), planData.Name.ValueString(), planData.DateFormat.ValueString()); err != nil {
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to confirm log collector was updated: %s", err))
 		return
 	}
 
@@ -391,8 +444,13 @@ func (r *logCollectorResource) Delete(ctx context.Context, req resource.DeleteRe
 		return
 	}
 
+	// Serialize read-modify-write against the shared log collectors
+	// document for this cluster (see cluster_lock.go).
+	unlock := lockCluster("logcollectors", data.ClusterType.ValueString(), data.ClusterName.ValueString())
+	defer unlock()
+
 	// Get existing log collectors
-	existingCollectors, err := r.client.GetLogCollectors(data.ClusterType.ValueString(), data.ClusterName.ValueString())
+	existingCollectors, err := r.client.GetLogCollectors(ctx, data.ClusterType.ValueString(), data.ClusterName.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to get existing log collectors, got error: %s", err))
 		return
@@ -407,7 +465,7 @@ func (r *logCollectorResource) Delete(ctx context.Context, req resource.DeleteRe
 	}
 
 	// Update all collectors (without our deleted one)
-	err = r.client.UpdateLogCollectors(data.ClusterType.ValueString(), data.ClusterName.ValueString(), updatedCollectors)
+	err = r.client.UpdateLogCollectors(ctx, data.ClusterType.ValueString(), data.ClusterName.ValueString(), updatedCollectors)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete log collector, got error: %s", err))
 		return
@@ -435,7 +493,7 @@ func (r *logCollectorResource) ImportState(ctx context.Context, req resource.Imp
 	filename := strings.Join(parts[2:], "/")
 
 	// Get all log collectors
-	collectors, err := r.client.GetLogCollectors(clusterType, clusterName)
+	collectors, err := r.client.GetLogCollectors(ctx, clusterType, clusterName)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Import Error",

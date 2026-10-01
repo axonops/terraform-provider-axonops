@@ -14,7 +14,10 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/listdefault"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
@@ -66,6 +69,7 @@ func (r *tcpHealthcheckResource) Schema(ctx context.Context, req resource.Schema
 				Computed:    true,
 				Default:     stringdefault.StaticString("cassandra"),
 				Description: "The cluster type (e.g. cassandra, kafka). Defaults to cassandra.",
+				Validators:  []validator.String{clusterTypeValidator()},
 			},
 			"name": schema.StringAttribute{
 				Required:    true,
@@ -74,6 +78,9 @@ func (r *tcpHealthcheckResource) Schema(ctx context.Context, req resource.Schema
 			"id": schema.StringAttribute{
 				Computed:    true,
 				Description: "The unique identifier for the healthcheck (auto-generated).",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"tcp": schema.StringAttribute{
 				Required:    true,
@@ -84,12 +91,14 @@ func (r *tcpHealthcheckResource) Schema(ctx context.Context, req resource.Schema
 				Computed:    true,
 				Default:     stringdefault.StaticString("1m"),
 				Description: "The interval between checks (e.g., 1m, 30s). Default: 1m",
+				Validators:  []validator.String{durationValidator()},
 			},
 			"timeout": schema.StringAttribute{
 				Optional:    true,
 				Computed:    true,
 				Default:     stringdefault.StaticString("1m"),
 				Description: "The timeout for the check (e.g., 1m, 30s). Default: 1m",
+				Validators:  []validator.String{durationValidator()},
 			},
 			"readonly": schema.BoolAttribute{
 				Optional:    true,
@@ -130,8 +139,13 @@ func (r *tcpHealthcheckResource) Create(ctx context.Context, req resource.Create
 		return
 	}
 
+	// Serialize read-modify-write against the shared healthchecks document
+	// for this cluster (see cluster_lock.go).
+	unlock := lockCluster("healthchecks", data.ClusterType.ValueString(), data.ClusterName.ValueString())
+	defer unlock()
+
 	// Get existing healthchecks
-	existing, err := r.client.GetHealthchecks(data.ClusterType.ValueString(), data.ClusterName.ValueString())
+	existing, err := r.client.GetHealthchecks(ctx, data.ClusterType.ValueString(), data.ClusterName.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to get existing healthchecks, got error: %s", err))
 		return
@@ -170,9 +184,15 @@ func (r *tcpHealthcheckResource) Create(ctx context.Context, req resource.Create
 	existing.TCPChecks = append(existing.TCPChecks, newCheck)
 
 	// Update all healthchecks
-	err = r.client.UpdateHealthchecks(data.ClusterType.ValueString(), data.ClusterName.ValueString(), *existing)
+	err = r.client.UpdateHealthchecks(ctx, data.ClusterType.ValueString(), data.ClusterName.ValueString(), *existing)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create TCP healthcheck, got error: %s", err))
+		return
+	}
+
+	if err := confirmHealthcheck(ctx, r.client, data.ClusterType.ValueString(), data.ClusterName.ValueString(), "tcp",
+		data.Name.ValueString(), data.Interval.ValueString(), data.Timeout.ValueString()); err != nil {
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to confirm TCP healthcheck was created: %s", err))
 		return
 	}
 
@@ -196,7 +216,7 @@ func (r *tcpHealthcheckResource) Read(ctx context.Context, req resource.ReadRequ
 	}
 
 	// Get all healthchecks
-	healthchecks, err := r.client.GetHealthchecks(data.ClusterType.ValueString(), data.ClusterName.ValueString())
+	healthchecks, err := r.client.GetHealthchecks(ctx, data.ClusterType.ValueString(), data.ClusterName.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read healthchecks, got error: %s", err))
 		return
@@ -250,8 +270,13 @@ func (r *tcpHealthcheckResource) Update(ctx context.Context, req resource.Update
 		return
 	}
 
+	// Serialize read-modify-write against the shared healthchecks document
+	// for this cluster (see cluster_lock.go).
+	unlock := lockCluster("healthchecks", planData.ClusterType.ValueString(), planData.ClusterName.ValueString())
+	defer unlock()
+
 	// Get existing healthchecks
-	existing, err := r.client.GetHealthchecks(planData.ClusterType.ValueString(), planData.ClusterName.ValueString())
+	existing, err := r.client.GetHealthchecks(ctx, planData.ClusterType.ValueString(), planData.ClusterName.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to get existing healthchecks, got error: %s", err))
 		return
@@ -290,9 +315,15 @@ func (r *tcpHealthcheckResource) Update(ctx context.Context, req resource.Update
 	}
 
 	// Update all healthchecks
-	err = r.client.UpdateHealthchecks(planData.ClusterType.ValueString(), planData.ClusterName.ValueString(), *existing)
+	err = r.client.UpdateHealthchecks(ctx, planData.ClusterType.ValueString(), planData.ClusterName.ValueString(), *existing)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to update TCP healthcheck, got error: %s", err))
+		return
+	}
+
+	if err := confirmHealthcheck(ctx, r.client, planData.ClusterType.ValueString(), planData.ClusterName.ValueString(), "tcp",
+		planData.Name.ValueString(), planData.Interval.ValueString(), planData.Timeout.ValueString()); err != nil {
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to confirm TCP healthcheck was updated: %s", err))
 		return
 	}
 
@@ -315,8 +346,13 @@ func (r *tcpHealthcheckResource) Delete(ctx context.Context, req resource.Delete
 		return
 	}
 
+	// Serialize read-modify-write against the shared healthchecks document
+	// for this cluster (see cluster_lock.go).
+	unlock := lockCluster("healthchecks", data.ClusterType.ValueString(), data.ClusterName.ValueString())
+	defer unlock()
+
 	// Get existing healthchecks
-	existing, err := r.client.GetHealthchecks(data.ClusterType.ValueString(), data.ClusterName.ValueString())
+	existing, err := r.client.GetHealthchecks(ctx, data.ClusterType.ValueString(), data.ClusterName.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to get existing healthchecks, got error: %s", err))
 		return
@@ -332,7 +368,7 @@ func (r *tcpHealthcheckResource) Delete(ctx context.Context, req resource.Delete
 	existing.TCPChecks = updatedChecks
 
 	// Update all healthchecks (without our deleted one)
-	err = r.client.UpdateHealthchecks(data.ClusterType.ValueString(), data.ClusterName.ValueString(), *existing)
+	err = r.client.UpdateHealthchecks(ctx, data.ClusterType.ValueString(), data.ClusterName.ValueString(), *existing)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete TCP healthcheck, got error: %s", err))
 		return
@@ -359,7 +395,7 @@ func (r *tcpHealthcheckResource) ImportState(ctx context.Context, req resource.I
 	healthcheckName := parts[2]
 
 	// Get all healthchecks
-	healthchecks, err := r.client.GetHealthchecks(clusterType, clusterName)
+	healthchecks, err := r.client.GetHealthchecks(ctx, clusterType, clusterName)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Import Error",

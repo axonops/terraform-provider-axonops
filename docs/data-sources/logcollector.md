@@ -17,6 +17,7 @@ Reads a log collector configuration.
 # Read an existing log collector
 data "axonops_logcollector" "existing" {
   cluster_name = "my-kafka-cluster"
+  cluster_type = "kafka"
   name         = "Kafka Server Log"
 }
 

@@ -1,0 +1,1 @@
+terraform import axonops_servicenow_integration.example cassandra/my-cassandra-cluster/servicenow-incidents

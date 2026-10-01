@@ -7,6 +7,7 @@ import (
 
 	axonopsClient "terraform-provider-axonops/client"
 
+	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -15,6 +16,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64default"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/listdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
@@ -64,6 +66,7 @@ func (r *cassandraAdaptiveRepairResource) Schema(ctx context.Context, req resour
 				Computed:    true,
 				Default:     stringdefault.StaticString("cassandra"),
 				Description: "The cluster type (cassandra or dse). Default: cassandra",
+				Validators:  []validator.String{clusterTypeValidator()},
 			},
 			"active": schema.BoolAttribute{
 				Optional:    true,
@@ -76,12 +79,14 @@ func (r *cassandraAdaptiveRepairResource) Schema(ctx context.Context, req resour
 				Computed:    true,
 				Default:     int64default.StaticInt64(10),
 				Description: "Number of tables to repair concurrently. Default: 10",
+				Validators:  []validator.Int64{int64validator.AtLeast(1)},
 			},
 			"gc_grace_threshold": schema.Int64Attribute{
 				Optional:    true,
 				Computed:    true,
 				Default:     int64default.StaticInt64(86400),
 				Description: "GC grace period threshold in seconds. Default: 86400",
+				Validators:  []validator.Int64{int64validator.AtLeast(0)},
 			},
 			"blacklisted_tables": schema.ListAttribute{
 				ElementType: types.StringType,
@@ -101,18 +106,21 @@ func (r *cassandraAdaptiveRepairResource) Schema(ctx context.Context, req resour
 				Computed:    true,
 				Default:     int64default.StaticInt64(3),
 				Description: "Maximum retry attempts per segment. Default: 3",
+				Validators:  []validator.Int64{int64validator.AtLeast(0)},
 			},
 			"segments_per_vnode": schema.Int64Attribute{
 				Optional:    true,
 				Computed:    true,
 				Default:     int64default.StaticInt64(1),
 				Description: "Number of segments per vnode. Default: 1",
+				Validators:  []validator.Int64{int64validator.AtLeast(1)},
 			},
 			"segment_target_size_mb": schema.Int64Attribute{
 				Optional:    true,
 				Computed:    true,
 				Default:     int64default.StaticInt64(256),
 				Description: "Target segment size in MB. Default: 256",
+				Validators:  []validator.Int64{int64validator.AtLeast(1)},
 			},
 		},
 	}
@@ -161,9 +169,14 @@ func (r *cassandraAdaptiveRepairResource) Create(ctx context.Context, req resour
 		SegmentTargetSizeMB: int(data.SegmentTargetSizeMB.ValueInt64()),
 	}
 
-	err := r.client.UpdateCassandraAdaptiveRepair(data.ClusterType.ValueString(), data.ClusterName.ValueString(), settings)
+	err := r.client.UpdateCassandraAdaptiveRepair(ctx, data.ClusterType.ValueString(), data.ClusterName.ValueString(), settings)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to set adaptive repair settings: %s", err))
+		return
+	}
+
+	if err := r.confirmSettings(ctx, data.ClusterType.ValueString(), data.ClusterName.ValueString(), settings); err != nil {
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to confirm adaptive repair settings were applied: %s", err))
 		return
 	}
 
@@ -171,6 +184,25 @@ func (r *cassandraAdaptiveRepairResource) Create(ctx context.Context, req resour
 
 	diags = resp.State.Set(ctx, &data)
 	resp.Diagnostics.Append(diags...)
+}
+
+// confirmSettings waits until the API reports the scalar settings that were
+// sent. SegmentsPerVnode and SegmentTargetSizeMB are omitted when zero and
+// may be server-defaulted, and BlacklistedTables order is not guaranteed, so
+// those are not compared.
+func (r *cassandraAdaptiveRepairResource) confirmSettings(ctx context.Context, clusterType, clusterName string, want axonopsClient.AdaptiveRepairSettings) error {
+	_, err := confirmWrite(ctx, "adaptive repair settings", func(ctx context.Context) (struct{}, bool, error) {
+		got, err := r.client.GetCassandraAdaptiveRepair(ctx, clusterType, clusterName)
+		if err != nil || got == nil {
+			return struct{}{}, false, err
+		}
+		return struct{}{}, got.Active == want.Active &&
+			got.GcGraceThreshold == want.GcGraceThreshold &&
+			got.TableParallelism == want.TableParallelism &&
+			got.FilterTWCSTables == want.FilterTWCSTables &&
+			got.SegmentRetries == want.SegmentRetries, nil
+	})
+	return err
 }
 
 func (r *cassandraAdaptiveRepairResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
@@ -182,7 +214,7 @@ func (r *cassandraAdaptiveRepairResource) Read(ctx context.Context, req resource
 		return
 	}
 
-	settings, err := r.client.GetCassandraAdaptiveRepair(data.ClusterType.ValueString(), data.ClusterName.ValueString())
+	settings, err := r.client.GetCassandraAdaptiveRepair(ctx, data.ClusterType.ValueString(), data.ClusterName.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read adaptive repair settings: %s", err))
 		return
@@ -236,9 +268,14 @@ func (r *cassandraAdaptiveRepairResource) Update(ctx context.Context, req resour
 		SegmentTargetSizeMB: int(data.SegmentTargetSizeMB.ValueInt64()),
 	}
 
-	err := r.client.UpdateCassandraAdaptiveRepair(data.ClusterType.ValueString(), data.ClusterName.ValueString(), settings)
+	err := r.client.UpdateCassandraAdaptiveRepair(ctx, data.ClusterType.ValueString(), data.ClusterName.ValueString(), settings)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to update adaptive repair settings: %s", err))
+		return
+	}
+
+	if err := r.confirmSettings(ctx, data.ClusterType.ValueString(), data.ClusterName.ValueString(), settings); err != nil {
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to confirm adaptive repair settings were applied: %s", err))
 		return
 	}
 
@@ -269,7 +306,7 @@ func (r *cassandraAdaptiveRepairResource) Delete(ctx context.Context, req resour
 		SegmentTargetSizeMB: 256,
 	}
 
-	err := r.client.UpdateCassandraAdaptiveRepair(data.ClusterType.ValueString(), data.ClusterName.ValueString(), settings)
+	err := r.client.UpdateCassandraAdaptiveRepair(ctx, data.ClusterType.ValueString(), data.ClusterName.ValueString(), settings)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to reset adaptive repair settings: %s", err))
 		return
@@ -293,7 +330,7 @@ func (r *cassandraAdaptiveRepairResource) ImportState(ctx context.Context, req r
 	clusterType := parts[0]
 	clusterName := parts[1]
 
-	settings, err := r.client.GetCassandraAdaptiveRepair(clusterType, clusterName)
+	settings, err := r.client.GetCassandraAdaptiveRepair(ctx, clusterType, clusterName)
 	if err != nil {
 		resp.Diagnostics.AddError("Import Error", fmt.Sprintf("Unable to read adaptive repair settings: %s", err))
 		return

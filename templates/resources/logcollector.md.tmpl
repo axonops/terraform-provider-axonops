@@ -13,86 +13,25 @@ description: |-
 
 ## Example Usage
 
-```terraform
-# Kafka server log collector
-resource "axonops_logcollector" "server_log" {
-  cluster_name          = "my-kafka-cluster"
-  name                  = "Kafka Server Log"
-  filename              = "/var/log/kafka/server.log"
-  date_format           = "yyyy-MM-dd HH:mm:ss,SSS"
-  supported_agent_types = ["broker", "kraft-broker"]
-}
+{{ tffile "examples/resources/axonops_logcollector/resource.tf" }}
 
-# Kafka controller log collector
-resource "axonops_logcollector" "controller_log" {
-  cluster_name          = "my-kafka-cluster"
-  name                  = "Kafka Controller Log"
-  filename              = "/var/log/kafka/controller.log"
-  date_format           = "yyyy-MM-dd HH:mm:ss,SSS"
-  supported_agent_types = ["kraft-controller"]
-}
-
-# Schema Registry log collector
-resource "axonops_logcollector" "schema_registry_log" {
-  cluster_name          = "my-kafka-cluster"
-  name                  = "Schema Registry Log"
-  filename              = "/var/log/schema-registry/schema-registry.log"
-  date_format           = "yyyy-MM-dd HH:mm:ss,SSS"
-  supported_agent_types = ["schema-registry"]
-}
-
-# AxonOps agent log collector
-resource "axonops_logcollector" "agent_log" {
-  cluster_name          = "my-kafka-cluster"
-  name                  = "AxonOps Agent Log"
-  filename              = "/var/log/axonops/axon-agent.log"
-  date_format           = "yyyy-MM-ddTHH:mm:ssZ"
-  supported_agent_types = ["all"]
-}
-
-# Custom application log with regex patterns
-resource "axonops_logcollector" "app_log" {
-  cluster_name          = "my-kafka-cluster"
-  name                  = "Custom Application Log"
-  filename              = "/var/log/myapp/application.log"
-  date_format           = "yyyy-MM-dd HH:mm:ss,SSS"
-  info_regex            = "\\[INFO\\]"
-  warning_regex         = "\\[WARN\\]"
-  error_regex           = "\\[ERROR\\]"
-  debug_regex           = "\\[DEBUG\\]"
-  error_alert_threshold = 10
-  supported_agent_types = ["broker", "kraft-broker"]
-}
-
-# Kafka Connect log collector
-resource "axonops_logcollector" "connect_log" {
-  cluster_name          = "my-kafka-cluster"
-  name                  = "Kafka Connect Log"
-  filename              = "/var/log/kafka-connect/connect.log"
-  date_format           = "yyyy-MM-dd HH:mm:ss,SSS"
-  supported_agent_types = ["all"]
-}
-
-# GC log collector
-resource "axonops_logcollector" "gc_log" {
-  cluster_name          = "my-kafka-cluster"
-  name                  = "Kafka GC Log"
-  filename              = "/var/log/kafka/kafka-gc.log"
-  date_format           = "yyyy-MM-ddTHH:mm:ss"
-  supported_agent_types = ["broker", "kraft-broker", "kraft-controller"]
-}
-```
+> **Note:** Healthchecks and log collectors for a given cluster share a single document on the AxonOps server. The provider serializes writes to that document across all healthcheck/log-collector resources for the same `cluster_type`/`cluster_name` within one `terraform apply`, so concurrent Terraform operations in the same run cannot silently overwrite each other's changes. This protection does NOT extend across separate `terraform apply` processes (e.g. two CI pipelines applying at once) or edits made via the AxonOps UI at the same time — those can still race and the last write wins.
 
 {{ .SchemaMarkdown | trimspace }}
 
 ## Import
 
-Log collectors can be imported using the format `cluster_name/logcollector_name`:
+Log collectors can be imported using the format `cluster_type/cluster_name/filename`:
 
-```shell
-terraform import axonops_logcollector.example my-kafka-cluster/Kafka%20Server%20Log
-```
+{{ codefile "shell" "examples/resources/axonops_logcollector/import.sh" }}
+
+In Terraform v1.5.0 and later, use an [`import` block](https://developer.hashicorp.com/terraform/language/import) instead:
+
+{{ tffile "examples/resources/axonops_logcollector/import.tf" }}
 
 Where:
+- `cluster_type` - The type of cluster (cassandra, kafka, or dse)
 - `cluster_name` - The name of the cluster
-- `logcollector_name` - The name of the log collector (URL-encoded if it contains spaces)
+- `filename` - The `filename` attribute of the log collector (not its `name`). The filename may itself contain `/`; everything after `cluster_name` is joined back together and used as-is.
+
+> **Warning:** The import ID identifies the collector by its `filename` attribute, not by `name`. Because `filename` is almost always an absolute path (e.g. `/var/log/kafka/server.log`), the import ID contains a double slash after `cluster_name` — see the example.

@@ -44,30 +44,27 @@ var (
 )
 
 // detectSAML probes {protocol}://{host}/dashboard/ to determine whether the
-// host is a SAML-enabled AxonOps deployment. It returns true if the server
-// responds with any HTTP status (including 401/403/302), and false if the
-// connection fails or returns 404. Results are cached by host so the probe
-// is only made once per host per process.
-func detectSAML(protocol, host string, tlsSkipVerify bool) bool {
+// host is a SAML-enabled AxonOps deployment. SAML deployments answer that path
+// with JSON (the IDP redirect payload); on-prem servers serve the SPA as HTML.
+// Conclusive results are cached by host so the probe is only made once per
+// host per process. Network errors are not cached, so a transient failure
+// does not pin the wrong URL layout for the rest of the run.
+func detectSAML(ctx context.Context, protocol, host string, tlsSkipVerify bool) bool {
 	cacheKey := protocol + ":" + host
 
 	samlCacheMu.RLock()
 	if cached, ok := samlCache[cacheKey]; ok {
 		samlCacheMu.RUnlock()
-		if os.Getenv("AXONOPS_DEBUG") != "" {
-			fmt.Printf("[AXONOPS DEBUG] SAML detection for host %q: cached=%v\n", host, cached)
-		}
+		tflog.Debug(ctx, "SAML detection (cached)", map[string]interface{}{"host": host, "saml": cached})
 		return cached
 	}
 	samlCacheMu.RUnlock()
 
 	probeURL := fmt.Sprintf("%s://%s/dashboard/", protocol, host)
-	if os.Getenv("AXONOPS_DEBUG") != "" {
-		fmt.Printf("[AXONOPS DEBUG] SAML detection: probing %s\n", probeURL)
-	}
+	tflog.Debug(ctx, "SAML detection: probing", map[string]interface{}{"url": probeURL})
 
 	tr := &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: tlsSkipVerify},
+		TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS12, InsecureSkipVerify: tlsSkipVerify}, // #nosec G402 -- opt-in via tls_skip_verify; a warning diagnostic is emitted
 	}
 	c := &http.Client{
 		Timeout:   5 * time.Second,
@@ -77,26 +74,23 @@ func detectSAML(protocol, host string, tlsSkipVerify bool) bool {
 		},
 	}
 
-	resp, err := c.Get(probeURL)
-	// SAML /dashboard/ returns JSON (IDP redirect payload).
-	// On-prem servers serve the SPA as HTML at that path.
-	// So we only consider it SAML if the response is JSON.
-	isSAML := err == nil && resp != nil &&
-		resp.StatusCode != http.StatusNotFound &&
-		strings.Contains(resp.Header.Get("Content-Type"), "application/json")
-	if resp != nil {
-		resp.Body.Close() // #nosec G104 -- error from Body.Close is intentionally ignored
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, probeURL, nil)
+	if err != nil {
+		tflog.Warn(ctx, "SAML detection: invalid probe URL, assuming non-SAML", map[string]interface{}{"url": probeURL, "error": err.Error()})
+		return false
 	}
+	resp, err := c.Do(req)
+	if err != nil {
+		tflog.Warn(ctx, "SAML detection probe failed, assuming non-SAML (not cached)", map[string]interface{}{"url": probeURL, "error": err.Error()})
+		return false
+	}
+	_ = resp.Body.Close()
 
-	if os.Getenv("AXONOPS_DEBUG") != "" {
-		statusCode := 0
-		contentType := ""
-		if resp != nil {
-			statusCode = resp.StatusCode
-			contentType = resp.Header.Get("Content-Type")
-		}
-		fmt.Printf("[AXONOPS DEBUG] SAML detection for host %q: isSAML=%v (status=%d, content-type=%q, err=%v)\n", host, isSAML, statusCode, contentType, err)
-	}
+	isSAML := resp.StatusCode != http.StatusNotFound &&
+		strings.Contains(resp.Header.Get("Content-Type"), "application/json")
+	tflog.Debug(ctx, "SAML detection result", map[string]interface{}{
+		"host": host, "saml": isSAML, "status": resp.StatusCode, "content_type": resp.Header.Get("Content-Type"),
+	})
 
 	samlCacheMu.Lock()
 	samlCache[cacheKey] = isSAML
@@ -126,6 +120,23 @@ func (p *axonopsProvider) Configure(ctx context.Context, req provider.ConfigureR
 		return
 	}
 
+	for attr, unknown := range map[string]bool{
+		"api_key":          config.ApiKey.IsUnknown(),
+		"axonops_host":     config.AxonopsHost.IsUnknown(),
+		"axonops_protocol": config.AxonopsProtocol.IsUnknown(),
+		"org_id":           config.OrgId.IsUnknown(),
+		"tls_skip_verify":  config.TlsSkipVerify.IsUnknown(),
+		"token_type":       config.TokenType.IsUnknown(),
+	} {
+		if unknown {
+			resp.Diagnostics.AddAttributeError(path.Root(attr), "Unknown Provider Configuration Value",
+				fmt.Sprintf("The provider cannot be configured because %q is not known until apply. Set it statically or via environment variable.", attr))
+		}
+	}
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
 	var protocol = getEnvOrDefault("AXONOPS_PROTOCOL", "https")
 	var axonopsHost = getEnvOrDefault("AXONOPS_HOST", "")
 	var apiKey = getEnvOrDefault("AXONOPS_API_KEY", "")
@@ -144,6 +155,18 @@ func (p *axonopsProvider) Configure(ctx context.Context, req provider.ConfigureR
 		tlsSkipVerify = config.TlsSkipVerify.ValueBool()
 	}
 
+	if protocol != "https" && protocol != "http" {
+		resp.Diagnostics.AddAttributeError(path.Root("axonops_protocol"), "Invalid Protocol",
+			fmt.Sprintf("axonops_protocol must be 'https' or 'http', got %q", protocol))
+		return
+	}
+
+	if tlsSkipVerify {
+		resp.Diagnostics.AddWarning("TLS Certificate Verification Disabled",
+			"tls_skip_verify is enabled. The provider will not verify the AxonOps server certificate, "+
+				"which exposes the API key to man-in-the-middle attacks. Use only with self-signed certificates in trusted networks.")
+	}
+
 	// Construct axonops_host based on configuration. SAML is auto-detected
 	// in both cases by probing {host}/dashboard/.
 	//
@@ -156,13 +179,13 @@ func (p *axonopsProvider) Configure(ctx context.Context, req provider.ConfigureR
 	if axonopsHost == "" {
 		orgId := config.OrgId.ValueString()
 		samlHost := orgId + ".axonops.cloud"
-		if detectSAML(protocol, samlHost, tlsSkipVerify) {
+		if detectSAML(ctx, protocol, samlHost, tlsSkipVerify) {
 			axonopsHost = samlHost + "/dashboard"
 		} else {
 			axonopsHost = "dash.axonops.cloud/" + orgId
 		}
 	} else {
-		if detectSAML(protocol, axonopsHost, tlsSkipVerify) {
+		if detectSAML(ctx, protocol, axonopsHost, tlsSkipVerify) {
 			axonopsHost = axonopsHost + "/dashboard"
 		}
 	}
@@ -202,6 +225,7 @@ func (p *axonopsProvider) Configure(ctx context.Context, req provider.ConfigureR
 	}
 
 	resp.ResourceData = client
+	resp.DataSourceData = client
 
 }
 
@@ -230,6 +254,8 @@ func (p *axonopsProvider) DataSources(ctx context.Context) []func() datasource.D
 		NewServiceNowIntegrationDataSource,
 		NewCassandraScheduledRepairDataSource,
 		NewSilenceDataSource,
+		NewAlertRouteDataSource,
+		NewKafkaACLSingleDataSource,
 	}
 }
 
@@ -260,30 +286,42 @@ func (p *axonopsProvider) Resources(ctx context.Context) []func() resource.Resou
 
 func (p *axonopsProvider) Schema(ctx context.Context, req provider.SchemaRequest, resp *provider.SchemaResponse) {
 	resp.Schema = schema.Schema{
+		Description: "Configure the AxonOps provider to manage Kafka, Cassandra, and DataStax Enterprise (DSE) clusters.",
 		Attributes: map[string]schema.Attribute{
 			"api_key": schema.StringAttribute{
 				Optional:    true,
-				Description: "API key for authentication. Can also be set via AXONOPS_API_KEY environment variable.",
+				Sensitive:   true,
+				Description: "The API key for authentication with AxonOps. Generate this from your AxonOps dashboard. If not provided, the provider will use the AXONOPS_API_KEY environment variable. This value is sensitive and should be stored securely.",
 			},
 			"axonops_host": schema.StringAttribute{
-				Optional:    true,
-				Description: "AxonOps server hostname (without protocol). For SaaS, leave empty to auto-detect the correct URL. For on-premise deployments, specify your server hostname. Can also be set via AXONOPS_HOST environment variable.",
+				Optional: true,
+				Description: "The AxonOps server hostname without the protocol (e.g., 'axonops.example.com' or 'myorg.axonops.cloud'). " +
+					"For AxonOps SaaS, leave this empty to auto-detect the correct URL based on org_id and SAML configuration. " +
+					"For self-hosted deployments, specify your server's fully qualified domain name. " +
+					"Default: Auto-detected for SaaS. Environment variable: AXONOPS_HOST.",
 			},
 			"axonops_protocol": schema.StringAttribute{
-				Optional:    true,
-				Description: "Protocol to use for API requests. Valid values: 'https' (default) or 'http'. Can also be set via AXONOPS_PROTOCOL environment variable.",
+				Optional: true,
+				Description: "The protocol to use when connecting to the AxonOps API. " +
+					"Valid values: 'https' (default, recommended for production) or 'http' (only for non-production environments). " +
+					"Default: 'https'. Environment variable: AXONOPS_PROTOCOL.",
 			},
 			"org_id": schema.StringAttribute{
 				Required:    true,
-				Description: "Organization ID for your AxonOps account.",
+				Description: "The AxonOps organization ID. This identifies your organization within AxonOps and is required for authentication.",
 			},
 			"tls_skip_verify": schema.BoolAttribute{
-				Optional:    true,
-				Description: "Skip TLS certificate verification. Use with caution, only for self-signed certificates. Default: false. Can also be set via AXONOPS_TLS_SKIP_VERIFY environment variable.",
+				Optional: true,
+				Description: "Skip TLS certificate verification when connecting to the AxonOps API. " +
+					"Use only for development environments with self-signed certificates. " +
+					"WARNING: Disabling TLS verification exposes your API key to man-in-the-middle attacks. " +
+					"Default: false. Environment variable: AXONOPS_TLS_SKIP_VERIFY (set to 'true' to enable).",
 			},
 			"token_type": schema.StringAttribute{
-				Optional:    true,
-				Description: "Token type for Authorization header. Valid values: 'Bearer' (default for SaaS) or 'AxonApi' (for on-premise). Can also be set via AXONOPS_TOKEN_TYPE environment variable.",
+				Optional: true,
+				Description: "The type of authentication token to use in the Authorization header. " +
+					"Valid values: 'Bearer' (default for SaaS) or 'AxonApi' (typically for on-premise deployments). " +
+					"Most users should leave this at the default. Default: 'Bearer'. Environment variable: AXONOPS_TOKEN_TYPE.",
 			},
 		},
 	}

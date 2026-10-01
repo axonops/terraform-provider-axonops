@@ -13,16 +13,6 @@ Use this data source to reference an existing OpsGenie integration when configur
 
 ## Example Usage
 
-```terraform
-data "axonops_opsgenie_integration" "existing" {
-  cluster_name = "production-cassandra"
-  cluster_type = "cassandra"
-  name         = "opsgenie-oncall"
-}
-
-output "opsgenie_integration_id" {
-  value = data.axonops_opsgenie_integration.existing.id
-}
-```
+{{ tffile "examples/data-sources/axonops_opsgenie_integration/data-source.tf" }}
 
 {{ .SchemaMarkdown | trimspace }}

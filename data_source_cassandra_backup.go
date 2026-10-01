@@ -8,6 +8,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
@@ -55,6 +56,7 @@ func (d *cassandraBackupDataSource) Schema(ctx context.Context, req datasource.S
 				Optional:    true,
 				Computed:    true,
 				Description: "The cluster type (cassandra or dse). Default: cassandra",
+				Validators:  []validator.String{clusterTypeValidator()},
 			},
 			"tag": schema.StringAttribute{
 				Required:    true,
@@ -168,7 +170,7 @@ func (d *cassandraBackupDataSource) Read(ctx context.Context, req datasource.Rea
 		clusterType = "cassandra"
 	}
 
-	backups, err := d.client.GetCassandraBackups(clusterType, data.ClusterName.ValueString())
+	backups, err := d.client.GetCassandraBackups(ctx, clusterType, data.ClusterName.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read backups: %s", err))
 		return

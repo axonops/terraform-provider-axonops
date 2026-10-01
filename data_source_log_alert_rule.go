@@ -130,7 +130,7 @@ func (d *logAlertRuleDataSource) Read(ctx context.Context, req datasource.ReadRe
 		return
 	}
 
-	rules, err := d.client.GetAlertRules(data.ClusterType.ValueString(), data.ClusterName.ValueString())
+	rules, err := d.client.GetAlertRules(ctx, data.ClusterType.ValueString(), data.ClusterName.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read alert rules: %s", err))
 		return

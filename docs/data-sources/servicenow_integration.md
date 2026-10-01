@@ -42,5 +42,5 @@ output "servicenow_instance" {
 
 - `id` (String) The integration ID.
 - `instance_name` (String) The ServiceNow instance name.
-- `password` (String, Sensitive) The ServiceNow password.
+- `password` (String, Sensitive) Not returned by the API (masked). Always null.
 - `user` (String) The ServiceNow username.
