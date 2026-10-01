@@ -26,7 +26,7 @@ import (
 // user-supplied fields (everything except ID), used to disambiguate the
 // newly created silence when several candidate IDs appear after a create.
 func silenceEqual(a, b axonopsClient.SilenceWindow) bool {
-	if a.Active != b.Active || a.CronExpr != b.CronExpr || a.IsRecurring != b.IsRecurring || a.Duration != b.Duration {
+	if a.Active != b.Active || a.CronExpr != b.CronExpr || a.IsRecurring != b.IsRecurring || a.Duration != b.Duration || a.Note != b.Note {
 		return false
 	}
 	if len(a.DCs) != len(b.DCs) {
@@ -232,14 +232,13 @@ func (r *silenceResource) Create(ctx context.Context, req resource.CreateRequest
 		return
 	}
 
-	// Fetch the created silence to confirm and get the actual ID
-	after, err := r.client.GetSilenceWindows(ctx, data.ClusterType.ValueString(), data.ClusterName.ValueString())
+	// Confirm the new silence is listed and capture its server-assigned ID.
+	newID, err := r.confirmSilence(ctx, data.ClusterType.ValueString(), data.ClusterName.ValueString(), before, silenceID, silence)
 	if err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read silences after creation: %s", err))
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to confirm silence was created: %s", err))
 		return
 	}
-
-	data.ID = types.StringValue(findNewSilenceID(before, after, silenceID, silence))
+	data.ID = types.StringValue(newID)
 
 	tflog.Info(ctx, "Created silence resource", map[string]any{
 		"cluster_name": data.ClusterName.ValueString(),
@@ -249,6 +248,19 @@ func (r *silenceResource) Create(ctx context.Context, req resource.CreateRequest
 
 	diags = resp.State.Set(ctx, &data)
 	resp.Diagnostics.Append(diags...)
+}
+
+// confirmSilence waits until the silence just created is listed, and returns
+// its ID as identified by findNewSilenceID.
+func (r *silenceResource) confirmSilence(ctx context.Context, clusterType, clusterName string, before []axonopsClient.SilenceWindow, generatedID string, want axonopsClient.SilenceWindow) (string, error) {
+	return confirmWrite(ctx, "silence", func(ctx context.Context) (string, bool, error) {
+		after, err := r.client.GetSilenceWindows(ctx, clusterType, clusterName)
+		if err != nil {
+			return "", false, err
+		}
+		id := findNewSilenceID(before, after, generatedID, want)
+		return id, axonopsClient.FindSilenceWindowByID(after, id) != nil, nil
+	})
 }
 
 func (r *silenceResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
@@ -317,6 +329,17 @@ func (r *silenceResource) Update(ctx context.Context, req resource.UpdateRequest
 			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete existing silence during update: %s", err))
 			return
 		}
+		_, err = confirmWrite(ctx, fmt.Sprintf("deletion of silence %q", state.ID.ValueString()), func(ctx context.Context) (struct{}, bool, error) {
+			silences, err := r.client.GetSilenceWindows(ctx, state.ClusterType.ValueString(), state.ClusterName.ValueString())
+			if err != nil {
+				return struct{}{}, false, err
+			}
+			return struct{}{}, axonopsClient.FindSilenceWindowByID(silences, state.ID.ValueString()) == nil, nil
+		})
+		if err != nil {
+			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to confirm existing silence was deleted before replacing it: %s", err))
+			return
+		}
 	}
 
 	var datacenters []string
@@ -364,14 +387,13 @@ func (r *silenceResource) Update(ctx context.Context, req resource.UpdateRequest
 		return
 	}
 
-	// Fetch the created silence to get its actual ID
-	after, err := r.client.GetSilenceWindows(ctx, data.ClusterType.ValueString(), data.ClusterName.ValueString())
+	// Confirm the new silence is listed and capture its server-assigned ID.
+	newID, err := r.confirmSilence(ctx, data.ClusterType.ValueString(), data.ClusterName.ValueString(), before, silenceID, silence)
 	if err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read silences after update: %s", err))
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to confirm silence was updated: %s", err))
 		return
 	}
-
-	data.ID = types.StringValue(findNewSilenceID(before, after, silenceID, silence))
+	data.ID = types.StringValue(newID)
 
 	tflog.Info(ctx, "Updated silence resource", map[string]any{
 		"cluster_name": data.ClusterName.ValueString(),

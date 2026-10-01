@@ -148,8 +148,38 @@ func (e *topicResource) Create(ctx context.Context, req resource.CreateRequest, 
 		return
 	}
 
+	if err := e.confirmTopic(ctx, &data, true); err != nil {
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to confirm topic was created: %s", err))
+		return
+	}
+
 	diags = resp.State.Set(ctx, &data)
 	resp.Diagnostics.Append(diags...)
+}
+
+// confirmTopic waits until the topic is listed with the planned partition
+// count and config values. The replication factor is compared only when
+// checkRF is set: on update, Kafka reassigns replicas in the background and a
+// large topic can take far longer than the confirmation timeout to converge.
+func (e *topicResource) confirmTopic(ctx context.Context, data *topicResourceData, checkRF bool) error {
+	_, err := confirmWrite(ctx, fmt.Sprintf("topic %q", data.Name.ValueString()), func(ctx context.Context) (struct{}, bool, error) {
+		topic, err := e.client.GetTopic(ctx, data.Name.ValueString(), data.ClusterName.ValueString())
+		if err != nil || topic == nil {
+			return struct{}{}, false, err
+		}
+		if topic.Partitions != data.Partitions.ValueInt32() ||
+			(checkRF && topic.ReplicationFactor != data.ReplicationFactor.ValueInt32()) {
+			return struct{}{}, false, nil
+		}
+		got := refreshTopicConfig(data.Config, topic.Config)
+		for key, want := range data.Config {
+			if !got[key].Equal(want) {
+				return struct{}{}, false, nil
+			}
+		}
+		return struct{}{}, true, nil
+	})
+	return err
 }
 
 func (e *topicResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
@@ -257,6 +287,11 @@ func (e *topicResource) Update(ctx context.Context, req resource.UpdateRequest, 
 			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to update topic, got error: %s", err))
 			return
 		}
+	}
+
+	if err := e.confirmTopic(ctx, &planData, false); err != nil {
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to confirm topic was updated: %s", err))
+		return
 	}
 
 	diags = resp.State.Set(ctx, &planData)

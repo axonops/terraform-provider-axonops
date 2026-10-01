@@ -326,13 +326,11 @@ func (r *logAlertRuleResource) upsertLogAlertRule(ctx context.Context, data *log
 		return err
 	}
 
-	rules, err = r.client.GetAlertRules(ctx, clusterType, clusterName)
+	found, err := confirmAlertRule(ctx, r.client, clusterType, clusterName, rule, isLogAlertRule)
 	if err != nil {
-		return fmt.Errorf("verifying log alert rule after create/update: %w", err)
+		return err
 	}
-	if found := findAlertRuleByName(rules, alertName, isLogAlertRule); found != nil {
-		data.ID = types.StringValue(found.ID)
-	}
+	data.ID = types.StringValue(found.ID)
 	return nil
 }
 

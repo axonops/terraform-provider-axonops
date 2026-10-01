@@ -129,21 +129,30 @@ func (r *schemaResource) Create(ctx context.Context, req resource.CreateRequest,
 	// Set the schema ID from the response
 	data.SchemaId = types.Int64Value(int64(result.Id))
 
-	// Read back to get the version
-	schemaInfo, err := r.client.GetSchema(ctx, data.ClusterName.ValueString(), data.Subject.ValueString(), "latest")
+	// Confirm the new schema is the latest version and capture it.
+	schemaInfo, err := r.confirmSchema(ctx, data.ClusterName.ValueString(), data.Subject.ValueString(), result.Id)
 	if err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read schema after creation, got error: %s", err))
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to confirm schema was created: %s", err))
 		return
 	}
-
-	if schemaInfo != nil {
-		data.Version = types.Int64Value(int64(schemaInfo.Version))
-	}
+	data.Version = types.Int64Value(int64(schemaInfo.Version))
 
 	tflog.Info(ctx, "Created schema resource")
 
 	diags = resp.State.Set(ctx, &data)
 	resp.Diagnostics.Append(diags...)
+}
+
+// confirmSchema waits until the latest version of subject is the schema with
+// id returned by the create call.
+func (r *schemaResource) confirmSchema(ctx context.Context, clusterName, subject string, id int) (*axonopsClient.SchemaRegistryVersionedSchema, error) {
+	return confirmWrite(ctx, fmt.Sprintf("schema subject %q", subject), func(ctx context.Context) (*axonopsClient.SchemaRegistryVersionedSchema, bool, error) {
+		info, err := r.client.GetSchema(ctx, clusterName, subject, "latest")
+		if err != nil || info == nil {
+			return nil, false, err
+		}
+		return info, info.Id == id, nil
+	})
 }
 
 func (r *schemaResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
@@ -204,16 +213,13 @@ func (r *schemaResource) Update(ctx context.Context, req resource.UpdateRequest,
 	// Set the new schema ID
 	planData.SchemaId = types.Int64Value(int64(result.Id))
 
-	// Read back to get the new version
-	schemaInfo, err := r.client.GetSchema(ctx, planData.ClusterName.ValueString(), planData.Subject.ValueString(), "latest")
+	// Confirm the new schema is the latest version and capture it.
+	schemaInfo, err := r.confirmSchema(ctx, planData.ClusterName.ValueString(), planData.Subject.ValueString(), result.Id)
 	if err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read schema after update, got error: %s", err))
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to confirm schema was updated: %s", err))
 		return
 	}
-
-	if schemaInfo != nil {
-		planData.Version = types.Int64Value(int64(schemaInfo.Version))
-	}
+	planData.Version = types.Int64Value(int64(schemaInfo.Version))
 
 	tflog.Info(ctx, "Updated schema resource")
 

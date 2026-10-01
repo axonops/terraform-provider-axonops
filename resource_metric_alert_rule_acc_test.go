@@ -133,3 +133,47 @@ resource "axonops_metric_alert_rule" "m" {
 		},
 	})
 }
+
+// TestAccMetricAlertRule_escapedDollarChartNoDrift covers a chart title with a
+// literal "$" configured as "$$": the post-apply plan must keep the
+// configured spelling instead of showing a diff to the API's "$" title.
+func TestAccMetricAlertRule_escapedDollarChartNoDrift(t *testing.T) {
+	srv := newAccTestServer(t)
+	srv.seedDashboard("cassandra", "ccluster", axonopsClient.Dashboard{
+		UUID: "dash-uuid-1",
+		Name: "Overview",
+		Panels: []axonopsClient.DashboardPanel{{
+			UUID:  "panel-uuid-1",
+			Title: "Max Size per $groupBy",
+			Type:  "timeseries",
+			Details: axonopsClient.DashboardPanelDetails{
+				Queries: []axonopsClient.DashboardPanelQuery{{Query: `max(cas_size) by ($groupBy)`}},
+			},
+		}},
+	})
+	config := testAccProviderConfig(srv.URL()) + `
+resource "axonops_metric_alert_rule" "m" {
+  cluster_name   = "ccluster"
+  cluster_type   = "cassandra"
+  name           = "size-high"
+  operator       = ">"
+  warning_value  = 70
+  critical_value = 90
+  duration       = "5m"
+  dashboard      = "Overview"
+  chart          = "Max Size per $$groupBy"
+  metric         = "max(cas_size) by (keyspace)"
+}
+`
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: config,
+				Check:  resource.TestCheckResourceAttr("axonops_metric_alert_rule.m", "chart", "Max Size per $$groupBy"),
+			},
+			{Config: config, PlanOnly: true},
+		},
+	})
+}

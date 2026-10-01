@@ -145,6 +145,11 @@ func (r *connectorResource) Create(ctx context.Context, req resource.CreateReque
 		return
 	}
 
+	if err := r.confirmConnector(ctx, data.ClusterName.ValueString(), data.ConnectClusterName.ValueString(), data.Name.ValueString(), config); err != nil {
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to confirm connector was created: %s", err))
+		return
+	}
+
 	// Update computed fields
 	data.Type = types.StringValue(result.Type)
 
@@ -152,6 +157,24 @@ func (r *connectorResource) Create(ctx context.Context, req resource.CreateReque
 
 	diags = resp.State.Set(ctx, &data)
 	resp.Diagnostics.Append(diags...)
+}
+
+// confirmConnector waits until the connector is listed with every config key
+// that was sent at the sent value.
+func (r *connectorResource) confirmConnector(ctx context.Context, clusterName, connectCluster, name string, config map[string]string) error {
+	_, err := confirmWrite(ctx, fmt.Sprintf("connector %q", name), func(ctx context.Context) (struct{}, bool, error) {
+		got, err := r.client.GetConnector(ctx, clusterName, connectCluster, name)
+		if err != nil || got == nil {
+			return struct{}{}, false, err
+		}
+		for k, v := range config {
+			if got.Config[k] != v {
+				return struct{}{}, false, nil
+			}
+		}
+		return struct{}{}, true, nil
+	})
+	return err
 }
 
 func (r *connectorResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
@@ -222,6 +245,11 @@ func (r *connectorResource) Update(ctx context.Context, req resource.UpdateReque
 	result, err := r.client.UpdateConnectorConfig(ctx, planData.ClusterName.ValueString(), planData.ConnectClusterName.ValueString(), planData.Name.ValueString(), config)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to update connector, got error: %s", err))
+		return
+	}
+
+	if err := r.confirmConnector(ctx, planData.ClusterName.ValueString(), planData.ConnectClusterName.ValueString(), planData.Name.ValueString(), config); err != nil {
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to confirm connector was updated: %s", err))
 		return
 	}
 

@@ -274,10 +274,52 @@ func (r *cassandraBackupResource) Create(ctx context.Context, req resource.Creat
 		return
 	}
 
+	found, err := r.confirmBackup(ctx, data.ClusterType.ValueString(), data.ClusterName.ValueString(), data.Tag.ValueString(), "")
+	if err != nil {
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to confirm backup was created: %s", err))
+		return
+	}
+	data.ID = types.StringValue(found.ID)
+
 	tflog.Info(ctx, "Created Cassandra backup resource")
 
 	diags = resp.State.Set(ctx, &data)
 	resp.Diagnostics.Append(diags...)
+}
+
+// confirmBackup waits until a backup with tag is listed, ignoring the backup
+// with excludeID.
+func (r *cassandraBackupResource) confirmBackup(ctx context.Context, clusterType, clusterName, tag, excludeID string) (*axonopsClient.CassandraBackup, error) {
+	return confirmWrite(ctx, fmt.Sprintf("backup %q", tag), func(ctx context.Context) (*axonopsClient.CassandraBackup, bool, error) {
+		backups, err := r.client.GetCassandraBackups(ctx, clusterType, clusterName)
+		if err != nil {
+			return nil, false, err
+		}
+		for i := range backups {
+			if backups[i].Tag == tag && backups[i].ID != excludeID {
+				return &backups[i], true, nil
+			}
+		}
+		return nil, false, nil
+	})
+}
+
+// confirmBackupDeleted waits until the backup with id is no longer listed, so
+// its replacement is not created while the API is still removing it.
+func (r *cassandraBackupResource) confirmBackupDeleted(ctx context.Context, clusterType, clusterName, id string) error {
+	_, err := confirmWrite(ctx, fmt.Sprintf("deletion of backup %q", id), func(ctx context.Context) (struct{}, bool, error) {
+		backups, err := r.client.GetCassandraBackups(ctx, clusterType, clusterName)
+		if err != nil {
+			return struct{}{}, false, err
+		}
+		for _, b := range backups {
+			if b.ID == id {
+				return struct{}{}, false, nil
+			}
+		}
+		return struct{}{}, true, nil
+	})
+	return err
 }
 
 func (r *cassandraBackupResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
@@ -322,7 +364,9 @@ func (r *cassandraBackupResource) Read(ctx context.Context, req resource.ReadReq
 	if found.Remote {
 		data.RemoteType = types.StringValue(found.RemoteType)
 		data.RemotePath = types.StringValue(found.RemotePath)
-		data.RemoteConfig = types.StringValue(found.RemoteConfig)
+		// remote_config is sensitive and the API does not return it as
+		// sent, so refreshing it from the API shows a diff on every plan.
+		// Keep the configured value, as the integrations do for secrets.
 	}
 
 	// Refresh remote_retention from the API regardless of the remote flag so
@@ -380,6 +424,10 @@ func (r *cassandraBackupResource) Update(ctx context.Context, req resource.Updat
 	err := r.client.DeleteCassandraBackup(ctx, stateData.ClusterType.ValueString(), stateData.ClusterName.ValueString(), []string{stateData.ID.ValueString()})
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete old backup for update: %s", err))
+		return
+	}
+	if err := r.confirmBackupDeleted(ctx, stateData.ClusterType.ValueString(), stateData.ClusterName.ValueString(), stateData.ID.ValueString()); err != nil {
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to confirm old backup was deleted before replacing it: %s", err))
 		return
 	}
 
@@ -448,6 +496,15 @@ func (r *cassandraBackupResource) Update(ctx context.Context, req resource.Updat
 			fmt.Sprintf("Deleted existing backup but failed to create replacement: %s", err))
 		return
 	}
+
+	// The deleted backup has the same tag; ignore it in case its deletion is
+	// not yet visible.
+	found, err := r.confirmBackup(ctx, planData.ClusterType.ValueString(), planData.ClusterName.ValueString(), planData.Tag.ValueString(), stateData.ID.ValueString())
+	if err != nil {
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to confirm backup was updated: %s", err))
+		return
+	}
+	planData.ID = types.StringValue(found.ID)
 
 	tflog.Info(ctx, "Updated Cassandra backup resource")
 

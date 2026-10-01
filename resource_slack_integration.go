@@ -139,16 +139,9 @@ func (r *slackIntegrationResource) Create(ctx context.Context, req resource.Crea
 		return
 	}
 
-	// Read back to get the ID
-	integrations, err := r.client.GetIntegrations(ctx, data.ClusterType.ValueString(), data.ClusterName.ValueString())
+	def, err := confirmIntegration(ctx, r.client, data.ClusterType.ValueString(), data.ClusterName.ValueString(), payload, "url")
 	if err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read integrations: %s", err))
-		return
-	}
-
-	def := axonopsClient.FindIntegrationByNameAndType(integrations, data.Name.ValueString(), "slack")
-	if def == nil {
-		resp.Diagnostics.AddError("Client Error", "Integration was created but could not be found")
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to confirm Slack integration was created: %s", err))
 		return
 	}
 	data.ID = types.StringValue(def.ID)
@@ -217,7 +210,12 @@ func (r *slackIntegrationResource) Update(ctx context.Context, req resource.Upda
 		return
 	}
 
-	planData.ID = stateData.ID
+	def, err := confirmIntegration(ctx, r.client, planData.ClusterType.ValueString(), planData.ClusterName.ValueString(), payload, "url")
+	if err != nil {
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to confirm Slack integration was updated: %s", err))
+		return
+	}
+	planData.ID = types.StringValue(def.ID)
 
 	tflog.Info(ctx, "Updated Slack integration resource")
 	diags = resp.State.Set(ctx, &planData)

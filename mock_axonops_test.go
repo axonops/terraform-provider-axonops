@@ -33,6 +33,9 @@ type mockIntegration struct {
 	ID     string
 	Type   string
 	Params map[string]string
+	// hiddenReads is how many more list GETs omit this integration,
+	// simulating an API that acknowledges a write before reads see it.
+	hiddenReads int
 }
 
 // maskedIntegrationParamKeys lists which Params keys are masked on GET for
@@ -102,6 +105,10 @@ type mockAxonOpsServer struct {
 
 	// silences: "clusterType/clusterName" -> list
 	silences map[string][]axonopsClient.SilenceWindow
+
+	// integrationReadLag is how many list GETs omit a newly created
+	// integration. Zero (the default) makes writes visible immediately.
+	integrationReadLag int
 }
 
 func newMockAxonOpsServer(t interface{ Cleanup(func()) }) *mockAxonOpsServer {
@@ -175,6 +182,14 @@ func (m *mockAxonOpsServer) seedDashboard(clusterType, clusterName string, dash 
 		m.dashboards[key] = &axonopsClient.DashboardTemplateResponse{}
 	}
 	m.dashboards[key].Dashboards = append(m.dashboards[key].Dashboards, dash)
+}
+
+// setIntegrationReadLag makes each integration created from now on invisible
+// to the next n list GETs.
+func (m *mockAxonOpsServer) setIntegrationReadLag(n int) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.integrationReadLag = n
 }
 
 // --- routing ---
@@ -793,6 +808,10 @@ func (m *mockAxonOpsServer) handleCassandraScheduleSnapshot(w http.ResponseWrite
 	case http.MethodGet:
 		var snapshots []axonopsClient.CassandraScheduledSnapshot
 		for _, b := range m.cassandraBackups[key] {
+			// The real API does not return remoteConfig as it was sent.
+			if b.RemoteConfig != "" {
+				b.RemoteConfig = maskedSecretValue
+			}
 			detailsJSON, _ := json.Marshal(b)
 			params := []axonopsClient.CassandraScheduledParam{{BackupDetails: string(detailsJSON)}}
 			paramsJSON, _ := json.Marshal(params)
@@ -1010,6 +1029,10 @@ func (m *mockAxonOpsServer) handleIntegrations(w http.ResponseWriter, r *http.Re
 		case http.MethodGet:
 			var defs []axonopsClient.IntegrationDefinition
 			for _, d := range m.integrations[key] {
+				if d.hiddenReads > 0 {
+					d.hiddenReads--
+					continue
+				}
 				defs = append(defs, axonopsClient.IntegrationDefinition{
 					ID: d.ID, Type: d.Type, Params: m.maskedParams(d),
 				})
@@ -1039,7 +1062,7 @@ func (m *mockAxonOpsServer) handleIntegrations(w http.ResponseWriter, r *http.Re
 					}
 				}
 			}
-			newDef := &mockIntegration{ID: uuid.New().String(), Type: payload.Type, Params: payload.Params}
+			newDef := &mockIntegration{ID: uuid.New().String(), Type: payload.Type, Params: payload.Params, hiddenReads: m.integrationReadLag}
 			m.integrations[key] = append(m.integrations[key], newDef)
 			w.WriteHeader(http.StatusCreated)
 			return

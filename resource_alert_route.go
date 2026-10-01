@@ -227,6 +227,18 @@ func (r *alertRouteResource) Create(ctx context.Context, req resource.CreateRequ
 		return
 	}
 
+	// Only an override this Create set is confirmed. When enable_override is
+	// false Create never calls SetIntegrationOverride, so there is no write to
+	// observe and the flag keeps whatever value it already had.
+	var wantOverride *bool
+	if data.RouteType.ValueString() != "global" && data.EnableOverride.ValueBool() {
+		wantOverride = data.EnableOverride.ValueBoolPointer()
+	}
+	if err := r.confirmRoute(ctx, &data, apiRouteType, integrationID, wantOverride); err != nil {
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to confirm alert route was created: %s", err))
+		return
+	}
+
 	data.ID = types.StringValue(alertRouteID(
 		data.ClusterType.ValueString(), data.ClusterName.ValueString(), data.RouteType.ValueString(),
 		data.Severity.ValueString(), data.IntegrationType.ValueString(), data.IntegrationName.ValueString(),
@@ -236,6 +248,47 @@ func (r *alertRouteResource) Create(ctx context.Context, req resource.CreateRequ
 
 	diags = resp.State.Set(ctx, &data)
 	resp.Diagnostics.Append(diags...)
+}
+
+// confirmRoute waits until the route to integrationID is listed for the
+// route type and severity in data, and, when wantOverride is non-nil, until
+// the severity's override flag equals it.
+func (r *alertRouteResource) confirmRoute(ctx context.Context, data *alertRouteResourceData, apiRouteType, integrationID string, wantOverride *bool) error {
+	routeType := strings.ReplaceAll(apiRouteType, "%20", " ")
+	severity := data.Severity.ValueString()
+	what := fmt.Sprintf("%s route %q to %s integration %q", severity, data.RouteType.ValueString(), data.IntegrationType.ValueString(), data.IntegrationName.ValueString())
+	_, err := confirmWrite(ctx, what, func(ctx context.Context) (struct{}, bool, error) {
+		integrations, err := r.client.GetIntegrations(ctx, data.ClusterType.ValueString(), data.ClusterName.ValueString())
+		if err != nil || integrations == nil {
+			return struct{}{}, false, err
+		}
+		for _, routing := range integrations.Routings {
+			if routing.Type != routeType {
+				continue
+			}
+			if wantOverride != nil {
+				var got bool
+				switch strings.ToLower(severity) {
+				case "info":
+					got = routing.OverrideInfo
+				case "warning":
+					got = routing.OverrideWarning
+				case "error":
+					got = routing.OverrideError
+				}
+				if got != *wantOverride {
+					return struct{}{}, false, nil
+				}
+			}
+			for _, route := range routing.Routing {
+				if route.ID == integrationID && strings.EqualFold(route.Severity, severity) {
+					return struct{}{}, true, nil
+				}
+			}
+		}
+		return struct{}{}, false, nil
+	})
+	return err
 }
 
 func (r *alertRouteResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
@@ -352,6 +405,15 @@ func (r *alertRouteResource) Update(ctx context.Context, req resource.UpdateRequ
 	// case it was ever removed out-of-band.
 	if err := r.client.AddIntegrationRoute(ctx, planData.ClusterType.ValueString(), planData.ClusterName.ValueString(), apiRouteType, planData.Severity.ValueString(), integrationID); err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to add route: %s", err))
+		return
+	}
+
+	var wantOverride *bool
+	if planData.RouteType.ValueString() != "global" {
+		wantOverride = planData.EnableOverride.ValueBoolPointer()
+	}
+	if err := r.confirmRoute(ctx, &planData, apiRouteType, integrationID, wantOverride); err != nil {
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to confirm alert route was updated: %s", err))
 		return
 	}
 

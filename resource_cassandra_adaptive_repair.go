@@ -175,10 +175,34 @@ func (r *cassandraAdaptiveRepairResource) Create(ctx context.Context, req resour
 		return
 	}
 
+	if err := r.confirmSettings(ctx, data.ClusterType.ValueString(), data.ClusterName.ValueString(), settings); err != nil {
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to confirm adaptive repair settings were applied: %s", err))
+		return
+	}
+
 	tflog.Info(ctx, "Created Cassandra adaptive repair resource")
 
 	diags = resp.State.Set(ctx, &data)
 	resp.Diagnostics.Append(diags...)
+}
+
+// confirmSettings waits until the API reports the scalar settings that were
+// sent. SegmentsPerVnode and SegmentTargetSizeMB are omitted when zero and
+// may be server-defaulted, and BlacklistedTables order is not guaranteed, so
+// those are not compared.
+func (r *cassandraAdaptiveRepairResource) confirmSettings(ctx context.Context, clusterType, clusterName string, want axonopsClient.AdaptiveRepairSettings) error {
+	_, err := confirmWrite(ctx, "adaptive repair settings", func(ctx context.Context) (struct{}, bool, error) {
+		got, err := r.client.GetCassandraAdaptiveRepair(ctx, clusterType, clusterName)
+		if err != nil || got == nil {
+			return struct{}{}, false, err
+		}
+		return struct{}{}, got.Active == want.Active &&
+			got.GcGraceThreshold == want.GcGraceThreshold &&
+			got.TableParallelism == want.TableParallelism &&
+			got.FilterTWCSTables == want.FilterTWCSTables &&
+			got.SegmentRetries == want.SegmentRetries, nil
+	})
+	return err
 }
 
 func (r *cassandraAdaptiveRepairResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
@@ -247,6 +271,11 @@ func (r *cassandraAdaptiveRepairResource) Update(ctx context.Context, req resour
 	err := r.client.UpdateCassandraAdaptiveRepair(ctx, data.ClusterType.ValueString(), data.ClusterName.ValueString(), settings)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to update adaptive repair settings: %s", err))
+		return
+	}
+
+	if err := r.confirmSettings(ctx, data.ClusterType.ValueString(), data.ClusterName.ValueString(), settings); err != nil {
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to confirm adaptive repair settings were applied: %s", err))
 		return
 	}
 

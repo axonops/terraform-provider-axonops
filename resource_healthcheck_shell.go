@@ -179,6 +179,12 @@ func (r *shellHealthcheckResource) Create(ctx context.Context, req resource.Crea
 		return
 	}
 
+	if err := confirmHealthcheck(ctx, r.client, data.ClusterType.ValueString(), data.ClusterName.ValueString(), "shell",
+		data.Name.ValueString(), data.Interval.ValueString(), data.Timeout.ValueString()); err != nil {
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to confirm shell healthcheck was created: %s", err))
+		return
+	}
+
 	// Set the ID in state
 	data.ID = types.StringValue(newID)
 
@@ -290,6 +296,12 @@ func (r *shellHealthcheckResource) Update(ctx context.Context, req resource.Upda
 	err = r.client.UpdateHealthchecks(ctx, planData.ClusterType.ValueString(), planData.ClusterName.ValueString(), *existing)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to update shell healthcheck, got error: %s", err))
+		return
+	}
+
+	if err := confirmHealthcheck(ctx, r.client, planData.ClusterType.ValueString(), planData.ClusterName.ValueString(), "shell",
+		planData.Name.ValueString(), planData.Interval.ValueString(), planData.Timeout.ValueString()); err != nil {
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to confirm shell healthcheck was updated: %s", err))
 		return
 	}
 

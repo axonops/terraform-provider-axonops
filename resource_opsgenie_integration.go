@@ -116,15 +116,9 @@ func (r *opsgenieIntegrationResource) Create(ctx context.Context, req resource.C
 		return
 	}
 
-	integrations, err := r.client.GetIntegrations(ctx, data.ClusterType.ValueString(), data.ClusterName.ValueString())
+	def, err := confirmIntegration(ctx, r.client, data.ClusterType.ValueString(), data.ClusterName.ValueString(), payload, "key")
 	if err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read integrations: %s", err))
-		return
-	}
-
-	def := axonopsClient.FindIntegrationByNameAndType(integrations, data.Name.ValueString(), "opsgenie")
-	if def == nil {
-		resp.Diagnostics.AddError("Client Error", "Integration was created but could not be found")
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to confirm OpsGenie integration was created: %s", err))
 		return
 	}
 	data.ID = types.StringValue(def.ID)
@@ -188,7 +182,12 @@ func (r *opsgenieIntegrationResource) Update(ctx context.Context, req resource.U
 		return
 	}
 
-	planData.ID = stateData.ID
+	def, err := confirmIntegration(ctx, r.client, planData.ClusterType.ValueString(), planData.ClusterName.ValueString(), payload, "key")
+	if err != nil {
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to confirm OpsGenie integration was updated: %s", err))
+		return
+	}
+	planData.ID = types.StringValue(def.ID)
 
 	tflog.Info(ctx, "Updated OpsGenie integration resource")
 	diags = resp.State.Set(ctx, &planData)

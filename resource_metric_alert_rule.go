@@ -399,6 +399,17 @@ type chartResolution struct {
 	ChartQuery    string // raw query from the chart's first query, empty if none
 }
 
+// keepDollarEscaped returns prior when it is the "$$"-escaped spelling of
+// the API name, otherwise the API name. resolveDashboardChart accepts "$$"
+// for a literal "$", so overwriting the configured spelling with the API one
+// would show a diff on every plan.
+func keepDollarEscaped(prior types.String, apiName string) types.String {
+	if !prior.IsNull() && !prior.IsUnknown() && strings.ReplaceAll(prior.ValueString(), "$$", "$") == apiName {
+		return prior
+	}
+	return types.StringValue(apiName)
+}
+
 // resolveDashboardChart resolves dashboard and chart names to UUIDs using the dashboard template API.
 func (r *metricAlertRuleResource) resolveDashboardChart(ctx context.Context, clusterType, clusterName, dashboardName, chartTitle string) (*chartResolution, error) {
 	templates, err := r.client.GetDashboardTemplates(ctx, clusterType, clusterName)
@@ -600,12 +611,13 @@ func (r *metricAlertRuleResource) Create(ctx context.Context, req resource.Creat
 		return
 	}
 
-	// Re-fetch to capture the canonical server-assigned ID.
-	if rules, err := r.client.GetAlertRules(ctx, clusterType, clusterName); err == nil {
-		if found := findAlertRuleByName(rules, alertName, isMetricAlertRule); found != nil {
-			data.ID = types.StringValue(found.ID)
-		}
+	// Confirm the write and capture the canonical server-assigned ID.
+	found, err := confirmAlertRule(ctx, r.client, clusterType, clusterName, rule, isMetricAlertRule)
+	if err != nil {
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to confirm alert rule was created: %s", err))
+		return
 	}
+	data.ID = types.StringValue(found.ID)
 
 	// Write computed annotations/integrations back to state
 	data.Annotations, diags = buildAnnotationsObject(ctx, rule.Annotations)
@@ -675,8 +687,8 @@ func (r *metricAlertRuleResource) Read(ctx context.Context, req resource.ReadReq
 		if err != nil {
 			tflog.Warn(ctx, fmt.Sprintf("Could not resolve dashboard/chart names from correlation ID: %s", err))
 		} else {
-			data.Dashboard = types.StringValue(dashName)
-			data.Chart = types.StringValue(chartName)
+			data.Dashboard = keepDollarEscaped(data.Dashboard, dashName)
+			data.Chart = keepDollarEscaped(data.Chart, chartName)
 		}
 	}
 
@@ -768,7 +780,6 @@ func (r *metricAlertRuleResource) Update(ctx context.Context, req resource.Updat
 
 	clusterType := planData.ClusterType.ValueString()
 	clusterName := planData.ClusterName.ValueString()
-	alertName := planData.Name.ValueString()
 
 	err = r.client.CreateOrUpdateAlertRule(ctx, clusterType, clusterName, rule)
 	if err != nil {
@@ -776,12 +787,13 @@ func (r *metricAlertRuleResource) Update(ctx context.Context, req resource.Updat
 		return
 	}
 
-	// Capture the canonical server-assigned ID after the upsert.
-	if rules, err := r.client.GetAlertRules(ctx, clusterType, clusterName); err == nil {
-		if found := findAlertRuleByName(rules, alertName, isMetricAlertRule); found != nil {
-			planData.ID = types.StringValue(found.ID)
-		}
+	// Confirm the write and capture the canonical server-assigned ID.
+	found, err := confirmAlertRule(ctx, r.client, clusterType, clusterName, rule, isMetricAlertRule)
+	if err != nil {
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to confirm alert rule was updated: %s", err))
+		return
 	}
+	planData.ID = types.StringValue(found.ID)
 
 	// Write computed annotations/integrations back to state
 	planData.Annotations, diags = buildAnnotationsObject(ctx, rule.Annotations)

@@ -212,6 +212,18 @@ func (r *aclResource) Create(ctx context.Context, req resource.CreateRequest, re
 		return
 	}
 
+	_, err = confirmWrite(ctx, fmt.Sprintf("ACL for %q on %s %q", acl.Principal, acl.ResourceType, acl.ResourceName), func(ctx context.Context) (struct{}, bool, error) {
+		aclResponse, err := r.client.GetACLs(ctx, data.ClusterName.ValueString())
+		if err != nil {
+			return struct{}{}, false, err
+		}
+		return struct{}{}, findACL(data, aclResponse), nil
+	})
+	if err != nil {
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to confirm ACL was created: %s", err))
+		return
+	}
+
 	tflog.Info(ctx, "Created ACL resource")
 
 	diags = resp.State.Set(ctx, &data)

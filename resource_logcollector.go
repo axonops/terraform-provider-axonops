@@ -234,6 +234,12 @@ func (r *logCollectorResource) Create(ctx context.Context, req resource.CreateRe
 		return
 	}
 
+	if err := r.confirmCollector(ctx, data.ClusterType.ValueString(), data.ClusterName.ValueString(),
+		data.Filename.ValueString(), data.Name.ValueString(), data.DateFormat.ValueString()); err != nil {
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to confirm log collector was created: %s", err))
+		return
+	}
+
 	// Set the UUID in state
 	data.UUID = types.StringValue(newUUID)
 
@@ -241,6 +247,24 @@ func (r *logCollectorResource) Create(ctx context.Context, req resource.CreateRe
 
 	diags = resp.State.Set(ctx, &data)
 	resp.Diagnostics.Append(diags...)
+}
+
+// confirmCollector waits until a log collector for filename is listed with
+// the name and date format that were sent.
+func (r *logCollectorResource) confirmCollector(ctx context.Context, clusterType, clusterName, filename, name, dateFormat string) error {
+	_, err := confirmWrite(ctx, fmt.Sprintf("log collector %q", filename), func(ctx context.Context) (struct{}, bool, error) {
+		collectors, err := r.client.GetLogCollectors(ctx, clusterType, clusterName)
+		if err != nil {
+			return struct{}{}, false, err
+		}
+		for _, c := range collectors {
+			if c.Filename == filename && c.Name == name && c.DateFormat == dateFormat {
+				return struct{}{}, true, nil
+			}
+		}
+		return struct{}{}, false, nil
+	})
+	return err
 }
 
 func (r *logCollectorResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
@@ -392,6 +416,12 @@ func (r *logCollectorResource) Update(ctx context.Context, req resource.UpdateRe
 	err = r.client.UpdateLogCollectors(ctx, planData.ClusterType.ValueString(), planData.ClusterName.ValueString(), existingCollectors)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to update log collector, got error: %s", err))
+		return
+	}
+
+	if err := r.confirmCollector(ctx, planData.ClusterType.ValueString(), planData.ClusterName.ValueString(),
+		planData.Filename.ValueString(), planData.Name.ValueString(), planData.DateFormat.ValueString()); err != nil {
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to confirm log collector was updated: %s", err))
 		return
 	}
 
