@@ -279,6 +279,8 @@ func (p *axonopsProvider) Resources(ctx context.Context) []func() resource.Resou
 		NewShellHealthcheckResource,
 		NewCassandraAdaptiveRepairResource,
 		NewCassandraBackupResource,
+		NewCassandraCommitLogSettingsResource,
+		NewCassandraAgentDisconnectToleranceResource,
 		NewMetricAlertRuleResource,
 		NewAlertRouteResource,
 		NewLogAlertRuleResource,

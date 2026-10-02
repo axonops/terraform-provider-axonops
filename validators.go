@@ -15,6 +15,16 @@ func clusterTypeValidator() validator.String {
 	return stringvalidator.OneOf(validClusterTypes...)
 }
 
+// cassandraOnlyClusterTypes lists the cluster types supported by
+// Cassandra/DSE-specific features that do not apply to Kafka clusters.
+var cassandraOnlyClusterTypes = []string{"cassandra", "dse"}
+
+// cassandraOnlyClusterTypeValidator restricts cluster_type attributes to
+// Cassandra/DSE, for resources that have no meaning on a Kafka cluster.
+func cassandraOnlyClusterTypeValidator() validator.String {
+	return stringvalidator.OneOf(cassandraOnlyClusterTypes...)
+}
+
 // durationRegex matches AxonOps duration strings such as "30s", "5m", "1h",
 // "7d", "2w" or compound values like "1h30m".
 var durationRegex = regexp.MustCompile(`^([0-9]+(ms|s|m|h|d|w|y))+$`)

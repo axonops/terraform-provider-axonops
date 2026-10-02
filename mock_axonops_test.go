@@ -89,6 +89,10 @@ type mockAxonOpsServer struct {
 	adaptiveRepair map[string]*axonopsClient.AdaptiveRepairSettings
 	// cassandra backups: "clusterType/clusterName" -> list of (id, backup)
 	cassandraBackups map[string][]axonopsClient.CassandraBackup
+	// commitlog archive settings: "clusterType/clusterName" -> list
+	commitLogSettings map[string][]axonopsClient.CommitLogArchiveSettings
+	// agent disconnection tolerance: "clusterType/clusterName" -> settings
+	agentTolerance map[string]*axonopsClient.AgentDisconnectionTolerance
 	// scheduled repairs: clusterName -> list of entries
 	scheduledRepairs map[string][]axonopsClient.ScheduledRepairEntry
 
@@ -122,25 +126,27 @@ type mockAxonOpsServer struct {
 
 func newMockAxonOpsServer(t interface{ Cleanup(func()) }) *mockAxonOpsServer {
 	m := &mockAxonOpsServer{
-		orgID:            "testorg",
-		topics:           map[string]map[string]*axonopsClient.TopicInfo{},
-		connectors:       map[string]map[string]map[string]*axonopsClient.KafkaConnectorResponse{},
-		schemas:          map[string]map[string][]*mockSchemaVersion{},
-		logCollectors:    map[string][]axonopsClient.LogCollectorConfig{},
-		healthchecks:     map[string]*axonopsClient.HealthchecksResponse{},
-		adaptiveRepair:   map[string]*axonopsClient.AdaptiveRepairSettings{},
-		cassandraBackups: map[string][]axonopsClient.CassandraBackup{},
-		scheduledRepairs: map[string][]axonopsClient.ScheduledRepairEntry{},
-		dashboards:       map[string]*axonopsClient.DashboardTemplateResponse{},
-		alertRules:       map[string][]axonopsClient.MetricAlertRule{},
-		integrations:     map[string][]*mockIntegration{},
-		routings:         map[string]map[string]*routingEntry{},
-		silences:         map[string][]axonopsClient.SilenceWindow{},
-		acls:             map[string][]axonopsClient.ACLResource{},
-		orgClusters:      map[string]map[string]map[string]int{},
-		nodes:            map[string][]axonopsClient.ClusterNodeInfo{},
-		keyspaces:        map[string][]axonopsClient.CassandraKeyspace{},
-		deletedSubjects:  map[string]map[string]bool{},
+		orgID:             "testorg",
+		topics:            map[string]map[string]*axonopsClient.TopicInfo{},
+		connectors:        map[string]map[string]map[string]*axonopsClient.KafkaConnectorResponse{},
+		schemas:           map[string]map[string][]*mockSchemaVersion{},
+		logCollectors:     map[string][]axonopsClient.LogCollectorConfig{},
+		healthchecks:      map[string]*axonopsClient.HealthchecksResponse{},
+		adaptiveRepair:    map[string]*axonopsClient.AdaptiveRepairSettings{},
+		cassandraBackups:  map[string][]axonopsClient.CassandraBackup{},
+		scheduledRepairs:  map[string][]axonopsClient.ScheduledRepairEntry{},
+		commitLogSettings: map[string][]axonopsClient.CommitLogArchiveSettings{},
+		agentTolerance:    map[string]*axonopsClient.AgentDisconnectionTolerance{},
+		dashboards:        map[string]*axonopsClient.DashboardTemplateResponse{},
+		alertRules:        map[string][]axonopsClient.MetricAlertRule{},
+		integrations:      map[string][]*mockIntegration{},
+		routings:          map[string]map[string]*routingEntry{},
+		silences:          map[string][]axonopsClient.SilenceWindow{},
+		acls:              map[string][]axonopsClient.ACLResource{},
+		orgClusters:       map[string]map[string]map[string]int{},
+		nodes:             map[string][]axonopsClient.ClusterNodeInfo{},
+		keyspaces:         map[string][]axonopsClient.CassandraKeyspace{},
+		deletedSubjects:   map[string]map[string]bool{},
 	}
 
 	mux := http.NewServeMux()
@@ -388,6 +394,18 @@ func (m *mockAxonOpsServer) handleAPI(w http.ResponseWriter, r *http.Request) {
 		// cassandraSnapshot/{org}/{clusterType}/{clusterName}: CreateCassandraBackup.
 		if len(parts) >= 4 {
 			m.handleCreateCassandraBackup(w, r, parts[2], parts[3])
+			return
+		}
+	case "cassandraCommitLogsSettings":
+		// cassandraCommitLogsSettings/{org}/{clusterType}/{clusterName}[/{datacenter}]
+		if len(parts) >= 4 {
+			m.handleCommitLogSettings(w, r, parts[2], parts[3], parts[4:])
+			return
+		}
+	case "configs":
+		// configs/agentDisconnectionTolerance/{org}/{clusterType}/{clusterName}
+		if len(parts) >= 5 && parts[1] == "agentDisconnectionTolerance" {
+			m.handleAgentTolerance(w, r, parts[3], parts[4])
 			return
 		}
 	case "alert-rules":
@@ -937,6 +955,112 @@ func (m *mockAxonOpsServer) handleAdaptiveRepair(w http.ResponseWriter, r *http.
 			return
 		}
 		m.adaptiveRepair[key] = &s
+		w.WriteHeader(http.StatusOK)
+	default:
+		w.WriteHeader(http.StatusMethodNotAllowed)
+	}
+}
+
+// --- cassandra commitlog archive settings ---
+
+// handleCommitLogSettings serves "cassandraCommitLogsSettings". Like the real
+// API, GET capitalises RemoteRetentionDuration and RemoteConfig and does not
+// return remoteConfig as sent; PUT targets the configuration by its first
+// datacenter; DELETE takes a JSON array of datacenters.
+func (m *mockAxonOpsServer) handleCommitLogSettings(w http.ResponseWriter, r *http.Request, clusterType, clusterName string, rest []string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	key := clusterKey(clusterType, clusterName)
+
+	switch r.Method {
+	case http.MethodGet:
+		out := []map[string]interface{}{}
+		for _, s := range m.commitLogSettings[key] {
+			cfg := s.RemoteConfig
+			if cfg != "" {
+				cfg = maskedSecretValue
+			}
+			out = append(out, map[string]interface{}{
+				"datacenters":             s.Datacenters,
+				"remoteType":              s.RemoteType,
+				"remotePath":              s.RemotePath,
+				"RemoteRetentionDuration": s.RemoteRetentionDuration,
+				"RemoteConfig":            cfg,
+				"timeout":                 s.Timeout,
+				"bwlimit":                 s.BwLimit,
+				"transfers":               s.Transfers,
+			})
+		}
+		writeJSON(w, http.StatusOK, out)
+	case http.MethodPost:
+		var s axonopsClient.CommitLogArchiveSettings
+		if err := json.Unmarshal(readBody(r), &s); err != nil || len(s.Datacenters) == 0 {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		m.commitLogSettings[key] = append(m.commitLogSettings[key], s)
+		w.WriteHeader(http.StatusOK)
+	case http.MethodPut:
+		var s axonopsClient.CommitLogArchiveSettings
+		if len(rest) == 0 || json.Unmarshal(readBody(r), &s) != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		for i, existing := range m.commitLogSettings[key] {
+			if len(existing.Datacenters) > 0 && existing.Datacenters[0] == rest[0] {
+				m.commitLogSettings[key][i] = s
+				w.WriteHeader(http.StatusOK)
+				return
+			}
+		}
+		w.WriteHeader(http.StatusNotFound)
+	case http.MethodDelete:
+		var dcs []string
+		_ = json.Unmarshal(readBody(r), &dcs)
+		var kept []axonopsClient.CommitLogArchiveSettings
+		for _, s := range m.commitLogSettings[key] {
+			remove := false
+			for _, dc := range dcs {
+				for _, sdc := range s.Datacenters {
+					if dc == sdc {
+						remove = true
+					}
+				}
+			}
+			if !remove {
+				kept = append(kept, s)
+			}
+		}
+		m.commitLogSettings[key] = kept
+		w.WriteHeader(http.StatusOK)
+	default:
+		w.WriteHeader(http.StatusMethodNotAllowed)
+	}
+}
+
+// --- agent disconnection tolerance ---
+
+// handleAgentTolerance serves "configs/agentDisconnectionTolerance". An
+// unconfigured cluster returns empty values.
+func (m *mockAxonOpsServer) handleAgentTolerance(w http.ResponseWriter, r *http.Request, clusterType, clusterName string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	key := clusterKey(clusterType, clusterName)
+
+	switch r.Method {
+	case http.MethodGet:
+		t := m.agentTolerance[key]
+		if t == nil {
+			t = &axonopsClient.AgentDisconnectionTolerance{}
+		}
+		writeJSON(w, http.StatusOK, t)
+	case http.MethodPut:
+		var t axonopsClient.AgentDisconnectionTolerance
+		if err := json.Unmarshal(readBody(r), &t); err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		m.agentTolerance[key] = &t
 		w.WriteHeader(http.StatusOK)
 	default:
 		w.WriteHeader(http.StatusMethodNotAllowed)

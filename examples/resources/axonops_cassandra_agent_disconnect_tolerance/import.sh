@@ -1,0 +1,1 @@
+terraform import axonops_cassandra_agent_disconnect_tolerance.example cassandra/my-cassandra-cluster
