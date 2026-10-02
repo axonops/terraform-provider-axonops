@@ -1,0 +1,35 @@
+---
+page_title: "{{.Name}} {{.Type}} - {{.ProviderName}}"
+subcategory: "Cassandra"
+description: |-
+{{ .Description | plainmarkdown | trimspace | prefixlines "  " }}
+---
+
+# {{.Name}} ({{.Type}})
+
+{{ .Description | trimspace }}
+
+## Example Usage
+
+{{ tffile "examples/resources/axonops_cassandra_commitlog_settings/resource.tf" }}
+
+## Behaviour
+
+- **One configuration per datacenter.** Creating the resource fails if any listed datacenter already has commitlog archive settings. Import the existing settings instead.
+- **`datacenters` changes replace the resource.** The first datacenter identifies the configuration in the AxonOps API, so changing the list deletes the old settings and creates new ones.
+- **`remote_config` is write-only.** The API does not return it as sent, so the provider keeps the configured value and does not detect changes made outside Terraform. When the value has no `type` key, the provider adds `type = <remote_type>`.
+- **Deleting stops archiving only.** Commitlogs already archived stay on the storage backend until you remove them.
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Import
+
+Commitlog archive settings can be imported using the format `cluster_type/cluster_name/datacenter`, where `datacenter` is any datacenter the settings cover:
+
+{{ codefile "shell" "examples/resources/axonops_cassandra_commitlog_settings/import.sh" }}
+
+In Terraform v1.5.0 and later, use an [`import` block](https://developer.hashicorp.com/terraform/language/import) instead:
+
+{{ tffile "examples/resources/axonops_cassandra_commitlog_settings/import.tf" }}
+
+`remote_config` is not imported. Set it in the configuration after import.
