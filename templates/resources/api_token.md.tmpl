@@ -1,0 +1,51 @@
+---
+page_title: "{{.Name}} {{.Type}} - {{.ProviderName}}"
+subcategory: "Access"
+description: |-
+{{ .Description | plainmarkdown | trimspace | prefixlines "  " }}
+---
+
+# {{.Name}} ({{.Type}})
+
+{{ .Description | trimspace }}
+
+## Example Usage
+
+{{ tffile "examples/resources/axonops_api_token/resource.tf" }}
+
+## Roles
+
+Each `allowed_roles` entry scopes one role:
+
+| Format | Example | Scope |
+|--------|---------|-------|
+| `<org>/<role>` | `my-org/readonly` | Every cluster of the organisation |
+| `<org>/<cluster_type>/<role>` | `my-org/kafka/admin` | Every cluster of one type |
+| `<org>/<cluster_type>/<cluster_name>/<role>` | `my-org/kafka/prod/readonly` | One cluster |
+
+`<role>` is `superuser`, `admin`, `readonly` or `backupadmin`.
+
+## Rotation
+
+AxonOps tokens cannot be changed or rotated in place. Changing `allowed_roles`, `expires_at` or `rotation_triggers` replaces the token: Terraform creates a new token and revokes the old one. Use `create_before_destroy` so the new secret exists before the old one stops working, and change `rotation_triggers` (for example from a `time_rotating` resource) to rotate on a schedule.
+
+## Secret handling
+
+- `secret` is returned by AxonOps only when the token is created. It is stored in Terraform state, so protect the state (remote backend with encryption and access control).
+- Clients send it as the header `Authorization: AxonApi <secret>`.
+- `name` is kept in Terraform state only; AxonOps does not store token names.
+- Managing tokens requires a provider `api_key` with the `superuser` role.
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Import
+
+API tokens can be imported using the token key ID:
+
+{{ codefile "shell" "examples/resources/axonops_api_token/import.sh" }}
+
+In Terraform v1.5.0 and later, use an [`import` block](https://developer.hashicorp.com/terraform/language/import) instead:
+
+{{ tffile "examples/resources/axonops_api_token/import.tf" }}
+
+> **Note:** an imported token has no `secret` in state, because AxonOps cannot return it again.

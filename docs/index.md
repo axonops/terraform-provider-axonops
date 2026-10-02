@@ -130,6 +130,7 @@ provider "axonops" {
 - `axonops_kafka_topic` - Manage Kafka topics
 - `axonops_kafka_acl` - Manage Kafka ACLs
 - `axonops_kafka_connect_connector` - Deploy Kafka Connect connectors
+- `axonops_schema_registry_compatibility` - Set Schema Registry compatibility levels
 
 ### Cassandra/DSE Management
 - `axonops_cassandra_backup` - Schedule and manage backups
@@ -141,6 +142,10 @@ provider "axonops" {
 - `axonops_log_alert_rule` - Create log-based alert rules
 - `axonops_alert_route` - Route alerts to integrations
 - `axonops_silence` - Suppress alerts during maintenance
+- `axonops_custom_dashboard` - Build custom dashboards
+
+### Access
+- `axonops_api_token` - Create and rotate API tokens
 
 ### Integrations
 - `axonops_slack_integration` - Configure Slack webhook
@@ -163,6 +168,7 @@ provider "axonops" {
 - `axonops_kafka_acl` - Look up a specific Kafka ACL
 - `axonops_kafka_acl_list` - List all Kafka ACLs
 - `axonops_kafka_connect_connector` - Look up a Kafka Connect connector
+- `axonops_kafka_broker_config` - Read a Kafka broker's configuration
 
 ### Cassandra/DSE
 - `axonops_cassandra_backup` - Look up a backup

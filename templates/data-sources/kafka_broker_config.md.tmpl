@@ -1,0 +1,18 @@
+---
+page_title: "{{.Name}} {{.Type}} - {{.ProviderName}}"
+subcategory: "Kafka"
+description: |-
+{{ .Description | plainmarkdown | trimspace | prefixlines "  " }}
+---
+
+# {{.Name}} ({{.Type}})
+
+{{ .Description | trimspace }}
+
+The AxonOps API can read broker configs but not change them, so this is a data source only. Change broker configs with your Kafka deployment tooling.
+
+## Example Usage
+
+{{ tffile "examples/data-sources/axonops_kafka_broker_config/data-source.tf" }}
+
+{{ .SchemaMarkdown | trimspace }}

@@ -256,6 +256,7 @@ func (p *axonopsProvider) DataSources(ctx context.Context) []func() datasource.D
 		NewSilenceDataSource,
 		NewAlertRouteDataSource,
 		NewKafkaACLSingleDataSource,
+		NewKafkaBrokerConfigDataSource,
 	}
 }
 
@@ -281,6 +282,9 @@ func (p *axonopsProvider) Resources(ctx context.Context) []func() resource.Resou
 		NewServiceNowIntegrationResource,
 		NewCassandraScheduledRepairResource,
 		NewSilenceResource,
+		NewCustomDashboardResource,
+		NewApiTokenResource,
+		NewSchemaRegistryCompatibilityResource,
 	}
 }
 

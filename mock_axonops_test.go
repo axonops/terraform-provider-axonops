@@ -106,6 +106,15 @@ type mockAxonOpsServer struct {
 	// silences: "clusterType/clusterName" -> list
 	silences map[string][]axonopsClient.SilenceWindow
 
+	// 2.0 dashboard templates (?dashver=2.0): "clusterType/clusterName" -> template
+	dashboardsV2 map[string]*axonopsClient.DashboardTemplate
+	// API tokens of the org
+	apiTokens []axonopsClient.ApiToken
+	// schema registry compatibility: cluster -> subject ("" = global) -> level
+	srCompat map[string]map[string]string
+	// kafka brokers: cluster -> broker ID -> broker
+	brokers map[string]map[int64]*axonopsClient.KafkaBrokerInfo
+
 	// integrationReadLag is how many list GETs omit a newly created
 	// integration. Zero (the default) makes writes visible immediately.
 	integrationReadLag int
@@ -128,6 +137,9 @@ func newMockAxonOpsServer(t interface{ Cleanup(func()) }) *mockAxonOpsServer {
 		routings:         map[string]map[string]*routingEntry{},
 		silences:         map[string][]axonopsClient.SilenceWindow{},
 		acls:             map[string][]axonopsClient.ACLResource{},
+		dashboardsV2:     map[string]*axonopsClient.DashboardTemplate{},
+		srCompat:         map[string]map[string]string{},
+		brokers:          map[string]map[int64]*axonopsClient.KafkaBrokerInfo{},
 	}
 
 	mux := http.NewServeMux()
@@ -321,6 +333,10 @@ func (m *mockAxonOpsServer) handleAPI(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	default:
+		// org-first: {org}/createApiToken, {org}/listApiTokens, {org}/deleteApiToken
+		if len(parts) == 2 && m.handleApiTokens(w, r, parts[1]) {
+			return
+		}
 		// org-first: {org}/kafka/...
 		if len(parts) >= 2 && parts[1] == "kafka" {
 			m.handleKafka(w, r, parts[2:])
@@ -351,7 +367,19 @@ func (m *mockAxonOpsServer) handleKafka(w http.ResponseWriter, r *http.Request, 
 			return
 		}
 		m.handleConnect(w, r, cluster, rest[2], rest[3:])
+	case "broker":
+		// broker/{brokerId}
+		if len(rest) != 3 {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		m.handleBroker(w, r, cluster, rest[2])
 	case "registry":
+		// registry/configs[/{subject}]
+		if len(rest) >= 3 && rest[2] == "configs" {
+			m.handleSchemaRegistryConfig(w, r, cluster, rest[3:])
+			return
+		}
 		// registry/subjects/{subject}[/{version}]
 		if len(rest) < 4 || rest[2] != "subjects" {
 			w.WriteHeader(http.StatusNotFound)
@@ -933,6 +961,10 @@ func (m *mockAxonOpsServer) handleDeleteScheduledRepair(w http.ResponseWriter, r
 // --- dashboard templates ---
 
 func (m *mockAxonOpsServer) handleDashboardTemplates(w http.ResponseWriter, r *http.Request, clusterType, clusterName string) {
+	if r.URL.Query().Get("dashver") == "2.0" {
+		m.handleDashboardTemplateV2(w, r, clusterType, clusterName)
+		return
+	}
 	if r.Method != http.MethodGet {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
