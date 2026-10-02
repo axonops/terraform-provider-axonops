@@ -144,6 +144,8 @@ Full attribute documentation: [registry.terraform.io/providers/axonops/axonops/l
 | [`axonops_cassandra_adaptive_repair`](docs/resources/cassandra_adaptive_repair.md) | Cassandra adaptive repair settings |
 | [`axonops_cassandra_scheduled_repair`](docs/resources/cassandra_scheduled_repair.md) | Cassandra scheduled repair job |
 | [`axonops_cassandra_backup`](docs/resources/cassandra_backup.md) | Cassandra backup schedule |
+| [`axonops_cassandra_commitlog_settings`](docs/resources/cassandra_commitlog_settings.md) | Cassandra commitlog archiving per datacenter |
+| [`axonops_cassandra_agent_disconnect_tolerance`](docs/resources/cassandra_agent_disconnect_tolerance.md) | Cassandra agent disconnection tolerance settings |
 | [`axonops_healthcheck_tcp`](docs/resources/healthcheck_tcp.md) | TCP connectivity health check |
 | [`axonops_healthcheck_http`](docs/resources/healthcheck_http.md) | HTTP endpoint health check |
 | [`axonops_healthcheck_shell`](docs/resources/healthcheck_shell.md) | Shell script health check |
@@ -231,6 +233,8 @@ All resources support `terraform import`.
 | `axonops_cassandra_adaptive_repair` | `cluster_type/cluster_name` |
 | `axonops_cassandra_scheduled_repair` | `cluster_type/cluster_name/tag` (or legacy `cluster_name/tag`) |
 | `axonops_cassandra_backup` | `cluster_type/cluster_name/tag` |
+| `axonops_cassandra_commitlog_settings` | `cluster_type/cluster_name/datacenter` |
+| `axonops_cassandra_agent_disconnect_tolerance` | `cluster_type/cluster_name` |
 | `axonops_healthcheck_tcp` | `cluster_type/cluster_name/healthcheck_name` |
 | `axonops_healthcheck_http` | `cluster_type/cluster_name/healthcheck_name` |
 | `axonops_healthcheck_shell` | `cluster_type/cluster_name/healthcheck_name` |
