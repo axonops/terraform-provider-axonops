@@ -1,0 +1,18 @@
+---
+page_title: "{{.Name}} {{.Type}} - {{.ProviderName}}"
+subcategory: "Clusters"
+description: |-
+{{ .Description | plainmarkdown | trimspace | prefixlines "  " }}
+---
+
+# {{.Name}} ({{.Type}})
+
+{{ .Description | trimspace }}
+
+Use this data source to fail fast when a cluster is missing, and to read its type, node count and versions before configuring dependent resources. Set `type` only when two clusters of different types share a name.
+
+## Example Usage
+
+{{ tffile "examples/data-sources/axonops_cluster/data-source.tf" }}
+
+{{ .SchemaMarkdown | trimspace }}

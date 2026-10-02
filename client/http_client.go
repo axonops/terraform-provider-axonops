@@ -230,6 +230,7 @@ func (c *AxonopsHttpClient) CreateTopic(ctx context.Context, topicName, clusterN
 // TopicInfo represents topic information returned from the API
 type TopicInfo struct {
 	Name              string             `json:"name"`
+	IsInternal        bool               `json:"isInternal"`
 	Partitions        int32              `json:"partitionCount"`
 	ReplicationFactor int32              `json:"replicationFactor"`
 	Config            []KafkaTopicConfig `json:"-"` // Populated from configs endpoint
@@ -2312,4 +2313,178 @@ func FindSilenceWindowByCronExpr(silences []SilenceWindow, cronExpr string) *Sil
 		}
 	}
 	return nil
+}
+
+// ListConnectors returns every connector registered in a Kafka Connect
+// cluster, keyed by connector name, including runtime status.
+func (c *AxonopsHttpClient) ListConnectors(ctx context.Context, clusterName, connectClusterName string) (map[string]ConnectorListEntry, error) {
+	reqURL := fmt.Sprintf("%s://%s/%s/%s/kafka/%s/connect/%s/connectors", c.protocol, c.axonopsHost, axonops_api_version, esc(c.orgid), esc(clusterName), esc(connectClusterName))
+	status, body, err := c.doJSON(ctx, "GET", reqURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	if status != 200 {
+		return nil, fmt.Errorf("failed to list connectors: status %d for url %v, body: %s", status, reqURL, string(body))
+	}
+	var result ConnectorsListResponse
+	if err := json.Unmarshal(body, &result); err != nil {
+		return nil, fmt.Errorf("failed to decode connectors response: %w", err)
+	}
+	if result.Connectors == nil {
+		result.Connectors = map[string]ConnectorListEntry{}
+	}
+	return result.Connectors, nil
+}
+
+// Cluster inventory types and methods
+
+// OrgsResponse is the org -> cluster type -> cluster hierarchy returned by
+// GET /api/v1/orgs, filtered by the caller's permissions.
+type OrgsResponse struct {
+	Orgs []OrgNode `json:"children"`
+}
+
+type OrgNode struct {
+	Name  string            `json:"name"`
+	Types []ClusterTypeNode `json:"children"`
+}
+
+type ClusterTypeNode struct {
+	Name     string        `json:"name"`
+	Clusters []ClusterNode `json:"children"`
+}
+
+// ClusterNode is a single cluster. Status is the alert RAG level:
+// 0 green, 1 amber, 2 red.
+type ClusterNode struct {
+	Name   string `json:"name"`
+	Type   string `json:"type"`
+	Status int    `json:"status"`
+}
+
+// ClusterSummary is a flattened cluster entry for one organisation.
+type ClusterSummary struct {
+	Name   string
+	Type   string
+	Status int
+}
+
+// ListClusters returns every cluster in the configured organisation that the
+// API key can see.
+func (c *AxonopsHttpClient) ListClusters(ctx context.Context) ([]ClusterSummary, error) {
+	reqURL := fmt.Sprintf("%s://%s/%s/orgs", c.protocol, c.axonopsHost, axonops_api_version)
+	status, body, err := c.doJSON(ctx, "GET", reqURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	if status != 200 {
+		return nil, fmt.Errorf("failed to list clusters: status %d for url %v, body: %s", status, reqURL, string(body))
+	}
+	var result OrgsResponse
+	if err := json.Unmarshal(body, &result); err != nil {
+		return nil, fmt.Errorf("failed to decode orgs response: %w", err)
+	}
+	clusters := []ClusterSummary{}
+	for _, org := range result.Orgs {
+		if org.Name != c.orgid {
+			continue
+		}
+		for _, t := range org.Types {
+			for _, cl := range t.Clusters {
+				clusterType := t.Name
+				if clusterType == "" {
+					clusterType = cl.Type
+				}
+				clusters = append(clusters, ClusterSummary{Name: cl.Name, Type: clusterType, Status: cl.Status})
+			}
+		}
+	}
+	return clusters, nil
+}
+
+// ClusterNodeInfo is a node (agent) as returned by GET /api/v1/nodes. Details
+// holds a reduced inventory: agent_version, comp_releaseVersion, rack,
+// human_readable_identifier, node_type, host_Platform, ...
+type ClusterNodeInfo struct {
+	HostID  string            `json:"host_id"`
+	Org     string            `json:"org"`
+	Type    string            `json:"type"`
+	Cluster string            `json:"cluster"`
+	DC      string            `json:"DC"`
+	HostIP  string            `json:"HostIP"`
+	Details map[string]string `json:"Details"`
+	Active  bool              `json:"active"`
+}
+
+// GetClusterNodes returns every node registered in a cluster.
+func (c *AxonopsHttpClient) GetClusterNodes(ctx context.Context, clusterType, clusterName string) ([]ClusterNodeInfo, error) {
+	reqURL := fmt.Sprintf("%s://%s/%s/nodes/%s/%s/%s", c.protocol, c.axonopsHost, axonops_api_version, esc(c.orgid), esc(clusterType), esc(clusterName))
+	status, body, err := c.doJSON(ctx, "GET", reqURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	if status != 200 {
+		return nil, fmt.Errorf("failed to get nodes: status %d for url %v, body: %s", status, reqURL, string(body))
+	}
+	var nodes []ClusterNodeInfo
+	if err := json.Unmarshal(body, &nodes); err != nil {
+		return nil, fmt.Errorf("failed to decode nodes response: %w", err)
+	}
+	return nodes, nil
+}
+
+type CassandraTable struct {
+	Name string `json:"Name,omitempty"`
+}
+
+type CassandraKeyspace struct {
+	Name                string           `json:"Name,omitempty"`
+	Tables              []CassandraTable `json:"Tables,omitempty"`
+	ReplicationStrategy string           `json:"ReplicationStrategy,omitempty"`
+	ReplicationFactor   int32            `json:"ReplicationFactor,omitempty"`
+	ReplicationParams   string           `json:"ReplicationParams,omitempty"`
+	System              bool             `json:"System,omitempty"`
+}
+
+// GetKeyspaces returns the keyspaces of a Cassandra or DSE cluster. The API
+// returns them in no particular order.
+func (c *AxonopsHttpClient) GetKeyspaces(ctx context.Context, clusterType, clusterName string) ([]CassandraKeyspace, error) {
+	reqURL := fmt.Sprintf("%s://%s/%s/keyspaces/%s/%s/%s", c.protocol, c.axonopsHost, axonops_api_version, esc(c.orgid), esc(clusterType), esc(clusterName))
+	status, body, err := c.doJSON(ctx, "GET", reqURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	if status != 200 {
+		return nil, fmt.Errorf("failed to get keyspaces: status %d for url %v, body: %s", status, reqURL, string(body))
+	}
+	var keyspaces []CassandraKeyspace
+	if err := json.Unmarshal(body, &keyspaces); err != nil {
+		return nil, fmt.Errorf("failed to decode keyspaces response: %w", err)
+	}
+	return keyspaces, nil
+}
+
+type SchemaSubjectsResponse struct {
+	Subjects []string `json:"subjects"`
+}
+
+// GetSchemaSubjects lists the schema registry subjects of a Kafka cluster.
+// Soft-deleted subjects are included only when includeDeleted is true.
+func (c *AxonopsHttpClient) GetSchemaSubjects(ctx context.Context, clusterName string, includeDeleted bool) ([]string, error) {
+	reqURL := fmt.Sprintf("%s://%s/%s/%s/kafka/%s/registry/subjects", c.protocol, c.axonopsHost, axonops_api_version, esc(c.orgid), esc(clusterName))
+	if includeDeleted {
+		reqURL += "?addDeleted=true"
+	}
+	status, body, err := c.doJSON(ctx, "GET", reqURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	if status != 200 {
+		return nil, fmt.Errorf("failed to list schema subjects: status %d for url %v, body: %s", status, reqURL, string(body))
+	}
+	var result SchemaSubjectsResponse
+	if err := json.Unmarshal(body, &result); err != nil {
+		return nil, fmt.Errorf("failed to decode schema subjects response: %w", err)
+	}
+	return result.Subjects, nil
 }

@@ -1,0 +1,18 @@
+---
+page_title: "{{.Name}} {{.Type}} - {{.ProviderName}}"
+subcategory: "Kafka"
+description: |-
+{{ .Description | plainmarkdown | trimspace | prefixlines "  " }}
+---
+
+# {{.Name}} ({{.Type}})
+
+{{ .Description | trimspace }}
+
+Use this data source to discover the connectors running in a Kafka Connect cluster, optionally filtered by `type`, for monitoring or dependency wiring.
+
+## Example Usage
+
+{{ tffile "examples/data-sources/axonops_kafka_connectors/data-source.tf" }}
+
+{{ .SchemaMarkdown | trimspace }}
