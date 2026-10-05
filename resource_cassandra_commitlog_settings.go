@@ -107,7 +107,7 @@ func (r *cassandraCommitLogSettingsResource) Schema(ctx context.Context, req res
 			"remote_config": schema.StringAttribute{
 				Optional:    true,
 				Sensitive:   true,
-				Description: "rclone-style storage configuration as `key = value` lines, e.g. credentials and region for s3. A `type = <remote_type>` line is added when missing.",
+				Description: "Remote storage configuration as key=value pairs separated by newlines. A `type = <remote_type>` line is added when missing.",
 			},
 			"timeout": schema.StringAttribute{
 				Optional:    true,
@@ -127,7 +127,7 @@ func (r *cassandraCommitLogSettingsResource) Schema(ctx context.Context, req res
 				Optional:    true,
 				Computed:    true,
 				Default:     stringdefault.StaticString(""),
-				Description: "Upload bandwidth limit in rclone format, e.g. \"10M\". Empty means unlimited.",
+				Description: "Upload bandwidth limit, e.g. \"10M\". Empty means unlimited.",
 			},
 		},
 	}
@@ -147,7 +147,7 @@ type cassandraCommitLogSettingsResourceData struct {
 }
 
 // commitLogRemoteConfig returns config with a "type = remoteType" line
-// prepended when config has no type key, since the agent selects the rclone
+// prepended when config has no type key, since the agent selects the storage
 // backend from it.
 func commitLogRemoteConfig(remoteType, config string) string {
 	for _, line := range strings.Split(config, "\n") {

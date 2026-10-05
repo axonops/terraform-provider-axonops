@@ -13,7 +13,7 @@ Manages Cassandra commitlog archiving for one datacenter. AxonOps archives commi
 
 ```terraform
 variable "commitlog_s3_remote_config" {
-  description = "rclone-style S3 remote configuration (key = value lines)"
+  description = "Remote storage configuration as key=value pairs separated by newlines"
   type        = string
   sensitive   = true
 }
@@ -74,9 +74,9 @@ resource "axonops_cassandra_commitlog_settings" "all" {
 
 ### Optional
 
-- `bw_limit` (String) Upload bandwidth limit in rclone format, e.g. "10M". Empty means unlimited.
+- `bw_limit` (String) Upload bandwidth limit, e.g. "10M". Empty means unlimited.
 - `cluster_type` (String) The cluster type (cassandra or dse). Default: cassandra
-- `remote_config` (String, Sensitive) rclone-style storage configuration as `key = value` lines, e.g. credentials and region for s3. A `type = <remote_type>` line is added when missing.
+- `remote_config` (String, Sensitive) Remote storage configuration as key=value pairs separated by newlines. A `type = <remote_type>` line is added when missing.
 - `remote_retention` (String) How long archived commitlogs are kept. Default: 60d
 - `timeout` (String) Upload operation timeout. Default: 10h
 - `transfers` (Number) Number of parallel file transfers. 0 uses the agent default. Default: 0
