@@ -150,10 +150,11 @@ func expiryEpoch(v types.String) (int32, error) {
 	if err != nil {
 		return 0, err
 	}
-	if t.Unix() <= 0 || t.Unix() > math.MaxInt32 {
+	secs := t.Unix()
+	if secs <= 0 || secs > math.MaxInt32 {
 		return 0, fmt.Errorf("expires_at %s is out of range", v.ValueString())
 	}
-	return int32(t.Unix()), nil
+	return int32(secs), nil
 }
 
 func epochToRFC3339(s int32) string {
