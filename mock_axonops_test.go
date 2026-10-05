@@ -130,6 +130,10 @@ type mockAxonOpsServer struct {
 	// soft-deleted schema subjects: cluster -> subject -> true
 	deletedSubjects map[string]map[string]bool
 
+	// dashboardProbeJSON makes /dashboard/ answer 401 with a JSON body, as a
+	// self-hosted server with authentication enabled does. Default: 404.
+	dashboardProbeJSON bool
+
 	// integrationReadLag is how many list GETs omit a newly created
 	// integration. Zero (the default) makes writes visible immediately.
 	integrationReadLag int
@@ -326,6 +330,13 @@ func (m *mockAxonOpsServer) handleKeyspaces(w http.ResponseWriter, r *http.Reque
 func (m *mockAxonOpsServer) registerRoutes(mux *http.ServeMux) {
 	// SAML probe: always 404 so the provider uses the non-SAML host layout.
 	mux.HandleFunc("/dashboard/", func(w http.ResponseWriter, r *http.Request) {
+		m.mu.Lock()
+		probeJSON := m.dashboardProbeJSON
+		m.mu.Unlock()
+		if probeJSON {
+			writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+			return
+		}
 		w.WriteHeader(http.StatusNotFound)
 	})
 
