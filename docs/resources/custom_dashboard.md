@@ -97,7 +97,7 @@ resource "axonops_custom_dashboard" "cassandra_latency" {
 
 A `row` panel starts a collapsible group: AxonOps puts every panel that follows it, up to the next `row`, in that group.
 
-The AxonOps UI needs a hidden row named `__EMPTY_ROW__` at the top of every dashboard. The provider adds and keeps it for you and does not show it in `panels`, so `__EMPTY_ROW__` cannot be used as a panel title. Configured panels are stored one grid row lower to make room for it; `layout.y` in Terraform is always relative to the first visible row.
+The AxonOps UI needs a hidden row named `__EMPTY_ROW__` at the top of every dashboard. The provider adds and keeps it for you, hiding it from the `panels` attribute, so `__EMPTY_ROW__` cannot be used as a panel title. Configured panels are positioned one grid row lower to make room for it, and `layout.y` in Terraform is always relative to the first visible row.
 
 Panel UUIDs follow list position. Add new panels at the end of the list to keep the UUIDs (and alert rules tied to them) of existing panels.
 
