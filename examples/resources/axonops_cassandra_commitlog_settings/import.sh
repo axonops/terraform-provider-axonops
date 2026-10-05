@@ -1,0 +1,1 @@
+terraform import axonops_cassandra_commitlog_settings.example cassandra/my-cassandra-cluster/dc1

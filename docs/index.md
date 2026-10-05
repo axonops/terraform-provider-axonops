@@ -136,6 +136,8 @@ provider "axonops" {
 - `axonops_cassandra_backup` - Schedule and manage backups
 - `axonops_cassandra_scheduled_repair` - Schedule repair jobs
 - `axonops_cassandra_adaptive_repair` - Configure adaptive repair
+- `axonops_cassandra_commitlog_settings` - Archive commitlogs for point-in-time restore
+- `axonops_cassandra_agent_disconnect_tolerance` - Set agent disconnection alert thresholds
 
 ### Monitoring & Alerting
 - `axonops_metric_alert_rule` - Create metric-based alert rules
@@ -220,7 +222,7 @@ provider "axonops" {
 ### Optional
 
 - `api_key` (String, Sensitive) The API key for authentication with AxonOps. Generate this from your AxonOps dashboard. If not provided, the provider will use the AXONOPS_API_KEY environment variable. This value is sensitive and should be stored securely.
-- `axonops_host` (String) The AxonOps server hostname without the protocol (e.g., 'axonops.example.com' or 'myorg.axonops.cloud'). For AxonOps SaaS, leave this empty to auto-detect the correct URL based on org_id and SAML configuration. For self-hosted deployments, specify your server's fully qualified domain name. Default: Auto-detected for SaaS. Environment variable: AXONOPS_HOST.
+- `axonops_host` (String) The AxonOps server hostname without the protocol (e.g., 'axonops.example.com' or 'myorg.axonops.cloud'). For AxonOps SaaS, leave this empty to auto-detect the correct URL based on org_id and SAML configuration. For self-hosted deployments, specify your server's fully qualified domain name; the API is then always reached at {host}/api/v1. Default: Auto-detected for SaaS. Environment variable: AXONOPS_HOST.
 - `axonops_protocol` (String) The protocol to use when connecting to the AxonOps API. Valid values: 'https' (default, recommended for production) or 'http' (only for non-production environments). Default: 'https'. Environment variable: AXONOPS_PROTOCOL.
 - `tls_skip_verify` (Boolean) Skip TLS certificate verification when connecting to the AxonOps API. Use only for development environments with self-signed certificates. WARNING: Disabling TLS verification exposes your API key to man-in-the-middle attacks. Default: false. Environment variable: AXONOPS_TLS_SKIP_VERIFY (set to 'true' to enable).
 - `token_type` (String) The type of authentication token to use in the Authorization header. Valid values: 'Bearer' (default for SaaS) or 'AxonApi' (typically for on-premise deployments). Most users should leave this at the default. Default: 'Bearer'. Environment variable: AXONOPS_TOKEN_TYPE.

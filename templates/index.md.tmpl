@@ -136,6 +136,8 @@ provider "axonops" {
 - `axonops_cassandra_backup` - Schedule and manage backups
 - `axonops_cassandra_scheduled_repair` - Schedule repair jobs
 - `axonops_cassandra_adaptive_repair` - Configure adaptive repair
+- `axonops_cassandra_commitlog_settings` - Archive commitlogs for point-in-time restore
+- `axonops_cassandra_agent_disconnect_tolerance` - Set agent disconnection alert thresholds
 
 ### Monitoring & Alerting
 - `axonops_metric_alert_rule` - Create metric-based alert rules

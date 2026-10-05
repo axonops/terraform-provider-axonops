@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"strings"
@@ -42,6 +43,27 @@ var (
 	samlCache   = map[string]bool{}
 	samlCacheMu sync.RWMutex
 )
+
+// saasDomains are the AxonOps SaaS domains. Only they serve the API under
+// /dashboard for SAML-enabled orgs; self-hosted servers always serve /api/v1
+// at the root.
+var saasDomains = []string{"axonops.cloud", "axonopsdev.com"}
+
+// isSaaSHost reports whether host (optionally with a port or path) belongs to
+// an AxonOps SaaS domain.
+func isSaaSHost(host string) bool {
+	host, _, _ = strings.Cut(host, "/")
+	if h, _, err := net.SplitHostPort(host); err == nil {
+		host = h
+	}
+	host = strings.ToLower(strings.TrimSuffix(host, "."))
+	for _, d := range saasDomains {
+		if host == d || strings.HasSuffix(host, "."+d) {
+			return true
+		}
+	}
+	return false
+}
 
 // detectSAML probes {protocol}://{host}/dashboard/ to determine whether the
 // host is a SAML-enabled AxonOps deployment. SAML deployments answer that path
@@ -168,14 +190,16 @@ func (p *axonopsProvider) Configure(ctx context.Context, req provider.ConfigureR
 	}
 
 	// Construct axonops_host based on configuration. SAML is auto-detected
-	// in both cases by probing {host}/dashboard/.
+	// by probing {host}/dashboard/, on SaaS hosts only: a self-hosted server
+	// with authentication enabled can answer that path with JSON too.
 	//
 	// No custom host:
 	//   SAML org:     {org_id}.axonops.cloud/dashboard
 	//   Non-SAML org: dash.axonops.cloud/{org_id}
-	// Custom host:
+	// Custom SaaS host:
 	//   SAML:         {custom_host}/dashboard
 	//   Non-SAML:     {custom_host}
+	// Self-hosted:    {custom_host}
 	if axonopsHost == "" {
 		orgId := config.OrgId.ValueString()
 		samlHost := orgId + ".axonops.cloud"
@@ -185,7 +209,7 @@ func (p *axonopsProvider) Configure(ctx context.Context, req provider.ConfigureR
 			axonopsHost = "dash.axonops.cloud/" + orgId
 		}
 	} else {
-		if detectSAML(ctx, protocol, axonopsHost, tlsSkipVerify) {
+		if isSaaSHost(axonopsHost) && detectSAML(ctx, protocol, axonopsHost, tlsSkipVerify) {
 			axonopsHost = axonopsHost + "/dashboard"
 		}
 	}
@@ -280,6 +304,8 @@ func (p *axonopsProvider) Resources(ctx context.Context) []func() resource.Resou
 		NewShellHealthcheckResource,
 		NewCassandraAdaptiveRepairResource,
 		NewCassandraBackupResource,
+		NewCassandraCommitLogSettingsResource,
+		NewCassandraAgentDisconnectToleranceResource,
 		NewMetricAlertRuleResource,
 		NewAlertRouteResource,
 		NewLogAlertRuleResource,
@@ -309,7 +335,7 @@ func (p *axonopsProvider) Schema(ctx context.Context, req provider.SchemaRequest
 				Optional: true,
 				Description: "The AxonOps server hostname without the protocol (e.g., 'axonops.example.com' or 'myorg.axonops.cloud'). " +
 					"For AxonOps SaaS, leave this empty to auto-detect the correct URL based on org_id and SAML configuration. " +
-					"For self-hosted deployments, specify your server's fully qualified domain name. " +
+					"For self-hosted deployments, specify your server's fully qualified domain name; the API is then always reached at {host}/api/v1. " +
 					"Default: Auto-detected for SaaS. Environment variable: AXONOPS_HOST.",
 			},
 			"axonops_protocol": schema.StringAttribute{
