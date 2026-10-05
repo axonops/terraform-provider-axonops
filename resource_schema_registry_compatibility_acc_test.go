@@ -111,7 +111,7 @@ resource "axonops_schema_registry_compatibility" "c" {
 `, subject, level)
 	}
 
-	resource.UnitTest(t, resource.TestCase{
+	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			{Config: cfg("orders-value", "backward"), ExpectError: regexp.MustCompile(`value must be one of`)},
@@ -124,7 +124,7 @@ resource "axonops_schema_registry_compatibility" "c" {
 func TestAccSchemaRegistryCompatibility_importInvalidID(t *testing.T) {
 	srv := newAccTestServer(t)
 
-	resource.UnitTest(t, resource.TestCase{
+	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			{

@@ -140,7 +140,7 @@ resource "axonops_api_token" "t" {
 `, roles, expires)
 	}
 
-	resource.UnitTest(t, resource.TestCase{
+	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			{Config: cfg(`["testorg/owner"]`, "2030-01-01T00:00:00Z"), ExpectError: regexp.MustCompile(`must be <org>/<role>`)},

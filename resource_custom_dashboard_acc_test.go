@@ -170,7 +170,7 @@ resource "axonops_custom_dashboard" "d" {
 `, clusterType, details, w)
 	}
 
-	resource.UnitTest(t, resource.TestCase{
+	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			{Config: base("kafka", "not json", 1), ExpectError: regexp.MustCompile(`Invalid JSON`)},

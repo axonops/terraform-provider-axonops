@@ -66,7 +66,7 @@ data "axonops_kafka_broker_config" "b" {
 func TestAccKafkaBrokerConfig_errors(t *testing.T) {
 	srv := newAccTestServer(t)
 
-	resource.UnitTest(t, resource.TestCase{
+	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			{
