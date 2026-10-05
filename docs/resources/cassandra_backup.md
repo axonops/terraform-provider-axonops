@@ -13,7 +13,7 @@ Manages a Cassandra backup schedule. Updates are performed as delete-then-create
 
 ```terraform
 variable "s3_remote_config" {
-  description = "rclone-style S3 remote configuration (key=value lines)"
+  description = "Remote storage configuration as key=value pairs separated by newlines"
   type        = string
   sensitive   = true
 }
