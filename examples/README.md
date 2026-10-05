@@ -43,6 +43,7 @@ terraform apply
 - **axonops_kafka_acl** - Manages Kafka Access Control Lists for authorization.
 - **axonops_kafka_connect_connector** - Manages Kafka Connect connectors (source and sink).
 - **axonops_schema** - Manages schemas in Schema Registry (supports AVRO, JSON, and PROTOBUF).
+- **axonops_schema_registry_compatibility** - Sets Schema Registry compatibility levels per subject or globally.
 
 ### Cassandra
 
@@ -58,6 +59,11 @@ terraform apply
 - **axonops_healthcheck_shell** - Shell script healthchecks.
 - **axonops_metric_alert_rule** - Metric-based alert rules.
 - **axonops_log_alert_rule** - Log-based alert rules.
+- **axonops_custom_dashboard** - Custom dashboards with panels, layout and filters.
+
+### Access
+
+- **axonops_api_token** - API tokens with scoped roles and rotation.
 - **axonops_alert_route** - Alert routing configuration.
 
 ### Integrations

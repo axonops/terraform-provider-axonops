@@ -1,0 +1,44 @@
+---
+page_title: "{{.Name}} {{.Type}} - {{.ProviderName}}"
+subcategory: "Dashboards"
+description: |-
+{{ .Description | plainmarkdown | trimspace | prefixlines "  " }}
+---
+
+# {{.Name}} ({{.Type}})
+
+{{ .Description | trimspace }}
+
+AxonOps stores all dashboards of a cluster in one template. This resource reads the template, changes only its own dashboard, and writes the template back, so dashboards made in the AxonOps UI are kept. Edits made in the UI at the same moment as a `terraform apply` can be lost.
+
+## Example Usage
+
+{{ tffile "examples/resources/axonops_custom_dashboard/resource.tf" }}
+
+## Panels
+
+| Field | Meaning |
+|-------|---------|
+| `type` | Widget type: `row`, `line-chart`, `pie_chart`, `counter`, `events_table`, `events_timeline`, `events_bar_chart`. |
+| `layout` | Grid position. The grid is 18 columns wide; `x` and `w` are columns, `y` and `h` are rows. |
+| `details` | Widget settings as JSON. For charts use `queries = [{ query, legend }]`. Copy a panel's JSON from an existing dashboard to see all options. |
+
+A `row` panel starts a collapsible group: AxonOps puts every panel that follows it, up to the next `row`, in that group.
+
+The AxonOps UI needs a hidden row named `__EMPTY_ROW__` at the top of every dashboard. The provider adds and keeps it for you, hiding it from the `panels` attribute, so `__EMPTY_ROW__` cannot be used as a panel title. Configured panels are positioned one grid row lower to make room for it, and `layout.y` in Terraform is always relative to the first visible row.
+
+Panel UUIDs follow list position. Add new panels at the end of the list to keep the UUIDs (and alert rules tied to them) of existing panels.
+
+> **Note:** AxonOps has no dashboard refresh-interval setting, so this resource has none.
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Import
+
+Dashboards can be imported using the format `cluster_type/cluster_name/dashboard_uuid`:
+
+{{ codefile "shell" "examples/resources/axonops_custom_dashboard/import.sh" }}
+
+In Terraform v1.5.0 and later, use an [`import` block](https://developer.hashicorp.com/terraform/language/import) instead:
+
+{{ tffile "examples/resources/axonops_custom_dashboard/import.tf" }}

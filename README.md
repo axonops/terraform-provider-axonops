@@ -140,6 +140,7 @@ Full attribute documentation: [registry.terraform.io/providers/axonops/axonops/l
 | [`axonops_kafka_acl`](docs/resources/kafka_acl.md) | Kafka Access Control List entry |
 | [`axonops_kafka_connect_connector`](docs/resources/kafka_connect_connector.md) | Kafka Connect source/sink connector |
 | [`axonops_schema`](docs/resources/schema.md) | Schema Registry schema (AVRO, Protobuf, JSON) |
+| [`axonops_schema_registry_compatibility`](docs/resources/schema_registry_compatibility.md) | Schema Registry compatibility level (per subject or global) |
 | [`axonops_cassandra_adaptive_repair`](docs/resources/cassandra_adaptive_repair.md) | Cassandra adaptive repair settings |
 | [`axonops_cassandra_scheduled_repair`](docs/resources/cassandra_scheduled_repair.md) | Cassandra scheduled repair job |
 | [`axonops_cassandra_backup`](docs/resources/cassandra_backup.md) | Cassandra backup schedule |
@@ -156,6 +157,8 @@ Full attribute documentation: [registry.terraform.io/providers/axonops/axonops/l
 | [`axonops_pagerduty_integration`](docs/resources/pagerduty_integration.md) | PagerDuty Events API v2 integration |
 | [`axonops_opsgenie_integration`](docs/resources/opsgenie_integration.md) | OpsGenie alerting integration |
 | [`axonops_servicenow_integration`](docs/resources/servicenow_integration.md) | ServiceNow incident integration |
+| [`axonops_custom_dashboard`](docs/resources/custom_dashboard.md) | Custom dashboard: panels, layout, filters |
+| [`axonops_api_token`](docs/resources/api_token.md) | AxonOps API token with scoped roles and rotation |
 
 ## Data Sources
 
@@ -174,6 +177,7 @@ Full attribute documentation: [registry.terraform.io/providers/axonops/axonops/l
 | [`axonops_kafka_acl_list`](docs/data-sources/kafka_acl_list.md) | List Kafka ACLs matching partial criteria |
 | [`axonops_kafka_connect_connector`](docs/data-sources/kafka_connect_connector.md) | Read an existing Kafka Connect connector |
 | [`axonops_schema`](docs/data-sources/schema.md) | Read an existing Schema Registry schema |
+| [`axonops_kafka_broker_config`](docs/data-sources/kafka_broker_config.md) | Read the configuration of a Kafka broker |
 | [`axonops_cassandra_adaptive_repair`](docs/data-sources/cassandra_adaptive_repair.md) | Read adaptive repair settings |
 | [`axonops_cassandra_scheduled_repair`](docs/data-sources/cassandra_scheduled_repair.md) | Read a scheduled repair job |
 | [`axonops_cassandra_backup`](docs/data-sources/cassandra_backup.md) | Read a backup schedule |
@@ -204,6 +208,10 @@ These behaviours are not obvious from the attribute tables alone and MUST be und
 - **`axonops_alert_route`** identity fields (`cluster_name`, `cluster_type`, `type`, `severity`, `integration_type`, `integration_name`) all force replacement; only `enable_override` updates in place.
 - **`axonops_cassandra_backup` updates are delete-then-create.** The AxonOps API has no in-place update for backup schedules, so every update changes the resource's `id`, even for a single-attribute change.
 - **Health checks and log collectors share one document per cluster.** The provider serializes writes across sibling resources on the same `cluster_type`/`cluster_name` within a single `terraform apply`, preventing intra-process lost updates. This protection does NOT extend across separate `apply` processes (e.g. two CI pipelines) or concurrent edits via the AxonOps UI — those can still race.
+- **`axonops_custom_dashboard`** shares one dashboard template per cluster with the AxonOps UI. Writes are serialized within one `terraform apply`, but UI edits made at the same moment can be lost. Panel UUIDs follow list position: add new panels at the end to keep existing UUIDs.
+- **`axonops_api_token`** tokens are immutable. Changing `allowed_roles`, `expires_at` or `rotation_triggers` replaces the token; use `create_before_destroy`. `secret` is only available after create and is stored in state. Requires a `superuser` provider key.
+- **`axonops_schema_registry_compatibility`** cannot be reset by the AxonOps API: destroy only removes it from state and leaves the level in place.
+- **Kafka broker configs** are read-only in the AxonOps API, so only the `axonops_kafka_broker_config` data source exists.
 - **`tls_skip_verify`** MUST NOT be used against production servers — see [Configuration Reference](#configuration-reference).
 - **`api_key`** is `Sensitive` in Terraform output, but is still stored in plaintext in the state file. Use an encrypted, access-controlled state backend.
 
@@ -217,6 +225,9 @@ All resources support `terraform import`.
 | `axonops_kafka_acl` | `cluster_name/resource_type/resource_name/resource_pattern_type/principal/host/operation/permission_type` (`principal` may contain `/`) |
 | `axonops_kafka_connect_connector` | `cluster_name/connect_cluster_name/connector_name` (`connector_name` may contain `/`) |
 | `axonops_schema` | `cluster_name/subject` |
+| `axonops_schema_registry_compatibility` | `cluster_name/subject`, or `cluster_name` for the global level |
+| `axonops_custom_dashboard` | `cluster_type/cluster_name/dashboard_uuid` |
+| `axonops_api_token` | `key_id` (the `secret` cannot be imported) |
 | `axonops_cassandra_adaptive_repair` | `cluster_type/cluster_name` |
 | `axonops_cassandra_scheduled_repair` | `cluster_type/cluster_name/tag` (or legacy `cluster_name/tag`) |
 | `axonops_cassandra_backup` | `cluster_type/cluster_name/tag` |
