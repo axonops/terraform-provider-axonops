@@ -2,12 +2,12 @@
 page_title: "axonops_cassandra_commitlog_settings Resource - axonops"
 subcategory: "Cassandra"
 description: |-
-  Manages Cassandra commitlog archiving for a set of datacenters. AxonOps archives commitlog segments to the configured storage so a cluster can be restored to a point in time. Each datacenter can belong to only one commitlog archive configuration; deleting the resource stops archiving but does not remove commitlogs already archived.
+  Manages Cassandra commitlog archiving for one datacenter. AxonOps archives commitlog segments to the configured storage so the datacenter can be restored to a point in time. Requires the Cassandra point-in-time restore (PITR) feature on the AxonOps organisation. Deleting the resource stops archiving but does not remove commitlogs already archived.
 ---
 
 # axonops_cassandra_commitlog_settings (Resource)
 
-Manages Cassandra commitlog archiving for a set of datacenters. AxonOps archives commitlog segments to the configured storage so a cluster can be restored to a point in time. Each datacenter can belong to only one commitlog archive configuration; deleting the resource stops archiving but does not remove commitlogs already archived.
+Manages Cassandra commitlog archiving for one datacenter. AxonOps archives commitlog segments to the configured storage so the datacenter can be restored to a point in time. Requires the Cassandra point-in-time restore (PITR) feature on the AxonOps organisation. Deleting the resource stops archiving but does not remove commitlogs already archived.
 
 ## Example Usage
 
@@ -18,31 +18,33 @@ variable "commitlog_s3_remote_config" {
   sensitive   = true
 }
 
-# Archive commitlogs to a directory on each node
-resource "axonops_cassandra_commitlog_settings" "local" {
+# Archive commitlogs of dc1 to a directory on each node
+resource "axonops_cassandra_commitlog_settings" "dc1" {
   cluster_name     = "my-cassandra-cluster"
-  datacenters      = ["dc1"]
+  datacenter       = "dc1"
   remote_type      = "local"
   remote_path      = "/var/lib/cassandra/commitlog_archive"
   remote_retention = "7d"
 }
 
-# Archive commitlogs of two datacenters to S3 using instance credentials
-resource "axonops_cassandra_commitlog_settings" "s3_instance_role" {
+# Archive commitlogs of dc2 to S3 using instance credentials
+resource "axonops_cassandra_commitlog_settings" "dc2" {
   cluster_name     = "my-cassandra-cluster"
-  datacenters      = ["dc2", "dc3"]
+  datacenter       = "dc2"
   remote_type      = "s3"
-  remote_path      = "my-bucket/commitlogs"
+  remote_path      = "my-bucket/commitlogs/dc2"
   remote_retention = "30d"
   remote_config    = "provider = AWS\nregion = eu-west-1\nenv_auth = true"
 }
 
-# Archive to S3 with explicit credentials and a bandwidth cap
-resource "axonops_cassandra_commitlog_settings" "s3_keys" {
+# Archive every datacenter to S3 with explicit credentials and a bandwidth cap
+resource "axonops_cassandra_commitlog_settings" "all" {
+  for_each = toset(["dc3", "dc4"])
+
   cluster_name     = "my-cassandra-cluster"
-  datacenters      = ["dc4"]
+  datacenter       = each.key
   remote_type      = "s3"
-  remote_path      = "my-bucket/commitlogs"
+  remote_path      = "my-bucket/commitlogs/${each.key}"
   remote_retention = "90d"
   remote_config    = var.commitlog_s3_remote_config # e.g. "provider = AWS\nregion = us-east-1\nenv_auth = false\naccess_key_id = ...\nsecret_access_key = ..."
   timeout          = "2h"
@@ -53,9 +55,11 @@ resource "axonops_cassandra_commitlog_settings" "s3_keys" {
 
 ## Behaviour
 
-- **One configuration per datacenter.** Creating the resource fails if any listed datacenter already has commitlog archive settings. Import the existing settings instead.
-- **`datacenters` changes replace the resource.** The first datacenter identifies the configuration in the AxonOps API, so changing the list deletes the old settings and creates new ones.
-- **`remote_config` is write-only.** The API does not return it as sent, so the provider keeps the configured value and does not detect changes made outside Terraform. When the value has no `type` key, the provider adds `type = <remote_type>`.
+- **Requires the Cassandra PITR feature.** Without point-in-time restore enabled on the AxonOps organisation, the API rejects every request with HTTP 400.
+- **One configuration per datacenter.** Use one resource per datacenter, e.g. with `for_each`. Creating the resource fails if the datacenter already has commitlog archive settings. Import the existing settings instead.
+- **`datacenter` changes replace the resource.**
+- **`remote_path` is mandatory.** Commitlog archiving is always remote, even with `remote_type = "local"`.
+- **`remote_config` is write-only.** The API hides its protected fields, so the provider keeps the configured value and does not detect changes made outside Terraform. When the value has no `type` key, the provider adds `type = <remote_type>`.
 - **Deleting stops archiving only.** Commitlogs already archived stay on the storage backend until you remove them.
 
 <!-- schema generated by tfplugindocs -->
@@ -64,7 +68,8 @@ resource "axonops_cassandra_commitlog_settings" "s3_keys" {
 ### Required
 
 - `cluster_name` (String) The name of the cluster.
-- `datacenters` (List of String) Datacenters whose commitlogs are archived. The first datacenter identifies the configuration; changing the list replaces the resource.
+- `datacenter` (String) Datacenter whose commitlogs are archived. A datacenter can have one commitlog archive configuration only. Changing it replaces the resource.
+- `remote_path` (String) Base path on the storage backend, e.g. a bucket and prefix for s3 or a directory for local and sftp. Must not end with "/".
 - `remote_type` (String) Storage backend: local, sftp, s3, s3Compatible, azureblob, googlecloudstorage.
 
 ### Optional
@@ -72,14 +77,13 @@ resource "axonops_cassandra_commitlog_settings" "s3_keys" {
 - `bw_limit` (String) Upload bandwidth limit in rclone format, e.g. "10M". Empty means unlimited.
 - `cluster_type` (String) The cluster type (cassandra or dse). Default: cassandra
 - `remote_config` (String, Sensitive) rclone-style storage configuration as `key = value` lines, e.g. credentials and region for s3. A `type = <remote_type>` line is added when missing.
-- `remote_path` (String) Path on the storage backend, e.g. a bucket and prefix for s3 or a directory for local and sftp.
 - `remote_retention` (String) How long archived commitlogs are kept. Default: 60d
 - `timeout` (String) Upload operation timeout. Default: 10h
 - `transfers` (Number) Number of parallel file transfers. 0 uses the agent default. Default: 0
 
 ## Import
 
-Commitlog archive settings can be imported using the format `cluster_type/cluster_name/datacenter`, where `datacenter` is any datacenter the settings cover:
+Commitlog archive settings can be imported using the format `cluster_type/cluster_name/datacenter`:
 
 ```shell
 terraform import axonops_cassandra_commitlog_settings.example cassandra/my-cassandra-cluster/dc1

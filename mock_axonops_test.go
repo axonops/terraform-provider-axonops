@@ -91,6 +91,9 @@ type mockAxonOpsServer struct {
 	cassandraBackups map[string][]axonopsClient.CassandraBackup
 	// commitlog archive settings: "clusterType/clusterName" -> list
 	commitLogSettings map[string][]axonopsClient.CommitLogArchiveSettings
+	// commitLogPITRDisabled makes every commitlog settings endpoint answer a
+	// bare 400, as the real API does without the Cassandra PITR feature.
+	commitLogPITRDisabled bool
 	// agent disconnection tolerance: "clusterType/clusterName" -> settings
 	agentTolerance map[string]*axonopsClient.AgentDisconnectionTolerance
 	// scheduled repairs: clusterName -> list of entries
@@ -990,14 +993,30 @@ func (m *mockAxonOpsServer) handleAdaptiveRepair(w http.ResponseWriter, r *http.
 
 // --- cassandra commitlog archive settings ---
 
-// handleCommitLogSettings serves "cassandraCommitLogsSettings". Like the real
-// API, GET capitalises RemoteRetentionDuration and RemoteConfig and does not
-// return remoteConfig as sent; PUT targets the configuration by its first
-// datacenter; DELETE takes a JSON array of datacenters.
+// handleCommitLogSettings serves "cassandraCommitLogsSettings" with the rules
+// of the real API: one configuration per datacenter, exactly one datacenter
+// per write, a mandatory remotePath with trailing "/" trimmed, PUT addressed
+// by datacenter, DELETE taking a JSON array of datacenters, and a bare 400
+// when the organisation lacks the PITR feature. GET capitalises
+// RemoteRetentionDuration and RemoteConfig and masks remoteConfig.
 func (m *mockAxonOpsServer) handleCommitLogSettings(w http.ResponseWriter, r *http.Request, clusterType, clusterName string, rest []string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	key := clusterKey(clusterType, clusterName)
+
+	if m.commitLogPITRDisabled {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	find := func(dc string) int {
+		for i, s := range m.commitLogSettings[key] {
+			if len(s.Datacenters) > 0 && s.Datacenters[0] == dc {
+				return i
+			}
+		}
+		return -1
+	}
 
 	switch r.Method {
 	case http.MethodGet:
@@ -1019,46 +1038,44 @@ func (m *mockAxonOpsServer) handleCommitLogSettings(w http.ResponseWriter, r *ht
 			})
 		}
 		writeJSON(w, http.StatusOK, out)
-	case http.MethodPost:
+	case http.MethodPost, http.MethodPut:
 		var s axonopsClient.CommitLogArchiveSettings
-		if err := json.Unmarshal(readBody(r), &s); err != nil || len(s.Datacenters) == 0 {
-			w.WriteHeader(http.StatusBadRequest)
+		if err := json.Unmarshal(readBody(r), &s); err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
-		m.commitLogSettings[key] = append(m.commitLogSettings[key], s)
-		w.WriteHeader(http.StatusOK)
-	case http.MethodPut:
-		var s axonopsClient.CommitLogArchiveSettings
-		if len(rest) == 0 || json.Unmarshal(readBody(r), &s) != nil {
-			w.WriteHeader(http.StatusBadRequest)
+		if strings.TrimSpace(s.RemotePath) == "" {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Base Remote Path is required when remote storage is enabled"})
 			return
 		}
-		for i, existing := range m.commitLogSettings[key] {
-			if len(existing.Datacenters) > 0 && existing.Datacenters[0] == rest[0] {
-				m.commitLogSettings[key][i] = s
-				w.WriteHeader(http.StatusOK)
+		if len(s.Datacenters) != 1 {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "exactly 1 datacenter must be specified"})
+			return
+		}
+		s.RemotePath = strings.TrimRight(s.RemotePath, "/")
+		i := find(s.Datacenters[0])
+		if r.Method == http.MethodPost {
+			if i >= 0 {
+				writeJSON(w, http.StatusForbidden, map[string]string{"error": "unable to create multiple configs for the same datacenter"})
 				return
 			}
+			m.commitLogSettings[key] = append(m.commitLogSettings[key], s)
+		} else {
+			if len(rest) == 0 || i < 0 {
+				writeJSON(w, http.StatusBadRequest, map[string]string{"error": "could not find an entry to update"})
+				return
+			}
+			m.commitLogSettings[key][i] = s
 		}
-		w.WriteHeader(http.StatusNotFound)
+		w.WriteHeader(http.StatusOK)
 	case http.MethodDelete:
 		var dcs []string
 		_ = json.Unmarshal(readBody(r), &dcs)
-		var kept []axonopsClient.CommitLogArchiveSettings
-		for _, s := range m.commitLogSettings[key] {
-			remove := false
-			for _, dc := range dcs {
-				for _, sdc := range s.Datacenters {
-					if dc == sdc {
-						remove = true
-					}
-				}
-			}
-			if !remove {
-				kept = append(kept, s)
+		for _, dc := range dcs {
+			if i := find(dc); i >= 0 {
+				m.commitLogSettings[key] = append(m.commitLogSettings[key][:i], m.commitLogSettings[key][i+1:]...)
 			}
 		}
-		m.commitLogSettings[key] = kept
 		w.WriteHeader(http.StatusOK)
 	default:
 		w.WriteHeader(http.StatusMethodNotAllowed)

@@ -12,7 +12,8 @@ import (
 // Cassandra commitlog archive settings types and methods
 
 // CommitLogArchiveSettings is one commitlog archive configuration. The API
-// keeps a list per cluster; each entry applies to the datacenters it lists.
+// keeps a list per cluster with one entry per datacenter; Datacenters must
+// hold exactly that one datacenter.
 // The API returns RemoteRetentionDuration and RemoteConfig capitalised but
 // accepts them lower-camel-case; encoding/json matches keys case-insensitively
 // so a single struct serves both directions.
@@ -25,6 +26,19 @@ type CommitLogArchiveSettings struct {
 	Timeout                 string   `json:"timeout"`
 	BwLimit                 string   `json:"bwlimit"`
 	Transfers               int      `json:"transfers"`
+}
+
+// errCommitLogPITRDisabled explains the bare 400 the AxonOps server returns
+// from every commitlog settings endpoint when the organisation does not have
+// the Cassandra point-in-time restore (PITR) feature.
+const errCommitLogPITRDisabled = "the AxonOps server rejected the request without a reason (HTTP 400); commitlog archiving requires the Cassandra point-in-time restore (PITR) feature to be enabled for the organisation"
+
+// commitLogError builds the error for a failed commitlog settings request.
+func commitLogError(action string, status int, reqURL string, body []byte) error {
+	if status == 400 && len(bytes.TrimSpace(body)) == 0 {
+		return fmt.Errorf("failed to %s commitlog archive settings: %s (url %v)", action, errCommitLogPITRDisabled, reqURL)
+	}
+	return fmt.Errorf("failed to %s commitlog archive settings: status %d for url %v, body: %s", action, status, reqURL, string(body))
 }
 
 func (c *AxonopsHttpClient) commitLogSettingsURL(clusterType, clusterName string) string {
@@ -40,7 +54,7 @@ func (c *AxonopsHttpClient) GetCommitLogArchiveSettings(ctx context.Context, clu
 		return nil, err
 	}
 	if status != 200 {
-		return nil, fmt.Errorf("failed to get commitlog archive settings: status %d for url %v, body: %s", status, reqURL, string(body))
+		return nil, commitLogError("get", status, reqURL, body)
 	}
 	var settings []CommitLogArchiveSettings
 	if err := json.Unmarshal(body, &settings); err != nil {
@@ -57,13 +71,13 @@ func (c *AxonopsHttpClient) CreateCommitLogArchiveSettings(ctx context.Context, 
 		return err
 	}
 	if status != 200 && status != 201 && status != 204 {
-		return fmt.Errorf("failed to create commitlog archive settings: status %d for url %v, body: %s", status, reqURL, string(body))
+		return commitLogError("create", status, reqURL, body)
 	}
 	return nil
 }
 
 // UpdateCommitLogArchiveSettings replaces the commitlog archive configuration
-// identified by its first datacenter, as the AxonOps dashboard does.
+// of a datacenter. The API takes exactly one datacenter per configuration.
 func (c *AxonopsHttpClient) UpdateCommitLogArchiveSettings(ctx context.Context, clusterType, clusterName string, settings CommitLogArchiveSettings) error {
 	if len(settings.Datacenters) == 0 {
 		return fmt.Errorf("commitlog archive settings must list at least one datacenter")
@@ -74,7 +88,7 @@ func (c *AxonopsHttpClient) UpdateCommitLogArchiveSettings(ctx context.Context, 
 		return err
 	}
 	if status != 200 && status != 204 {
-		return fmt.Errorf("failed to update commitlog archive settings: status %d for url %v, body: %s", status, reqURL, string(body))
+		return commitLogError("update", status, reqURL, body)
 	}
 	return nil
 }
@@ -116,7 +130,7 @@ func (c *AxonopsHttpClient) DeleteCommitLogArchiveSettings(ctx context.Context, 
 	if isDeleteSuccess(resp.StatusCode) {
 		return nil
 	}
-	return fmt.Errorf("failed to delete commitlog archive settings: status %d for url %v, body: %s", resp.StatusCode, reqURL, string(bodyBytes))
+	return commitLogError("delete", resp.StatusCode, reqURL, bodyBytes)
 }
 
 // Agent disconnection tolerance types and methods

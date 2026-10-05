@@ -144,7 +144,7 @@ Full attribute documentation: [registry.terraform.io/providers/axonops/axonops/l
 | [`axonops_cassandra_adaptive_repair`](docs/resources/cassandra_adaptive_repair.md) | Cassandra adaptive repair settings |
 | [`axonops_cassandra_scheduled_repair`](docs/resources/cassandra_scheduled_repair.md) | Cassandra scheduled repair job |
 | [`axonops_cassandra_backup`](docs/resources/cassandra_backup.md) | Cassandra backup schedule |
-| [`axonops_cassandra_commitlog_settings`](docs/resources/cassandra_commitlog_settings.md) | Cassandra commitlog archiving per datacenter |
+| [`axonops_cassandra_commitlog_settings`](docs/resources/cassandra_commitlog_settings.md) | Cassandra commitlog archiving for one datacenter |
 | [`axonops_cassandra_agent_disconnect_tolerance`](docs/resources/cassandra_agent_disconnect_tolerance.md) | Cassandra agent disconnection tolerance settings |
 | [`axonops_healthcheck_tcp`](docs/resources/healthcheck_tcp.md) | TCP connectivity health check |
 | [`axonops_healthcheck_http`](docs/resources/healthcheck_http.md) | HTTP endpoint health check |

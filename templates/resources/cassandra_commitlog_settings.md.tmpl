@@ -15,16 +15,18 @@ description: |-
 
 ## Behaviour
 
-- **One configuration per datacenter.** Creating the resource fails if any listed datacenter already has commitlog archive settings. Import the existing settings instead.
-- **`datacenters` changes replace the resource.** The first datacenter identifies the configuration in the AxonOps API, so changing the list deletes the old settings and creates new ones.
-- **`remote_config` is write-only.** The API does not return it as sent, so the provider keeps the configured value and does not detect changes made outside Terraform. When the value has no `type` key, the provider adds `type = <remote_type>`.
+- **Requires the Cassandra PITR feature.** Without point-in-time restore enabled on the AxonOps organisation, the API rejects every request with HTTP 400.
+- **One configuration per datacenter.** Use one resource per datacenter, e.g. with `for_each`. Creating the resource fails if the datacenter already has commitlog archive settings. Import the existing settings instead.
+- **`datacenter` changes replace the resource.**
+- **`remote_path` is mandatory.** Commitlog archiving is always remote, even with `remote_type = "local"`.
+- **`remote_config` is write-only.** The API hides its protected fields, so the provider keeps the configured value and does not detect changes made outside Terraform. When the value has no `type` key, the provider adds `type = <remote_type>`.
 - **Deleting stops archiving only.** Commitlogs already archived stay on the storage backend until you remove them.
 
 {{ .SchemaMarkdown | trimspace }}
 
 ## Import
 
-Commitlog archive settings can be imported using the format `cluster_type/cluster_name/datacenter`, where `datacenter` is any datacenter the settings cover:
+Commitlog archive settings can be imported using the format `cluster_type/cluster_name/datacenter`:
 
 {{ codefile "shell" "examples/resources/axonops_cassandra_commitlog_settings/import.sh" }}
 

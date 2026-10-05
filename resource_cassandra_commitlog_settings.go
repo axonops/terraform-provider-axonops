@@ -3,19 +3,16 @@ package main
 import (
 	"context"
 	"fmt"
-	"slices"
+	"regexp"
 	"strings"
 
 	axonopsClient "terraform-provider-axonops/client"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
-	"github.com/hashicorp/terraform-plugin-framework-validators/listvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
-	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64default"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/listplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
@@ -27,6 +24,10 @@ import (
 // commitLogRemoteTypes lists the storage backends the AxonOps dashboard
 // offers for commitlog archiving.
 var commitLogRemoteTypes = []string{"local", "sftp", "s3", "s3Compatible", "azureblob", "googlecloudstorage"}
+
+// commitLogRemotePathRegex rejects a trailing "/", which the AxonOps server
+// strips on write and would otherwise show as a diff on every plan.
+var commitLogRemotePathRegex = regexp.MustCompile(`[^/]$`)
 
 var _ resource.Resource = (*cassandraCommitLogSettingsResource)(nil)
 var _ resource.ResourceWithImportState = (*cassandraCommitLogSettingsResource)(nil)
@@ -62,7 +63,7 @@ func (r *cassandraCommitLogSettingsResource) Metadata(_ context.Context, req res
 
 func (r *cassandraCommitLogSettingsResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		Description: "Manages Cassandra commitlog archiving for a set of datacenters. AxonOps archives commitlog segments to the configured storage so a cluster can be restored to a point in time. Each datacenter can belong to only one commitlog archive configuration; deleting the resource stops archiving but does not remove commitlogs already archived.",
+		Description: "Manages Cassandra commitlog archiving for one datacenter. AxonOps archives commitlog segments to the configured storage so the datacenter can be restored to a point in time. Requires the Cassandra point-in-time restore (PITR) feature on the AxonOps organisation. Deleting the resource stops archiving but does not remove commitlogs already archived.",
 		Attributes: map[string]schema.Attribute{
 			"cluster_name": schema.StringAttribute{
 				Required:      true,
@@ -77,16 +78,11 @@ func (r *cassandraCommitLogSettingsResource) Schema(ctx context.Context, req res
 				Validators:    []validator.String{cassandraOnlyClusterTypeValidator()},
 				PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()},
 			},
-			"datacenters": schema.ListAttribute{
-				ElementType: types.StringType,
-				Required:    true,
-				Description: "Datacenters whose commitlogs are archived. The first datacenter identifies the configuration; changing the list replaces the resource.",
-				Validators: []validator.List{
-					listvalidator.SizeAtLeast(1),
-					listvalidator.UniqueValues(),
-					listvalidator.ValueStringsAre(stringvalidator.LengthAtLeast(1)),
-				},
-				PlanModifiers: []planmodifier.List{listplanmodifier.RequiresReplace()},
+			"datacenter": schema.StringAttribute{
+				Required:      true,
+				Description:   "Datacenter whose commitlogs are archived. A datacenter can have one commitlog archive configuration only. Changing it replaces the resource.",
+				Validators:    []validator.String{stringvalidator.LengthAtLeast(1)},
+				PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()},
 			},
 			"remote_type": schema.StringAttribute{
 				Required:    true,
@@ -94,10 +90,12 @@ func (r *cassandraCommitLogSettingsResource) Schema(ctx context.Context, req res
 				Validators:  []validator.String{stringvalidator.OneOf(commitLogRemoteTypes...)},
 			},
 			"remote_path": schema.StringAttribute{
-				Optional:    true,
-				Computed:    true,
-				Default:     stringdefault.StaticString(""),
-				Description: "Path on the storage backend, e.g. a bucket and prefix for s3 or a directory for local and sftp.",
+				Required:    true,
+				Description: "Base path on the storage backend, e.g. a bucket and prefix for s3 or a directory for local and sftp. Must not end with \"/\".",
+				Validators: []validator.String{
+					stringvalidator.LengthAtLeast(1),
+					stringvalidator.RegexMatches(commitLogRemotePathRegex, `must not end with "/"`),
+				},
 			},
 			"remote_retention": schema.StringAttribute{
 				Optional:    true,
@@ -138,7 +136,7 @@ func (r *cassandraCommitLogSettingsResource) Schema(ctx context.Context, req res
 type cassandraCommitLogSettingsResourceData struct {
 	ClusterName     types.String `tfsdk:"cluster_name"`
 	ClusterType     types.String `tfsdk:"cluster_type"`
-	Datacenters     types.List   `tfsdk:"datacenters"`
+	Datacenter      types.String `tfsdk:"datacenter"`
 	RemoteType      types.String `tfsdk:"remote_type"`
 	RemotePath      types.String `tfsdk:"remote_path"`
 	RemoteRetention types.String `tfsdk:"remote_retention"`
@@ -165,11 +163,9 @@ func commitLogRemoteConfig(remoteType, config string) string {
 	return typeLine + "\n" + config
 }
 
-func (data *cassandraCommitLogSettingsResourceData) toSettings(ctx context.Context) (axonopsClient.CommitLogArchiveSettings, diag.Diagnostics) {
-	var datacenters []string
-	diags := data.Datacenters.ElementsAs(ctx, &datacenters, false)
+func (data *cassandraCommitLogSettingsResourceData) toSettings() axonopsClient.CommitLogArchiveSettings {
 	return axonopsClient.CommitLogArchiveSettings{
-		Datacenters:             datacenters,
+		Datacenters:             []string{data.Datacenter.ValueString()},
 		RemoteType:              data.RemoteType.ValueString(),
 		RemotePath:              data.RemotePath.ValueString(),
 		RemoteRetentionDuration: data.RemoteRetention.ValueString(),
@@ -177,22 +173,23 @@ func (data *cassandraCommitLogSettingsResourceData) toSettings(ctx context.Conte
 		Timeout:                 data.Timeout.ValueString(),
 		BwLimit:                 data.BwLimit.ValueString(),
 		Transfers:               int(data.Transfers.ValueInt64()),
-	}, diags
+	}
 }
 
-// findCommitLogSettings returns the configuration covering datacenter, or nil.
+// findCommitLogSettings returns the configuration of datacenter, or nil. The
+// API keys each configuration by its first (and only) datacenter.
 func findCommitLogSettings(all []axonopsClient.CommitLogArchiveSettings, datacenter string) *axonopsClient.CommitLogArchiveSettings {
 	for i := range all {
-		if slices.Contains(all[i].Datacenters, datacenter) {
+		if len(all[i].Datacenters) > 0 && all[i].Datacenters[0] == datacenter {
 			return &all[i]
 		}
 	}
 	return nil
 }
 
-// confirmSettings waits until the configuration covering the first
-// datacenter reports the values that were sent. remote_config is not
-// compared, as the API may not return it as sent.
+// confirmSettings waits until the datacenter's configuration reports the
+// values that were sent. remote_config is not compared, as the API hides
+// its protected fields.
 func (r *cassandraCommitLogSettingsResource) confirmSettings(ctx context.Context, clusterType, clusterName string, want axonopsClient.CommitLogArchiveSettings) error {
 	_, err := confirmWrite(ctx, fmt.Sprintf("commitlog archive settings for datacenter %q", want.Datacenters[0]), func(ctx context.Context) (struct{}, bool, error) {
 		all, err := r.client.GetCommitLogArchiveSettings(ctx, clusterType, clusterName)
@@ -204,7 +201,9 @@ func (r *cassandraCommitLogSettingsResource) confirmSettings(ctx context.Context
 			got.RemoteType == want.RemoteType &&
 			got.RemotePath == want.RemotePath &&
 			got.RemoteRetentionDuration == want.RemoteRetentionDuration &&
-			got.Timeout == want.Timeout, nil
+			got.Timeout == want.Timeout &&
+			got.Transfers == want.Transfers &&
+			got.BwLimit == want.BwLimit, nil
 	})
 	return err
 }
@@ -218,27 +217,21 @@ func (r *cassandraCommitLogSettingsResource) Create(ctx context.Context, req res
 		return
 	}
 
-	settings, diags := data.toSettings(ctx)
-	resp.Diagnostics.Append(diags...)
-	if resp.Diagnostics.HasError() {
-		return
-	}
-	clusterType, clusterName := data.ClusterType.ValueString(), data.ClusterName.ValueString()
+	settings := data.toSettings()
+	clusterType, clusterName, dc := data.ClusterType.ValueString(), data.ClusterName.ValueString(), data.Datacenter.ValueString()
 
-	// A datacenter can belong to one configuration only; refuse to silently
-	// take over one that exists outside Terraform.
+	// The API refuses a second configuration for a datacenter; check first so
+	// the error says how to adopt the existing one.
 	existing, err := r.client.GetCommitLogArchiveSettings(ctx, clusterType, clusterName)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read commitlog archive settings: %s", err))
 		return
 	}
-	for _, dc := range settings.Datacenters {
-		if findCommitLogSettings(existing, dc) != nil {
-			resp.Diagnostics.AddError("Commitlog Archive Already Configured",
-				fmt.Sprintf("Datacenter %q of cluster %s/%s already has commitlog archive settings. Import them with ID %s/%s/%s or remove them first.",
-					dc, clusterType, clusterName, clusterType, clusterName, dc))
-			return
-		}
+	if findCommitLogSettings(existing, dc) != nil {
+		resp.Diagnostics.AddError("Commitlog Archive Already Configured",
+			fmt.Sprintf("Datacenter %q of cluster %s/%s already has commitlog archive settings. Import them with ID %s/%s/%s or remove them first.",
+				dc, clusterType, clusterName, clusterType, clusterName, dc))
+		return
 	}
 
 	if err := r.client.CreateCommitLogArchiveSettings(ctx, clusterType, clusterName, settings); err != nil {
@@ -266,47 +259,34 @@ func (r *cassandraCommitLogSettingsResource) Read(ctx context.Context, req resou
 		return
 	}
 
-	var datacenters []string
-	resp.Diagnostics.Append(data.Datacenters.ElementsAs(ctx, &datacenters, false)...)
-	if resp.Diagnostics.HasError() {
-		return
-	}
-	if len(datacenters) == 0 {
-		resp.State.RemoveResource(ctx)
-		return
-	}
-
 	all, err := r.client.GetCommitLogArchiveSettings(ctx, data.ClusterType.ValueString(), data.ClusterName.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read commitlog archive settings: %s", err))
 		return
 	}
 
-	found := findCommitLogSettings(all, datacenters[0])
+	found := findCommitLogSettings(all, data.Datacenter.ValueString())
 	if found == nil {
 		resp.State.RemoveResource(ctx)
 		return
 	}
 
-	resp.Diagnostics.Append(setCommitLogSettingsData(ctx, &data, found)...)
+	setCommitLogSettingsData(&data, found)
 
 	diags = resp.State.Set(ctx, &data)
 	resp.Diagnostics.Append(diags...)
 }
 
 // setCommitLogSettingsData copies the API values into data. remote_config is
-// sensitive and not returned as sent, so the configured value is kept, as
-// the backup resource does.
-func setCommitLogSettingsData(ctx context.Context, data *cassandraCommitLogSettingsResourceData, s *axonopsClient.CommitLogArchiveSettings) diag.Diagnostics {
-	var diags diag.Diagnostics
-	data.Datacenters, diags = types.ListValueFrom(ctx, types.StringType, s.Datacenters)
+// sensitive and its protected fields are hidden by the API, so the
+// configured value is kept, as the backup resource does.
+func setCommitLogSettingsData(data *cassandraCommitLogSettingsResourceData, s *axonopsClient.CommitLogArchiveSettings) {
 	data.RemoteType = types.StringValue(s.RemoteType)
 	data.RemotePath = types.StringValue(s.RemotePath)
 	data.RemoteRetention = types.StringValue(s.RemoteRetentionDuration)
 	data.Timeout = types.StringValue(s.Timeout)
 	data.Transfers = types.Int64Value(int64(s.Transfers))
 	data.BwLimit = types.StringValue(s.BwLimit)
-	return diags
 }
 
 func (r *cassandraCommitLogSettingsResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
@@ -318,11 +298,7 @@ func (r *cassandraCommitLogSettingsResource) Update(ctx context.Context, req res
 		return
 	}
 
-	settings, diags := data.toSettings(ctx)
-	resp.Diagnostics.Append(diags...)
-	if resp.Diagnostics.HasError() {
-		return
-	}
+	settings := data.toSettings()
 	clusterType, clusterName := data.ClusterType.ValueString(), data.ClusterName.ValueString()
 
 	if err := r.client.UpdateCommitLogArchiveSettings(ctx, clusterType, clusterName, settings); err != nil {
@@ -350,13 +326,7 @@ func (r *cassandraCommitLogSettingsResource) Delete(ctx context.Context, req res
 		return
 	}
 
-	var datacenters []string
-	resp.Diagnostics.Append(data.Datacenters.ElementsAs(ctx, &datacenters, false)...)
-	if resp.Diagnostics.HasError() {
-		return
-	}
-
-	err := r.client.DeleteCommitLogArchiveSettings(ctx, data.ClusterType.ValueString(), data.ClusterName.ValueString(), datacenters)
+	err := r.client.DeleteCommitLogArchiveSettings(ctx, data.ClusterType.ValueString(), data.ClusterName.ValueString(), []string{data.Datacenter.ValueString()})
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete commitlog archive settings: %s", err))
 		return
@@ -365,7 +335,7 @@ func (r *cassandraCommitLogSettingsResource) Delete(ctx context.Context, req res
 	tflog.Info(ctx, "Deleted Cassandra commitlog archive settings resource")
 }
 
-// ImportState imports the commitlog archive settings covering a datacenter.
+// ImportState imports the commitlog archive settings of a datacenter.
 // Import ID format: cluster_type/cluster_name/datacenter
 func (r *cassandraCommitLogSettingsResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	parts := strings.Split(req.ID, "/")
@@ -394,9 +364,10 @@ func (r *cassandraCommitLogSettingsResource) ImportState(ctx context.Context, re
 	data := cassandraCommitLogSettingsResourceData{
 		ClusterName:  types.StringValue(clusterName),
 		ClusterType:  types.StringValue(clusterType),
+		Datacenter:   types.StringValue(datacenter),
 		RemoteConfig: types.StringNull(),
 	}
-	resp.Diagnostics.Append(setCommitLogSettingsData(ctx, &data, found)...)
+	setCommitLogSettingsData(&data, found)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 
 	tflog.Info(ctx, fmt.Sprintf("Imported commitlog archive settings for datacenter %s in cluster %s/%s", datacenter, clusterType, clusterName))

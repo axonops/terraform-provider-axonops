@@ -25,6 +25,19 @@ func testAccCommitLogSettingsDestroyed(srv *mockAxonOpsServer) resource.TestChec
 func TestAccCassandraCommitlogSettings_crud(t *testing.T) {
 	srv := newAccTestServer(t)
 	name := "axonops_cassandra_commitlog_settings.c"
+	s3Config := testAccProviderConfig(srv.URL()) + `
+resource "axonops_cassandra_commitlog_settings" "c" {
+  cluster_name     = "ccluster"
+  datacenter       = "dc1"
+  remote_type      = "s3"
+  remote_path      = "bucket/commitlogs"
+  remote_retention = "30d"
+  remote_config    = "type = s3\nprovider = AWS\nregion = eu-west-1\nenv_auth = true"
+  timeout          = "2h"
+  transfers        = 4
+  bw_limit         = "10M"
+}
+`
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
@@ -34,14 +47,14 @@ func TestAccCassandraCommitlogSettings_crud(t *testing.T) {
 				Config: testAccProviderConfig(srv.URL()) + `
 resource "axonops_cassandra_commitlog_settings" "c" {
   cluster_name = "ccluster"
-  datacenters  = ["dc1", "dc2"]
+  datacenter   = "dc1"
   remote_type  = "local"
   remote_path  = "/backups/commitlogs"
 }
 `,
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr(name, "cluster_type", "cassandra"),
-					resource.TestCheckResourceAttr(name, "datacenters.#", "2"),
+					resource.TestCheckResourceAttr(name, "datacenter", "dc1"),
 					resource.TestCheckResourceAttr(name, "remote_type", "local"),
 					resource.TestCheckResourceAttr(name, "remote_retention", "60d"),
 					resource.TestCheckResourceAttr(name, "timeout", "10h"),
@@ -58,19 +71,7 @@ resource "axonops_cassandra_commitlog_settings" "c" {
 				),
 			},
 			{
-				Config: testAccProviderConfig(srv.URL()) + `
-resource "axonops_cassandra_commitlog_settings" "c" {
-  cluster_name     = "ccluster"
-  datacenters      = ["dc1", "dc2"]
-  remote_type      = "s3"
-  remote_path      = "bucket/commitlogs"
-  remote_retention = "30d"
-  remote_config    = "type = s3\nprovider = AWS\nregion = eu-west-1\nenv_auth = true"
-  timeout          = "2h"
-  transfers        = 4
-  bw_limit         = "10M"
-}
-`,
+				Config: s3Config,
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr(name, "remote_type", "s3"),
 					resource.TestCheckResourceAttr(name, "remote_path", "bucket/commitlogs"),
@@ -83,28 +84,65 @@ resource "axonops_cassandra_commitlog_settings" "c" {
 			{
 				// remote_config is masked by the API: refreshing must not
 				// produce a diff.
-				Config: testAccProviderConfig(srv.URL()) + `
-resource "axonops_cassandra_commitlog_settings" "c" {
-  cluster_name     = "ccluster"
-  datacenters      = ["dc1", "dc2"]
-  remote_type      = "s3"
-  remote_path      = "bucket/commitlogs"
-  remote_retention = "30d"
-  remote_config    = "type = s3\nprovider = AWS\nregion = eu-west-1\nenv_auth = true"
-  timeout          = "2h"
-  transfers        = 4
-  bw_limit         = "10M"
-}
-`,
+				Config:   s3Config,
 				PlanOnly: true,
 			},
 			{
 				ResourceName:                         name,
 				ImportState:                          true,
 				ImportStateVerify:                    true,
-				ImportStateVerifyIdentifierAttribute: "cluster_name",
-				ImportStateId:                        "cassandra/ccluster/dc2",
+				ImportStateVerifyIdentifierAttribute: "datacenter",
+				ImportStateId:                        "cassandra/ccluster/dc1",
 				ImportStateVerifyIgnore:              []string{"remote_config"},
+			},
+		},
+	})
+}
+
+// TestAccCassandraCommitlogSettings_twoDatacenters checks that each
+// datacenter gets its own configuration and that deleting one leaves the
+// other in place.
+func TestAccCassandraCommitlogSettings_twoDatacenters(t *testing.T) {
+	srv := newAccTestServer(t)
+	both := testAccProviderConfig(srv.URL()) + `
+resource "axonops_cassandra_commitlog_settings" "a" {
+  cluster_name = "ccluster"
+  datacenter   = "dc1"
+  remote_type  = "local"
+  remote_path  = "/archive/dc1"
+}
+
+resource "axonops_cassandra_commitlog_settings" "b" {
+  cluster_name = "ccluster"
+  datacenter   = "dc2"
+  remote_type  = "local"
+  remote_path  = "/archive/dc2"
+}
+`
+	onlyB := testAccProviderConfig(srv.URL()) + `
+resource "axonops_cassandra_commitlog_settings" "b" {
+  cluster_name = "ccluster"
+  datacenter   = "dc2"
+  remote_type  = "local"
+  remote_path  = "/archive/dc2"
+}
+`
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{Config: both},
+			{
+				Config: onlyB,
+				Check: func(*terraform.State) error {
+					srv.mu.Lock()
+					defer srv.mu.Unlock()
+					got := srv.commitLogSettings[clusterKey("cassandra", "ccluster")]
+					if len(got) != 1 || got[0].Datacenters[0] != "dc2" {
+						return fmt.Errorf("expected only dc2 to remain, got %+v", got)
+					}
+					return nil
+				},
 			},
 		},
 	})
@@ -117,8 +155,9 @@ func TestAccCassandraCommitlogSettings_removedOutOfBand(t *testing.T) {
 	config := testAccProviderConfig(srv.URL()) + `
 resource "axonops_cassandra_commitlog_settings" "c" {
   cluster_name = "ccluster"
-  datacenters  = ["dc1"]
+  datacenter   = "dc1"
   remote_type  = "local"
+  remote_path  = "/archive"
 }
 `
 
@@ -144,7 +183,7 @@ resource "axonops_cassandra_commitlog_settings" "c" {
 func TestAccCassandraCommitlogSettings_existingDatacenterRejected(t *testing.T) {
 	srv := newAccTestServer(t)
 	srv.commitLogSettings[clusterKey("cassandra", "ccluster")] = []axonopsClient.CommitLogArchiveSettings{
-		{Datacenters: []string{"dc1"}, RemoteType: "local", RemoteRetentionDuration: "60d", Timeout: "10h"},
+		{Datacenters: []string{"dc1"}, RemoteType: "local", RemotePath: "/archive", RemoteRetentionDuration: "60d", Timeout: "10h"},
 	}
 
 	resource.Test(t, resource.TestCase{
@@ -154,11 +193,36 @@ func TestAccCassandraCommitlogSettings_existingDatacenterRejected(t *testing.T) 
 				Config: testAccProviderConfig(srv.URL()) + `
 resource "axonops_cassandra_commitlog_settings" "c" {
   cluster_name = "ccluster"
-  datacenters  = ["dc2", "dc1"]
+  datacenter   = "dc1"
   remote_type  = "local"
+  remote_path  = "/archive"
 }
 `,
 				ExpectError: regexp.MustCompile(`(?s)Datacenter "dc1".*already has commitlog archive.*cassandra/ccluster/dc1`),
+			},
+		},
+	})
+}
+
+// TestAccCassandraCommitlogSettings_pitrDisabled checks that the bare 400 the
+// API returns without the PITR feature becomes an actionable error.
+func TestAccCassandraCommitlogSettings_pitrDisabled(t *testing.T) {
+	srv := newAccTestServer(t)
+	srv.commitLogPITRDisabled = true
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccProviderConfig(srv.URL()) + `
+resource "axonops_cassandra_commitlog_settings" "c" {
+  cluster_name = "ccluster"
+  datacenter   = "dc1"
+  remote_type  = "local"
+  remote_path  = "/archive"
+}
+`,
+				ExpectError: regexp.MustCompile(`(?s)point-in-time\s+restore\s+\(PITR\)\s+feature`),
 			},
 		},
 	})
@@ -172,20 +236,31 @@ func TestAccCassandraCommitlogSettings_invalidInputs(t *testing.T) {
 		attrs string
 		err   string
 	}{
-		{"empty datacenters", `datacenters = []
-  remote_type = "local"`, `at least 1`},
-		{"duplicate datacenters", `datacenters = ["dc1", "dc1"]
-  remote_type = "local"`, `duplicate values`},
-		{"unknown remote_type", `datacenters = ["dc1"]
-  remote_type = "ftp"`, `value must be one of`},
-		{"bad retention", `datacenters = ["dc1"]
+		{"empty datacenter", `datacenter = ""
   remote_type = "local"
+  remote_path = "/archive"`, `at least 1`},
+		{"missing remote_path", `datacenter = "dc1"
+  remote_type = "local"`, `"remote_path" is required`},
+		{"empty remote_path", `datacenter = "dc1"
+  remote_type = "local"
+  remote_path = ""`, `at least 1`},
+		{"trailing slash in remote_path", `datacenter = "dc1"
+  remote_type = "local"
+  remote_path = "/archive/"`, `must not end with "/"`},
+		{"unknown remote_type", `datacenter = "dc1"
+  remote_type = "ftp"
+  remote_path = "/archive"`, `value must be one of`},
+		{"bad retention", `datacenter = "dc1"
+  remote_type = "local"
+  remote_path = "/archive"
   remote_retention = "sixty days"`, `must be a duration`},
-		{"negative transfers", `datacenters = ["dc1"]
+		{"negative transfers", `datacenter = "dc1"
   remote_type = "local"
+  remote_path = "/archive"
   transfers = -1`, `at least 0`},
-		{"kafka cluster_type", `datacenters = ["dc1"]
+		{"kafka cluster_type", `datacenter = "dc1"
   remote_type  = "local"
+  remote_path  = "/archive"
   cluster_type = "kafka"`, `value must be one of`},
 	}
 
@@ -212,31 +287,27 @@ resource "axonops_cassandra_commitlog_settings" "c" {
 
 func TestAccCassandraCommitlogSettings_invalidImportID(t *testing.T) {
 	srv := newAccTestServer(t)
+	config := testAccProviderConfig(srv.URL()) + `
+resource "axonops_cassandra_commitlog_settings" "c" {
+  cluster_name = "ccluster"
+  datacenter   = "dc1"
+  remote_type  = "local"
+  remote_path  = "/archive"
+}
+`
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccProviderConfig(srv.URL()) + `
-resource "axonops_cassandra_commitlog_settings" "c" {
-  cluster_name = "ccluster"
-  datacenters  = ["dc1"]
-  remote_type  = "local"
-}
-`,
+				Config:        config,
 				ResourceName:  "axonops_cassandra_commitlog_settings.c",
 				ImportState:   true,
 				ImportStateId: "cassandra/ccluster",
 				ExpectError:   regexp.MustCompile(`cluster_type/cluster_name/datacenter`),
 			},
 			{
-				Config: testAccProviderConfig(srv.URL()) + `
-resource "axonops_cassandra_commitlog_settings" "c" {
-  cluster_name = "ccluster"
-  datacenters  = ["dc1"]
-  remote_type  = "local"
-}
-`,
+				Config:        config,
 				ResourceName:  "axonops_cassandra_commitlog_settings.c",
 				ImportState:   true,
 				ImportStateId: "cassandra/ccluster/dc9",
