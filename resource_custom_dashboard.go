@@ -36,13 +36,16 @@ var validDashboardFilterTypes = []string{"query", "custom"}
 // and hides it from the panels attribute.
 const emptyRowTitle = "__EMPTY_ROW__"
 
+// rowPanelType is the panel type of a dashboard row.
+const rowPanelType = "row"
+
 // emptyRowDetails is the details object the AxonOps UI gives new rows. The
 // UI cannot render a panel whose details are missing.
 const emptyRowDetails = `{"filters":{},"isHideNullValue":false,"max":0,"queries":[],"y":{}}`
 
 // defaultPanelDetails is sent for a panel without configured details.
 func defaultPanelDetails(panelType string) string {
-	if panelType == "row" {
+	if panelType == rowPanelType {
 		return emptyRowDetails
 	}
 	return "{}"
@@ -50,7 +53,23 @@ func defaultPanelDetails(panelType string) string {
 
 // isEmptyRow reports whether p is the hidden UI row.
 func isEmptyRow(p axonopsClient.CustomPanel) bool {
-	return p.Type == "row" && p.Title == emptyRowTitle
+	return p.Type == rowPanelType && p.Title == emptyRowTitle
+}
+
+// splitEmptyRow returns the hidden UI row, if any, and the other panels in
+// order. The UI keeps the hidden row first, but it is matched anywhere so it
+// never reaches state as a user panel.
+func splitEmptyRow(panels []axonopsClient.CustomPanel) (*axonopsClient.CustomPanel, []axonopsClient.CustomPanel) {
+	var row *axonopsClient.CustomPanel
+	rest := make([]axonopsClient.CustomPanel, 0, len(panels))
+	for i := range panels {
+		if row == nil && isEmptyRow(panels[i]) {
+			row = &panels[i]
+			continue
+		}
+		rest = append(rest, panels[i])
+	}
+	return row, rest
 }
 
 var _ resource.Resource = (*customDashboardResource)(nil)
@@ -283,7 +302,7 @@ func (data *customDashboardData) toAPI(emptyRowUUID string) axonopsClient.Custom
 	}
 	dash.Panels = append(dash.Panels, axonopsClient.CustomPanel{
 		UUID:    emptyRowUUID,
-		Type:    "row",
+		Type:    rowPanelType,
 		Title:   emptyRowTitle,
 		Details: json.RawMessage(emptyRowDetails),
 		Layout:  axonopsClient.PanelLayout{W: 18, H: 1, I: emptyRowUUID},
@@ -353,10 +372,9 @@ func (data *customDashboardData) fromAPI(dash *axonopsClient.CustomDashboard) {
 	}
 
 	// Panels sit one grid row below the hidden UI row when it is present.
-	panels := dash.Panels
+	emptyRow, panels := splitEmptyRow(dash.Panels)
 	yOffset := 0
-	if len(panels) > 0 && isEmptyRow(panels[0]) {
-		panels = panels[1:]
+	if emptyRow != nil {
 		yOffset = 1
 	}
 
@@ -535,8 +553,8 @@ func (r *customDashboardResource) Update(ctx context.Context, req resource.Updat
 		}
 		// Keep the hidden row's UUID so UI state tied to it survives.
 		emptyRowUUID := ""
-		if len(existing.Panels) > 0 && isEmptyRow(existing.Panels[0]) {
-			emptyRowUUID = existing.Panels[0].UUID
+		if row, _ := splitEmptyRow(existing.Panels); row != nil {
+			emptyRowUUID = row.UUID
 		}
 		dash = data.toAPI(emptyRowUUID)
 		*existing = dash
