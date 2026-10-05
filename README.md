@@ -164,6 +164,14 @@ Full attribute documentation: [registry.terraform.io/providers/axonops/axonops/l
 
 | Data Source | Description |
 |-------------|--------------|
+| [`axonops_clusters`](docs/data-sources/clusters.md) | List clusters in the organisation, optionally by type |
+| [`axonops_cluster`](docs/data-sources/cluster.md) | Look up one cluster by name (type, status, node count, versions) |
+| [`axonops_cluster_nodes`](docs/data-sources/cluster_nodes.md) | List nodes of a cluster, filter by status or data centre |
+| [`axonops_cassandra_keyspaces`](docs/data-sources/cassandra_keyspaces.md) | List keyspaces and tables of a Cassandra/DSE cluster |
+| [`axonops_kafka_topics`](docs/data-sources/kafka_topics.md) | List topics of a Kafka cluster |
+| [`axonops_kafka_connectors`](docs/data-sources/kafka_connectors.md) | List connectors of a Kafka Connect cluster, filter by type |
+| [`axonops_schemas`](docs/data-sources/schemas.md) | List Schema Registry subjects, filter by regex |
+| [`axonops_integrations`](docs/data-sources/integrations.md) | List alert integrations of a cluster, filter by type (no secrets) |
 | [`axonops_kafka_topic`](docs/data-sources/kafka_topic.md) | Read an existing Kafka topic |
 | [`axonops_kafka_acl`](docs/data-sources/kafka_acl.md) | Read a single Kafka ACL matching exact identity fields |
 | [`axonops_kafka_acl_list`](docs/data-sources/kafka_acl_list.md) | List Kafka ACLs matching partial criteria |

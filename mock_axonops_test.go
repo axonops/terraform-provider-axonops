@@ -114,6 +114,14 @@ type mockAxonOpsServer struct {
 	srCompat map[string]map[string]string
 	// kafka brokers: cluster -> broker ID -> broker
 	brokers map[string]map[int64]*axonopsClient.KafkaBrokerInfo
+	// cluster inventory (test fixtures): org -> clusterType -> cluster names/status
+	orgClusters map[string]map[string]map[string]int
+	// nodes: "clusterType/clusterName" -> nodes
+	nodes map[string][]axonopsClient.ClusterNodeInfo
+	// keyspaces: "clusterType/clusterName" -> keyspaces
+	keyspaces map[string][]axonopsClient.CassandraKeyspace
+	// soft-deleted schema subjects: cluster -> subject -> true
+	deletedSubjects map[string]map[string]bool
 
 	// integrationReadLag is how many list GETs omit a newly created
 	// integration. Zero (the default) makes writes visible immediately.
@@ -140,6 +148,10 @@ func newMockAxonOpsServer(t interface{ Cleanup(func()) }) *mockAxonOpsServer {
 		dashboardsV2:     map[string]*axonopsClient.DashboardTemplate{},
 		srCompat:         map[string]map[string]string{},
 		brokers:          map[string]map[int64]*axonopsClient.KafkaBrokerInfo{},
+		orgClusters:      map[string]map[string]map[string]int{},
+		nodes:            map[string][]axonopsClient.ClusterNodeInfo{},
+		keyspaces:        map[string][]axonopsClient.CassandraKeyspace{},
+		deletedSubjects:  map[string]map[string]bool{},
 	}
 
 	mux := http.NewServeMux()
@@ -206,6 +218,102 @@ func (m *mockAxonOpsServer) setIntegrationReadLag(n int) {
 
 // --- routing ---
 
+// seedCluster registers a cluster in the /orgs hierarchy of org with the
+// given alert status (0 green, 1 amber, 2 red).
+func (m *mockAxonOpsServer) seedCluster(org, clusterType, clusterName string, status int) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.orgClusters[org] == nil {
+		m.orgClusters[org] = map[string]map[string]int{}
+	}
+	if m.orgClusters[org][clusterType] == nil {
+		m.orgClusters[org][clusterType] = map[string]int{}
+	}
+	m.orgClusters[org][clusterType][clusterName] = status
+}
+
+func (m *mockAxonOpsServer) seedNodes(clusterType, clusterName string, nodes ...axonopsClient.ClusterNodeInfo) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	key := clusterKey(clusterType, clusterName)
+	m.nodes[key] = append(m.nodes[key], nodes...)
+}
+
+func (m *mockAxonOpsServer) seedKeyspaces(clusterType, clusterName string, keyspaces ...axonopsClient.CassandraKeyspace) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	key := clusterKey(clusterType, clusterName)
+	m.keyspaces[key] = append(m.keyspaces[key], keyspaces...)
+}
+
+// softDeleteSubjectOutOfBand marks a subject as soft-deleted: it disappears
+// from the subject list unless addDeleted=true is passed.
+func (m *mockAxonOpsServer) softDeleteSubjectOutOfBand(cluster, subject string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.deletedSubjects[cluster] == nil {
+		m.deletedSubjects[cluster] = map[string]bool{}
+	}
+	m.deletedSubjects[cluster][subject] = true
+}
+
+func (m *mockAxonOpsServer) handleOrgs(w http.ResponseWriter, r *http.Request) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	type clusterNode struct {
+		Name   string `json:"name"`
+		Type   string `json:"type"`
+		Status int    `json:"status"`
+	}
+	type typeNode struct {
+		Name     string        `json:"name"`
+		Type     string        `json:"type"`
+		Children []clusterNode `json:"children"`
+	}
+	type orgNode struct {
+		Name     string     `json:"name"`
+		Type     string     `json:"type"`
+		Children []typeNode `json:"children"`
+	}
+	orgs := []orgNode{}
+	for org, types := range m.orgClusters {
+		on := orgNode{Name: org, Type: "org"}
+		for clusterType, clusters := range types {
+			tn := typeNode{Name: clusterType, Type: "type"}
+			for name, status := range clusters {
+				tn.Children = append(tn.Children, clusterNode{Name: name, Type: clusterType, Status: status})
+			}
+			on.Children = append(on.Children, tn)
+		}
+		orgs = append(orgs, on)
+	}
+	writeJSON(w, http.StatusOK, map[string]interface{}{"children": orgs})
+}
+
+func (m *mockAxonOpsServer) handleNodes(w http.ResponseWriter, r *http.Request, clusterType, clusterName string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	nodes := m.nodes[clusterKey(clusterType, clusterName)]
+	if nodes == nil {
+		nodes = []axonopsClient.ClusterNodeInfo{}
+	}
+	writeJSON(w, http.StatusOK, nodes)
+}
+
+func (m *mockAxonOpsServer) handleKeyspaces(w http.ResponseWriter, r *http.Request, clusterType, clusterName string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	keyspaces := m.keyspaces[clusterKey(clusterType, clusterName)]
+	if keyspaces == nil {
+		keyspaces = []axonopsClient.CassandraKeyspace{}
+	}
+	writeJSON(w, http.StatusOK, keyspaces)
+}
+
 func (m *mockAxonOpsServer) registerRoutes(mux *http.ServeMux) {
 	// SAML probe: always 404 so the provider uses the non-SAML host layout.
 	mux.HandleFunc("/dashboard/", func(w http.ResponseWriter, r *http.Request) {
@@ -247,6 +355,21 @@ func (m *mockAxonOpsServer) handleAPI(w http.ResponseWriter, r *http.Request) {
 	}
 
 	switch parts[0] {
+	case "orgs":
+		m.handleOrgs(w, r)
+		return
+	case "nodes":
+		// nodes/{org}/{clusterType}/{clusterName}
+		if len(parts) >= 4 {
+			m.handleNodes(w, r, parts[2], parts[3])
+			return
+		}
+	case "keyspaces":
+		// keyspaces/{org}/{clusterType}/{clusterName}
+		if len(parts) >= 4 {
+			m.handleKeyspaces(w, r, parts[2], parts[3])
+			return
+		}
 	case "logcollectors":
 		// logcollectors/{org}/{clusterType}/{clusterName}
 		if len(parts) >= 4 {
@@ -380,7 +503,11 @@ func (m *mockAxonOpsServer) handleKafka(w http.ResponseWriter, r *http.Request, 
 			m.handleSchemaRegistryConfig(w, r, cluster, rest[3:])
 			return
 		}
-		// registry/subjects/{subject}[/{version}]
+		// registry/subjects[/{subject}[/{version}]]
+		if len(rest) == 3 && rest[2] == "subjects" {
+			m.handleSchemaSubjects(w, r, cluster)
+			return
+		}
 		if len(rest) < 4 || rest[2] != "subjects" {
 			w.WriteHeader(http.StatusNotFound)
 			return
@@ -626,7 +753,14 @@ func (m *mockAxonOpsServer) handleConnect(w http.ResponseWriter, r *http.Request
 		}
 		entries := map[string]axonopsClient.ConnectorListEntry{}
 		for name, c := range store {
-			entries[name] = axonopsClient.ConnectorListEntry{Info: *c}
+			entries[name] = axonopsClient.ConnectorListEntry{
+				Info: *c,
+				Status: axonopsClient.ConnectorStatus{
+					Name:      name,
+					Connector: axonopsClient.ConnectorStateInfo{State: "RUNNING"},
+					Type:      c.Type,
+				},
+			}
 		}
 		writeJSON(w, http.StatusOK, axonopsClient.ConnectorsListResponse{
 			ClusterName: connectCluster, Connectors: entries,
@@ -671,6 +805,24 @@ func (m *mockAxonOpsServer) handleConnect(w http.ResponseWriter, r *http.Request
 		}
 		w.WriteHeader(http.StatusNotFound)
 	}
+}
+
+func (m *mockAxonOpsServer) handleSchemaSubjects(w http.ResponseWriter, r *http.Request, cluster string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	addDeleted := r.URL.Query().Get("addDeleted") == "true"
+	subjects := []string{}
+	for subject := range m.schemas[cluster] {
+		if m.deletedSubjects[cluster][subject] && !addDeleted {
+			continue
+		}
+		subjects = append(subjects, subject)
+	}
+	writeJSON(w, http.StatusOK, map[string]interface{}{"subjects": subjects, "Configs": map[string]string{}})
 }
 
 func (m *mockAxonOpsServer) handleSchemaRegistry(w http.ResponseWriter, r *http.Request, cluster string, rest []string) {

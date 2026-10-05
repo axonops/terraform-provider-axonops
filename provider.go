@@ -257,6 +257,14 @@ func (p *axonopsProvider) DataSources(ctx context.Context) []func() datasource.D
 		NewAlertRouteDataSource,
 		NewKafkaACLSingleDataSource,
 		NewKafkaBrokerConfigDataSource,
+		NewKafkaTopicsDataSource,
+		NewKafkaConnectorsDataSource,
+		NewIntegrationsDataSource,
+		NewClustersDataSource,
+		NewClusterDataSource,
+		NewClusterNodesDataSource,
+		NewCassandraKeyspacesDataSource,
+		NewSchemasDataSource,
 	}
 }
 

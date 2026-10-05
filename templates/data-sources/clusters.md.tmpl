@@ -1,0 +1,18 @@
+---
+page_title: "{{.Name}} {{.Type}} - {{.ProviderName}}"
+subcategory: "Clusters"
+description: |-
+{{ .Description | plainmarkdown | trimspace | prefixlines "  " }}
+---
+
+# {{.Name}} ({{.Type}})
+
+{{ .Description | trimspace }}
+
+Use this data source to drive `for_each` over every cluster in the organisation, for example to apply the same alert rules or integrations to all Cassandra clusters. Only clusters the API key can access are returned. Status is the cluster alert level: `green` (no alerts), `amber` (warnings) or `red` (errors).
+
+## Example Usage
+
+{{ tffile "examples/data-sources/axonops_clusters/data-source.tf" }}
+
+{{ .SchemaMarkdown | trimspace }}
