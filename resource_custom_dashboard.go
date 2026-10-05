@@ -30,6 +30,29 @@ const dashboardLockKind = "dashboardtemplate"
 
 var validDashboardFilterTypes = []string{"query", "custom"}
 
+// emptyRowTitle is the title of the hidden row the AxonOps UI puts first in
+// every dashboard. The UI fails to render a dashboard without it, and panels
+// placed before the first visible row belong to it. The provider manages it
+// and hides it from the panels attribute.
+const emptyRowTitle = "__EMPTY_ROW__"
+
+// emptyRowDetails is the details object the AxonOps UI gives new rows. The
+// UI cannot render a panel whose details are missing.
+const emptyRowDetails = `{"filters":{},"isHideNullValue":false,"max":0,"queries":[],"y":{}}`
+
+// defaultPanelDetails is sent for a panel without configured details.
+func defaultPanelDetails(panelType string) string {
+	if panelType == "row" {
+		return emptyRowDetails
+	}
+	return "{}"
+}
+
+// isEmptyRow reports whether p is the hidden UI row.
+func isEmptyRow(p axonopsClient.CustomPanel) bool {
+	return p.Type == "row" && p.Title == emptyRowTitle
+}
+
 var _ resource.Resource = (*customDashboardResource)(nil)
 var _ resource.ResourceWithImportState = (*customDashboardResource)(nil)
 
@@ -160,6 +183,7 @@ func (r *customDashboardResource) Schema(ctx context.Context, req resource.Schem
 						"title": schema.StringAttribute{
 							Required:    true,
 							Description: "The panel title.",
+							Validators:  []validator.String{stringvalidator.NoneOf(emptyRowTitle)},
 						},
 						"type": schema.StringAttribute{
 							Required: true,
@@ -227,8 +251,10 @@ type dashboardLayoutModel struct {
 }
 
 // toAPI builds the API dashboard from data, assigning UUIDs to the dashboard
-// and to new panels. It writes the assigned UUIDs back into data.
-func (data *customDashboardData) toAPI() axonopsClient.CustomDashboard {
+// and to new panels. It writes the assigned UUIDs back into data. The hidden
+// UI row is put first, with emptyRowUUID or a new UUID when empty, and the
+// configured panels move one grid row down below it.
+func (data *customDashboardData) toAPI(emptyRowUUID string) axonopsClient.CustomDashboard {
 	if data.ID.IsUnknown() || data.ID.ValueString() == "" {
 		data.ID = types.StringValue(uuid.NewString())
 	}
@@ -252,6 +278,17 @@ func (data *customDashboardData) toAPI() axonopsClient.CustomDashboard {
 		})
 	}
 
+	if emptyRowUUID == "" {
+		emptyRowUUID = uuid.NewString()
+	}
+	dash.Panels = append(dash.Panels, axonopsClient.CustomPanel{
+		UUID:    emptyRowUUID,
+		Type:    "row",
+		Title:   emptyRowTitle,
+		Details: json.RawMessage(emptyRowDetails),
+		Layout:  axonopsClient.PanelLayout{W: 18, H: 1, I: emptyRowUUID},
+	})
+
 	for i := range data.Panels {
 		p := &data.Panels[i]
 		if p.UUID.IsUnknown() || p.UUID.ValueString() == "" {
@@ -263,7 +300,7 @@ func (data *customDashboardData) toAPI() axonopsClient.CustomDashboard {
 			Title: p.Title.ValueString(),
 			Layout: axonopsClient.PanelLayout{
 				X: int(p.Layout.X.ValueInt64()),
-				Y: int(p.Layout.Y.ValueInt64()),
+				Y: int(p.Layout.Y.ValueInt64()) + 1,
 				W: int(p.Layout.W.ValueInt64()),
 				H: int(p.Layout.H.ValueInt64()),
 				I: p.UUID.ValueString(),
@@ -271,6 +308,8 @@ func (data *customDashboardData) toAPI() axonopsClient.CustomDashboard {
 		}
 		if !p.Details.IsNull() && p.Details.ValueString() != "" {
 			panel.Details = json.RawMessage(p.Details.ValueString())
+		} else {
+			panel.Details = json.RawMessage(defaultPanelDetails(panel.Type))
 		}
 		dash.Panels = append(dash.Panels, panel)
 	}
@@ -313,24 +352,29 @@ func (data *customDashboardData) fromAPI(dash *axonopsClient.CustomDashboard) {
 		}
 	}
 
+	// Panels sit one grid row below the hidden UI row when it is present.
+	panels := dash.Panels
+	yOffset := 0
+	if len(panels) > 0 && isEmptyRow(panels[0]) {
+		panels = panels[1:]
+		yOffset = 1
+	}
+
 	prevPanels := data.Panels
-	data.Panels = make([]dashboardPanelModel, len(dash.Panels))
-	for i, p := range dash.Panels {
+	data.Panels = make([]dashboardPanelModel, len(panels))
+	for i, p := range panels {
+		var prev types.String
+		if i < len(prevPanels) {
+			prev = prevPanels[i].Details
+		}
+		// Details equal to the default sent for unset details stay unset.
+		isDefault := prev.IsNull() && jsonEqual(defaultPanelDetails(p.Type), string(p.Details))
 		details := types.StringNull()
-		if len(p.Details) > 0 && string(p.Details) != "null" {
-			var prev types.String
-			if i < len(prevPanels) {
-				prev = prevPanels[i].Details
-			}
+		if len(p.Details) > 0 && string(p.Details) != "null" && !isDefault {
 			if !prev.IsNull() && !prev.IsUnknown() && jsonEqual(prev.ValueString(), string(p.Details)) {
 				details = prev
 			} else {
-				var buf bytes.Buffer
-				if err := json.Compact(&buf, p.Details); err == nil {
-					details = types.StringValue(buf.String())
-				} else {
-					details = types.StringValue(string(p.Details))
-				}
+				details = types.StringValue(normalizeJSON(p.Details))
 			}
 		}
 		data.Panels[i] = dashboardPanelModel{
@@ -340,7 +384,7 @@ func (data *customDashboardData) fromAPI(dash *axonopsClient.CustomDashboard) {
 			Details: details,
 			Layout: dashboardLayoutModel{
 				X: types.Int64Value(int64(p.Layout.X)),
-				Y: types.Int64Value(int64(p.Layout.Y)),
+				Y: types.Int64Value(int64(max(p.Layout.Y-yOffset, 0))),
 				W: types.Int64Value(int64(p.Layout.W)),
 				H: types.Int64Value(int64(p.Layout.H)),
 			},
@@ -365,6 +409,22 @@ func optionalString(v string, prev types.String) types.String {
 		return types.StringNull()
 	}
 	return types.StringValue(v)
+}
+
+// normalizeJSON re-encodes raw with sorted object keys and no whitespace,
+// the form Terraform's jsonencode produces. Invalid JSON is returned as is.
+func normalizeJSON(raw []byte) string {
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	dec.UseNumber() // keep 1000000 from becoming 1e+06
+	var v interface{}
+	if err := dec.Decode(&v); err != nil {
+		return string(raw)
+	}
+	out, err := json.Marshal(v)
+	if err != nil {
+		return string(raw)
+	}
+	return string(out)
 }
 
 // jsonEqual reports whether two JSON documents are semantically equal.
@@ -413,7 +473,7 @@ func (r *customDashboardResource) Create(ctx context.Context, req resource.Creat
 	}
 
 	clusterType, clusterName := data.ClusterType.ValueString(), data.ClusterName.ValueString()
-	dash := data.toAPI()
+	dash := data.toAPI("")
 
 	err := r.write(ctx, clusterType, clusterName, func(tmpl *axonopsClient.DashboardTemplate) error {
 		tmpl.Dashboards = append(tmpl.Dashboards, dash)
@@ -466,13 +526,19 @@ func (r *customDashboardResource) Update(ctx context.Context, req resource.Updat
 	}
 
 	clusterType, clusterName := data.ClusterType.ValueString(), data.ClusterName.ValueString()
-	dash := data.toAPI()
+	var dash axonopsClient.CustomDashboard
 
 	err := r.write(ctx, clusterType, clusterName, func(tmpl *axonopsClient.DashboardTemplate) error {
-		existing := axonopsClient.FindCustomDashboard(tmpl, dash.UUID)
+		existing := axonopsClient.FindCustomDashboard(tmpl, data.ID.ValueString())
 		if existing == nil {
-			return fmt.Errorf("dashboard %s no longer exists on cluster %s/%s", dash.UUID, clusterType, clusterName)
+			return fmt.Errorf("dashboard %s no longer exists on cluster %s/%s", data.ID.ValueString(), clusterType, clusterName)
 		}
+		// Keep the hidden row's UUID so UI state tied to it survives.
+		emptyRowUUID := ""
+		if len(existing.Panels) > 0 && isEmptyRow(existing.Panels[0]) {
+			emptyRowUUID = existing.Panels[0].UUID
+		}
+		dash = data.toAPI(emptyRowUUID)
 		*existing = dash
 		return nil
 	})

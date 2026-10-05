@@ -1,9 +1,12 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"regexp"
 	"testing"
+
+	axonopsClient "terraform-provider-axonops/client"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/plancheck"
@@ -47,7 +50,7 @@ resource "axonops_custom_dashboard" "d" {
 
 func TestAccCustomDashboard_create(t *testing.T) {
 	srv := newAccTestServer(t)
-	var firstPanelUUID string
+	var firstPanelUUID, emptyRowUUID string
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
@@ -67,9 +70,17 @@ func TestAccCustomDashboard_create(t *testing.T) {
 						if dash == nil {
 							return fmt.Errorf("dashboard %s not stored", attrs["id"])
 						}
+						if err := checkUIRenderable(dash); err != nil {
+							return err
+						}
+						emptyRowUUID = dash.Panels[0].UUID
 						// The server groups panels under the preceding row.
-						if dash.Panels[1].Group != dash.Panels[0].UUID {
-							return fmt.Errorf("panel group = %q, want row uuid %q", dash.Panels[1].Group, dash.Panels[0].UUID)
+						if dash.Panels[2].Group != dash.Panels[1].UUID {
+							return fmt.Errorf("panel group = %q, want row uuid %q", dash.Panels[2].Group, dash.Panels[1].UUID)
+						}
+						// Configured panels sit one grid row below the hidden row.
+						if dash.Panels[1].Layout.Y != 1 || dash.Panels[2].Layout.Y != 2 {
+							return fmt.Errorf("stored y = %d, %d; want 1, 2", dash.Panels[1].Layout.Y, dash.Panels[2].Layout.Y)
 						}
 						// Dashboards not managed by Terraform are kept.
 						if srv.dashboardV2("kafka", "kcluster", builtinDashboardUUID) == nil {
@@ -90,9 +101,16 @@ func TestAccCustomDashboard_create(t *testing.T) {
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("axonops_custom_dashboard.d", "name", "Kafka throughput"),
 					func(s *terraform.State) error {
-						got := s.RootModule().Resources["axonops_custom_dashboard.d"].Primary.Attributes["panels.0.uuid"]
-						if got != firstPanelUUID {
+						attrs := s.RootModule().Resources["axonops_custom_dashboard.d"].Primary.Attributes
+						if got := attrs["panels.0.uuid"]; got != firstPanelUUID {
 							return fmt.Errorf("panel uuid changed from %s to %s", firstPanelUUID, got)
+						}
+						dash := srv.dashboardV2("kafka", "kcluster", attrs["id"])
+						if err := checkUIRenderable(dash); err != nil {
+							return err
+						}
+						if dash.Panels[0].UUID != emptyRowUUID {
+							return fmt.Errorf("hidden row uuid changed from %s to %s", emptyRowUUID, dash.Panels[0].UUID)
 						}
 						return nil
 					},
@@ -164,11 +182,102 @@ resource "axonops_custom_dashboard" "d" {
 resource "axonops_custom_dashboard" "d" {
   cluster_type = "kafka"
   cluster_name = "kcluster"
+  name         = "Reserved"
+  panels       = [{ title = "__EMPTY_ROW__", type = "row", layout = { x = 0, y = 0, w = 18, h = 1 } }]
+}
+`,
+				ExpectError: regexp.MustCompile(`value must be none of`),
+			},
+			{
+				Config: testAccProviderConfig(srv.URL()) + `
+resource "axonops_custom_dashboard" "d" {
+  cluster_type = "kafka"
+  cluster_name = "kcluster"
   name         = "Empty"
   panels       = []
 }
 `,
 				ExpectError: regexp.MustCompile(`at least 1`),
+			},
+		},
+	})
+}
+
+// checkUIRenderable checks what the AxonOps UI needs to render a dashboard:
+// the hidden __EMPTY_ROW__ row first, and details on every panel.
+func checkUIRenderable(dash *axonopsClient.CustomDashboard) error {
+	if dash == nil {
+		return fmt.Errorf("dashboard not stored")
+	}
+	if len(dash.Panels) == 0 || dash.Panels[0].Type != "row" || dash.Panels[0].Title != emptyRowTitle {
+		return fmt.Errorf("first panel is not the hidden %s row", emptyRowTitle)
+	}
+	for _, p := range dash.Panels {
+		if len(p.Details) == 0 || string(p.Details) == "null" {
+			return fmt.Errorf("panel %q has no details", p.Title)
+		}
+	}
+	return nil
+}
+
+func TestAccCustomDashboard_importUIDashboard(t *testing.T) {
+	srv := newAccTestServer(t)
+	// A dashboard as the AxonOps UI saves it: hidden row first, panels below.
+	srv.mu.Lock()
+	srv.dashboardsV2["cassandra/ccluster"] = &axonopsClient.DashboardTemplate{
+		Type: "cassandra",
+		Dashboards: []axonopsClient.CustomDashboard{{
+			UUID: "ui-dash",
+			Name: "From UI",
+			Panels: []axonopsClient.CustomPanel{
+				{UUID: "ui-empty", Type: "row", Title: emptyRowTitle, Details: json.RawMessage(emptyRowDetails),
+					Layout: axonopsClient.PanelLayout{W: 18, H: 1, I: "ui-empty"}},
+				{UUID: "ui-cpu", Type: "line-chart", Title: "CPU", Group: "ui-empty",
+					Details: json.RawMessage(`{"queries":[{"query":"host_CPU_Percent_Merge","legend":"{{host_id}}"}]}`),
+					Layout:  axonopsClient.PanelLayout{W: 18, H: 6, Y: 1, I: "ui-cpu"}},
+			},
+		}},
+	}
+	srv.mu.Unlock()
+
+	config := testAccProviderConfig(srv.URL()) + `
+resource "axonops_custom_dashboard" "ui" {
+  cluster_type = "cassandra"
+  cluster_name = "ccluster"
+  name         = "From UI"
+  panels = [{
+    title   = "CPU"
+    type    = "line-chart"
+    details = jsonencode({ queries = [{ query = "host_CPU_Percent_Merge", legend = "{{host_id}}" }] })
+    layout  = { x = 0, y = 0, w = 18, h = 6 }
+  }]
+}
+`
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				// Adopting the UI dashboard hides its __EMPTY_ROW__ and shows no diff.
+				Config:             config,
+				ResourceName:       "axonops_custom_dashboard.ui",
+				ImportState:        true,
+				ImportStateId:      "cassandra/ccluster/ui-dash",
+				ImportStatePersist: true,
+				ImportStateCheck: func(states []*terraform.InstanceState) error {
+					a := states[0].Attributes
+					if a["panels.#"] != "1" || a["panels.0.uuid"] != "ui-cpu" || a["panels.0.layout.y"] != "0" {
+						return fmt.Errorf("unexpected import: panels.#=%s uuid=%s y=%s", a["panels.#"], a["panels.0.uuid"], a["panels.0.layout.y"])
+					}
+					return nil
+				},
+			},
+			{
+				Config: config,
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
 			},
 		},
 	})
