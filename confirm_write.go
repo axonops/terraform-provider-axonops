@@ -138,7 +138,9 @@ func confirmHealthcheck(ctx context.Context, c *axonopsClient.AxonopsHttpClient,
 		if err != nil || checks == nil {
 			return struct{}{}, false, err
 		}
-		match := func(n, i, t string) bool { return n == name && i == interval && t == timeout }
+		match := func(n, i, t string) bool {
+			return n == name && durationsEqual(i, interval) && durationsEqual(t, timeout)
+		}
 		switch kind {
 		case "http":
 			for _, h := range checks.HTTPChecks {
