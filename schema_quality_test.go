@@ -2,12 +2,12 @@ package main
 
 // schema_quality_test.go checks every provider, resource and data source
 // attribute for a useful description and for correct Sensitive marking.
-// Findings are logged, and only fail the test when SCHEMA_QUALITY_STRICT=1.
+// Any finding fails the test, so a new attribute without a proper description
+// or Sensitive flag cannot be merged.
 
 import (
 	"context"
 	"fmt"
-	"os"
 	"reflect"
 	"regexp"
 	"sort"
@@ -258,11 +258,7 @@ func report(t *testing.T, findings []finding) {
 	for _, f := range findings {
 		b.WriteString(f.String() + "\n")
 	}
-	if os.Getenv("SCHEMA_QUALITY_STRICT") == "1" {
-		t.Errorf("%d findings:\n%s", len(findings), b.String())
-		return
-	}
-	t.Logf("report-only, %d findings (set SCHEMA_QUALITY_STRICT=1 to fail):\n%s", len(findings), b.String())
+	t.Errorf("%d findings:\n%s", len(findings), b.String())
 }
 
 func TestSchemaDescriptions(t *testing.T) {
