@@ -61,7 +61,7 @@ func (e *topicResource) Schema(ctx context.Context, req resource.SchemaRequest, 
 		Attributes: map[string]schema.Attribute{
 			"name": schema.StringAttribute{
 				Required:    true,
-				Description: "Name of the topic. Changing it destroys and recreates the topic.",
+				Description: "Name of the topic. Changing it destroys and recreates the topic, which deletes its messages.",
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},
@@ -82,7 +82,7 @@ func (e *topicResource) Schema(ctx context.Context, req resource.SchemaRequest, 
 			},
 			"cluster_name": schema.StringAttribute{
 				Required:    true,
-				Description: "Name of the Kafka cluster in AxonOps. Changing it destroys and recreates the topic.",
+				Description: "Name of the Kafka cluster in AxonOps. Changing it destroys and recreates the topic, which deletes its messages.",
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},

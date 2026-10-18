@@ -85,7 +85,7 @@ terraform apply
 
 ## Scenarios
 
-End-to-end configurations that combine several resources. Each directory is validated in CI with `make validate-examples`.
+End-to-end configurations that combine several resources. Each directory is validated in CI with `scripts/validate-examples.sh` (also `make validate-examples`).
 
 | Directory | Description |
 |-----------|-------------|

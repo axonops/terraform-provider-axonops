@@ -46,4 +46,4 @@ Run the **issue-writer** agent. Every issue must have: summary, detailed require
 - Do not add a bulk or cluster-wide delete to the client. Delete methods remove only the object Terraform manages.
 - Do not hardcode credentials in code, tests or examples.
 - Do not edit generated files under `docs/`.
-- Do not add an attribute without a description or, for credentials, without `Sensitive`: `TestSchemaDescriptions` and `TestSchemaSensitiveCredentials` fail the build.
+- Do not add an attribute without a description or, for credentials, without `Sensitive`: `TestSchemaDescriptions` and `TestSchemaSensitiveCredentials` fail `make test`.
