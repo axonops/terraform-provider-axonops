@@ -20,7 +20,10 @@ lint:
 docs:
 	go generate ./...
 
+validate-examples:
+	scripts/validate-examples.sh
+
 fmt:
 	gofmt -s -w .
 
-.PHONY: build buildnrun test testacc lint docs fmt
+.PHONY: build buildnrun test testacc lint docs validate-examples fmt

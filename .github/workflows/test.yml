@@ -39,3 +39,17 @@ jobs:
       # Acceptance tests run against an in-process mock AxonOps API, so no
       # credentials or live cluster are required.
       - run: TF_ACC=1 go test -v -cover -timeout 10m ./...
+
+  validate-examples:
+    name: Validate Example Scenarios
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+          cache: true
+      - uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_wrapper: false
+      - run: scripts/validate-examples.sh
