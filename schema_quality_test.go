@@ -53,7 +53,7 @@ func (f finding) String() string {
 
 var (
 	replaceWordsRe   = regexp.MustCompile(`(?i)replac|recreat|destroy|forces? (a )?new|new resource`)
-	credentialNameRe = regexp.MustCompile(`(?i)(password|passwd|secret|token|api_?key|private_?key|_key$|^key$|webhook|credential|routing_?key|auth)`)
+	credentialNameRe = regexp.MustCompile(`(?i)(password|passwd|pwd|secret|token|api_?key|private_?key|_key$|^key$|webhook|credential|routing_?key|(^|_)auth($|_token|_key|_secret))`)
 )
 
 // notCredentials lists attributes whose name looks like a credential but is

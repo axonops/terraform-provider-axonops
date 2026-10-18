@@ -19,8 +19,15 @@ provider_installation {
 EOF
 export TF_CLI_CONFIG_FILE="${work}/terraformrc"
 
+shopt -s nullglob
+dirs=("${root}"/examples/scenarios/*/)
+if [[ ${#dirs[@]} -eq 0 ]]; then
+  echo "no scenarios found under examples/scenarios" >&2
+  exit 1
+fi
+
 status=0
-for dir in "${root}"/examples/scenarios/*/; do
+for dir in "${dirs[@]}"; do
   name="$(basename "${dir}")"
   echo "validating ${name}"
   # Validate a copy so no .terraform state or lock file lands in the repo.
