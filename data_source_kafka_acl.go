@@ -70,19 +70,19 @@ func (d *aclDataSource) Schema(ctx context.Context, req datasource.SchemaRequest
 						},
 						"principal": schema.StringAttribute{
 							Computed:    true,
-							Description: "The principal.",
+							Description: "Principal the ACL entry applies to, for example User:alice.",
 						},
 						"host": schema.StringAttribute{
 							Computed:    true,
-							Description: "The host.",
+							Description: "Host the ACL entry applies to, or * for all hosts.",
 						},
 						"operation": schema.StringAttribute{
 							Computed:    true,
-							Description: "The operation.",
+							Description: "Operation the ACL entry allows or denies, for example READ or WRITE.",
 						},
 						"permission_type": schema.StringAttribute{
 							Computed:    true,
-							Description: "The permission type.",
+							Description: "Whether the ACL entry is ALLOW or DENY.",
 						},
 					},
 				},

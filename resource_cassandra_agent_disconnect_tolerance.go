@@ -63,14 +63,14 @@ func (r *cassandraAgentDisconnectToleranceResource) Schema(ctx context.Context, 
 		Attributes: map[string]schema.Attribute{
 			"cluster_name": schema.StringAttribute{
 				Required:      true,
-				Description:   "The name of the cluster.",
+				Description:   "Name of the cluster in AxonOps. Changing it destroys and recreates the setting.",
 				PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()},
 			},
 			"cluster_type": schema.StringAttribute{
 				Optional:      true,
 				Computed:      true,
 				Default:       stringdefault.StaticString("cassandra"),
-				Description:   "The cluster type (cassandra or dse). Default: cassandra",
+				Description:   "Cluster type: cassandra or dse. Defaults to cassandra. Changing it destroys and recreates the setting.",
 				Validators:    []validator.String{cassandraOnlyClusterTypeValidator()},
 				PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()},
 			},

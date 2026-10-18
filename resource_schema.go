@@ -61,14 +61,14 @@ func (r *schemaResource) Schema(ctx context.Context, req resource.SchemaRequest,
 		Attributes: map[string]schema.Attribute{
 			"cluster_name": schema.StringAttribute{
 				Required:    true,
-				Description: "The name of the Kafka cluster.",
+				Description: "Name of the Kafka cluster in AxonOps. Changing it destroys and recreates the schema.",
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},
 			},
 			"subject": schema.StringAttribute{
 				Required:    true,
-				Description: "The subject name (e.g., topic-name-value or topic-name-key).",
+				Description: "The subject name (e.g., topic-name-value or topic-name-key). Changing it destroys and recreates the schema.",
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},

@@ -83,7 +83,8 @@ func (r *apiTokenResource) Schema(ctx context.Context, req resource.SchemaReques
 				Required:    true,
 				ElementType: types.StringType,
 				Description: "Role scopes granted to the token. Each entry is `<org>/<role>`, `<org>/<cluster_type>/<role>` " +
-					"or `<org>/<cluster_type>/<cluster_name>/<role>`, where role is superuser, admin, readonly or backupadmin.",
+					"or `<org>/<cluster_type>/<cluster_name>/<role>`, where role is superuser, admin, readonly or backupadmin. " +
+					"Changing it destroys and recreates the token.",
 				Validators: []validator.List{
 					listvalidator.SizeAtLeast(1),
 					listvalidator.UniqueValues(),
@@ -96,7 +97,7 @@ func (r *apiTokenResource) Schema(ctx context.Context, req resource.SchemaReques
 			},
 			"expires_at": schema.StringAttribute{
 				Optional:    true,
-				Description: "Expiry time in RFC 3339 format (e.g. 2027-01-01T00:00:00Z). Omit for a token that never expires.",
+				Description: "Expiry time in RFC 3339 format (e.g. 2027-01-01T00:00:00Z). Omit for a token that never expires. Changing it destroys and recreates the token.",
 				Validators:  []validator.String{rfc3339Validator{}},
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),

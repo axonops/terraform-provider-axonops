@@ -66,4 +66,4 @@ Read-Only:
 - `is_internal` (Boolean) Whether this is a Kafka internal topic (for example `__consumer_offsets`).
 - `name` (String) The topic name.
 - `partitions` (Number) The number of partitions.
-- `replication_factor` (Number) The replication factor.
+- `replication_factor` (Number) Number of replicas kept for each partition of the topic.

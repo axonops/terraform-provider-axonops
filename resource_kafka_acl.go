@@ -71,14 +71,14 @@ func (r *aclResource) Schema(ctx context.Context, req resource.SchemaRequest, re
 		Attributes: map[string]schema.Attribute{
 			"cluster_name": schema.StringAttribute{
 				Required:    true,
-				Description: "The name of the Kafka cluster.",
+				Description: "Name of the Kafka cluster in AxonOps. Changing it destroys and recreates the ACL.",
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},
 			},
 			"resource_type": schema.StringAttribute{
 				Required:    true,
-				Description: "The type of resource. Valid values: ANY, TOPIC, GROUP, CLUSTER, TRANSACTIONAL_ID, DELEGATION_TOKEN, USER.",
+				Description: "The type of resource. Valid values: ANY, TOPIC, GROUP, CLUSTER, TRANSACTIONAL_ID, DELEGATION_TOKEN, USER. Changing it destroys and recreates the ACL.",
 				Validators: []validator.String{
 					stringvalidator.OneOf(validACLResourceTypes...),
 				},
@@ -88,7 +88,7 @@ func (r *aclResource) Schema(ctx context.Context, req resource.SchemaRequest, re
 			},
 			"resource_name": schema.StringAttribute{
 				Required:    true,
-				Description: "The name of the resource.",
+				Description: "The name of the resource. Changing it destroys and recreates the ACL.",
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},
@@ -97,7 +97,7 @@ func (r *aclResource) Schema(ctx context.Context, req resource.SchemaRequest, re
 				Optional:    true,
 				Computed:    true,
 				Default:     stringdefault.StaticString("LITERAL"),
-				Description: "The pattern type. Valid values: ANY, MATCH, LITERAL, PREFIXED. Default: LITERAL.",
+				Description: "The pattern type. Valid values: ANY, MATCH, LITERAL, PREFIXED. Default: LITERAL. Changing it destroys and recreates the ACL.",
 				Validators: []validator.String{
 					stringvalidator.OneOf(validACLResourcePatternTypes...),
 				},
@@ -107,7 +107,7 @@ func (r *aclResource) Schema(ctx context.Context, req resource.SchemaRequest, re
 			},
 			"principal": schema.StringAttribute{
 				Required:    true,
-				Description: "The principal (e.g., User:alice).",
+				Description: "The principal (e.g., User:alice). Changing it destroys and recreates the ACL.",
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},
@@ -116,14 +116,14 @@ func (r *aclResource) Schema(ctx context.Context, req resource.SchemaRequest, re
 				Optional:    true,
 				Computed:    true,
 				Default:     stringdefault.StaticString("*"),
-				Description: "The host. Default: * (all hosts).",
+				Description: "The host. Default: * (all hosts). Changing it destroys and recreates the ACL.",
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},
 			},
 			"operation": schema.StringAttribute{
 				Required:    true,
-				Description: "The operation. Valid values: ANY, ALL, READ, WRITE, CREATE, DELETE, ALTER, DESCRIBE, CLUSTER_ACTION, DESCRIBE_CONFIGS, ALTER_CONFIGS, IDEMPOTENT_WRITE, CREATE_TOKENS, DESCRIBE_TOKENS.",
+				Description: "The operation. Valid values: ANY, ALL, READ, WRITE, CREATE, DELETE, ALTER, DESCRIBE, CLUSTER_ACTION, DESCRIBE_CONFIGS, ALTER_CONFIGS, IDEMPOTENT_WRITE, CREATE_TOKENS, DESCRIBE_TOKENS. Changing it destroys and recreates the ACL.",
 				Validators: []validator.String{
 					stringvalidator.OneOf(validACLOperations...),
 				},
@@ -133,7 +133,7 @@ func (r *aclResource) Schema(ctx context.Context, req resource.SchemaRequest, re
 			},
 			"permission_type": schema.StringAttribute{
 				Required:    true,
-				Description: "The permission type. Valid values: ANY, DENY, ALLOW.",
+				Description: "The permission type. Valid values: ANY, DENY, ALLOW. Changing it destroys and recreates the ACL.",
 				Validators: []validator.String{
 					stringvalidator.OneOf(validACLPermissionTypes...),
 				},

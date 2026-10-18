@@ -57,14 +57,14 @@ func (r *teamsIntegrationResource) Schema(ctx context.Context, req resource.Sche
 			},
 			"cluster_name": schema.StringAttribute{
 				Required:    true,
-				Description: "The name of the cluster.",
+				Description: "Name of the cluster in AxonOps. Changing it destroys and recreates the integration.",
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},
 			},
 			"cluster_type": schema.StringAttribute{
 				Required:    true,
-				Description: "The cluster type (cassandra, kafka, or dse).",
+				Description: "Cluster type: cassandra, kafka or dse. Changing it destroys and recreates the integration.",
 				Validators:  []validator.String{clusterTypeValidator()},
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
@@ -72,7 +72,7 @@ func (r *teamsIntegrationResource) Schema(ctx context.Context, req resource.Sche
 			},
 			"name": schema.StringAttribute{
 				Required:    true,
-				Description: "The name of the integration.",
+				Description: "Name of the integration. Changing it destroys and recreates the integration.",
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},

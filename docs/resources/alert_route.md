@@ -70,12 +70,12 @@ resource "axonops_alert_route" "nodes_webhook" {
 
 ### Required
 
-- `cluster_name` (String) The name of the cluster.
-- `cluster_type` (String) The cluster type (cassandra, kafka, or dse).
-- `integration_name` (String) The name of the integration.
-- `integration_type` (String) The type of integration: email, smtp, pagerduty, slack, teams, servicenow, webhook, opsgenie.
-- `severity` (String) The severity level: info, warning, error.
-- `type` (String) The route type: global, metrics, backups, servicechecks, nodes, commands, repairs, rollingrestart.
+- `cluster_name` (String) Name of the cluster in AxonOps. Changing it destroys and recreates the route.
+- `cluster_type` (String) Cluster type: cassandra, kafka or dse. Changing it destroys and recreates the route.
+- `integration_name` (String) Name of the integration the route sends alerts to. Changing it destroys and recreates the route.
+- `integration_type` (String) The type of integration: email, smtp, pagerduty, slack, teams, servicenow, webhook, opsgenie. Changing it destroys and recreates the route.
+- `severity` (String) The severity level: info, warning, error. Changing it destroys and recreates the route.
+- `type` (String) The route type: global, metrics, backups, servicechecks, nodes, commands, repairs, rollingrestart. Changing it destroys and recreates the route.
 
 ### Optional
 

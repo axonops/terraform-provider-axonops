@@ -62,7 +62,7 @@ func (d *topicDataSource) Schema(ctx context.Context, req datasource.SchemaReque
 			},
 			"replication_factor": schema.Int32Attribute{
 				Computed:    true,
-				Description: "Replication factor.",
+				Description: "Number of replicas kept for each partition of the topic.",
 			},
 			"config": schema.MapAttribute{
 				Computed:    true,

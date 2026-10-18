@@ -46,10 +46,10 @@ resource "axonops_alert_route" "servicenow_global" {
 
 ### Required
 
-- `cluster_name` (String) The name of the cluster.
-- `cluster_type` (String) The cluster type (cassandra, kafka, or dse).
+- `cluster_name` (String) Name of the cluster in AxonOps. Changing it destroys and recreates the integration.
+- `cluster_type` (String) Cluster type: cassandra, kafka or dse. Changing it destroys and recreates the integration.
 - `instance_name` (String) The ServiceNow instance name.
-- `name` (String) The name of the integration.
+- `name` (String) Name of the integration. Changing it destroys and recreates the integration.
 - `password` (String, Sensitive) The ServiceNow password.
 - `user` (String) The ServiceNow username.
 

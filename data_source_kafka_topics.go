@@ -65,7 +65,7 @@ func (d *kafkaTopicsDataSource) Schema(_ context.Context, _ datasource.SchemaReq
 						},
 						"replication_factor": schema.Int64Attribute{
 							Computed:    true,
-							Description: "The replication factor.",
+							Description: "Number of replicas kept for each partition of the topic.",
 						},
 					},
 				},

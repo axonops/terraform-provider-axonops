@@ -43,9 +43,9 @@ resource "axonops_alert_route" "slack_global" {
 
 ### Required
 
-- `cluster_name` (String) The name of the cluster.
-- `cluster_type` (String) The cluster type (cassandra, kafka, or dse).
-- `name` (String) The name of the integration.
+- `cluster_name` (String) Name of the cluster in AxonOps. Changing it destroys and recreates the integration.
+- `cluster_type` (String) Cluster type: cassandra, kafka or dse. Changing it destroys and recreates the integration.
+- `name` (String) Name of the integration. Changing it destroys and recreates the integration.
 - `webhook_url` (String, Sensitive) The Slack webhook URL.
 
 ### Optional

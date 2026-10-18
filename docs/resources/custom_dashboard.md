@@ -108,8 +108,8 @@ Panel UUIDs follow list position. Add new panels at the end of the list to keep 
 
 ### Required
 
-- `cluster_name` (String) The name of the cluster.
-- `cluster_type` (String) The type of cluster (cassandra, kafka or dse).
+- `cluster_name` (String) Name of the cluster in AxonOps. Changing it destroys and recreates the dashboard.
+- `cluster_type` (String) Cluster type: cassandra, kafka or dse. Changing it destroys and recreates the dashboard.
 - `name` (String) The dashboard name shown in the AxonOps UI.
 - `panels` (Attributes List) Dashboard panels in display order. A panel of type `row` starts a collapsible group; the panels after it belong to that row. (see [below for nested schema](#nestedatt--panels))
 

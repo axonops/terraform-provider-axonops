@@ -58,12 +58,12 @@ resource "axonops_schema" "orders" {
 
 ### Required
 
-- `cluster_name` (String) The name of the Kafka cluster.
+- `cluster_name` (String) Name of the Kafka cluster in AxonOps. Changing it destroys and recreates the setting.
 - `compatibility_level` (String) The compatibility level. Valid values: NONE, BACKWARD, BACKWARD_TRANSITIVE, FORWARD, FORWARD_TRANSITIVE, FULL, FULL_TRANSITIVE.
 
 ### Optional
 
-- `subject` (String) The subject name (e.g. orders-value). Omit to manage the global compatibility level.
+- `subject` (String) The subject name (e.g. orders-value). Omit to manage the global compatibility level. Changing it destroys and recreates the setting.
 
 ### Read-Only
 

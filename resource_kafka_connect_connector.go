@@ -56,21 +56,21 @@ func (r *connectorResource) Schema(ctx context.Context, req resource.SchemaReque
 		Attributes: map[string]schema.Attribute{
 			"cluster_name": schema.StringAttribute{
 				Required:    true,
-				Description: "The name of the Kafka cluster.",
+				Description: "Name of the Kafka cluster in AxonOps. Changing it destroys and recreates the connector.",
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},
 			},
 			"connect_cluster_name": schema.StringAttribute{
 				Required:    true,
-				Description: "The name of the Kafka Connect cluster.",
+				Description: "Name of the Kafka Connect cluster that runs the connector. Changing it destroys and recreates the connector.",
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},
 			},
 			"name": schema.StringAttribute{
 				Required:    true,
-				Description: "The name of the connector.",
+				Description: "Name of the connector. Changing it destroys and recreates the connector.",
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},

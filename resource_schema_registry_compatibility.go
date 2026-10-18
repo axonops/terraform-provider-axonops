@@ -64,7 +64,7 @@ func (r *schemaRegistryCompatibilityResource) Schema(ctx context.Context, req re
 			},
 			"cluster_name": schema.StringAttribute{
 				Required:    true,
-				Description: "The name of the Kafka cluster.",
+				Description: "Name of the Kafka cluster in AxonOps. Changing it destroys and recreates the setting.",
 				Validators:  []validator.String{stringvalidator.LengthAtLeast(1)},
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
@@ -72,7 +72,7 @@ func (r *schemaRegistryCompatibilityResource) Schema(ctx context.Context, req re
 			},
 			"subject": schema.StringAttribute{
 				Optional:    true,
-				Description: "The subject name (e.g. orders-value). Omit to manage the global compatibility level.",
+				Description: "The subject name (e.g. orders-value). Omit to manage the global compatibility level. Changing it destroys and recreates the setting.",
 				Validators:  []validator.String{stringvalidator.LengthAtLeast(1)},
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),

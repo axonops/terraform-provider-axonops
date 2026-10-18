@@ -67,7 +67,7 @@ resource "axonops_cassandra_commitlog_settings" "all" {
 
 ### Required
 
-- `cluster_name` (String) The name of the cluster.
+- `cluster_name` (String) Name of the cluster in AxonOps. Changing it destroys and recreates the setting.
 - `datacenter` (String) Datacenter whose commitlogs are archived. A datacenter can have one commitlog archive configuration only. Changing it replaces the resource.
 - `remote_path` (String) Base path on the storage backend, e.g. a bucket and prefix for s3 or a directory for local and sftp. Must not end with "/".
 - `remote_type` (String) Storage backend: local, sftp, s3, s3Compatible, azureblob, googlecloudstorage.
@@ -75,7 +75,7 @@ resource "axonops_cassandra_commitlog_settings" "all" {
 ### Optional
 
 - `bw_limit` (String) Upload bandwidth limit, e.g. "10M". Empty means unlimited.
-- `cluster_type` (String) The cluster type (cassandra or dse). Default: cassandra
+- `cluster_type` (String) Cluster type: cassandra or dse. Defaults to cassandra. Changing it destroys and recreates the setting.
 - `remote_config` (String, Sensitive) Remote storage configuration as key=value pairs separated by newlines. A `type = <remote_type>` line is added when missing.
 - `remote_retention` (String) How long archived commitlogs are kept. Default: 60d
 - `timeout` (String) Upload operation timeout. Default: 10h

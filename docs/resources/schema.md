@@ -65,10 +65,10 @@ resource "axonops_schema" "sensor_data" {
 
 ### Required
 
-- `cluster_name` (String) The name of the Kafka cluster.
+- `cluster_name` (String) Name of the Kafka cluster in AxonOps. Changing it destroys and recreates the schema.
 - `schema` (String) The schema definition (JSON string for AVRO/JSON, proto definition for PROTOBUF).
 - `schema_type` (String) The schema type. Valid values: AVRO, PROTOBUF, JSON.
-- `subject` (String) The subject name (e.g., topic-name-value or topic-name-key).
+- `subject` (String) The subject name (e.g., topic-name-value or topic-name-key). Changing it destroys and recreates the schema.
 
 ### Read-Only
 
