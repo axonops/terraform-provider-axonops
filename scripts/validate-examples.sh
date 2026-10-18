@@ -31,8 +31,9 @@ for dir in "${dirs[@]}"; do
   name="$(basename "${dir}")"
   echo "validating ${name}"
   # Validate a copy so no .terraform state or lock file lands in the repo.
-  cp -R "${dir%/}" "${work}/${name}"
-  if ! terraform -chdir="${work}/${name}" validate -no-color; then
+  mkdir -p "${work}/scenarios"
+  cp -R "${dir%/}" "${work}/scenarios/${name}"
+  if ! terraform -chdir="${work}/scenarios/${name}" validate -no-color; then
     status=1
   fi
 done

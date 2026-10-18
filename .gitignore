@@ -1,4 +1,4 @@
-main.tf
+/main.tf
 terraform-provider-axonops
 terraform.tfstate
 terraform.tfstate.*
