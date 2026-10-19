@@ -288,8 +288,8 @@ func (r *httpHealthcheckResource) Read(ctx context.Context, req resource.ReadReq
 	data.Method = types.StringValue(found.Method)
 	data.Body = types.StringValue(found.Body)
 	data.ExpectedStatus = types.Int64Value(int64(found.ExpectedStatus))
-	data.Interval = types.StringValue(found.Interval)
-	data.Timeout = types.StringValue(found.Timeout)
+	data.Interval = types.StringValue(preferPriorDuration(data.Interval.ValueString(), found.Interval))
+	data.Timeout = types.StringValue(preferPriorDuration(data.Timeout.ValueString(), found.Timeout))
 	data.Readonly = types.BoolValue(found.Readonly)
 
 	// Convert headers to map

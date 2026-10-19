@@ -240,8 +240,8 @@ func (r *tcpHealthcheckResource) Read(ctx context.Context, req resource.ReadRequ
 	// Update state with current values from API
 	data.ID = types.StringValue(found.ID)
 	data.TCP = types.StringValue(found.TCP)
-	data.Interval = types.StringValue(found.Interval)
-	data.Timeout = types.StringValue(found.Timeout)
+	data.Interval = types.StringValue(preferPriorDuration(data.Interval.ValueString(), found.Interval))
+	data.Timeout = types.StringValue(preferPriorDuration(data.Timeout.ValueString(), found.Timeout))
 	data.Readonly = types.BoolValue(found.Readonly)
 
 	// Convert supported agent types to list

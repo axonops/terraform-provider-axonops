@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	axonopsClient "terraform-provider-axonops/client"
+
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 )
@@ -154,5 +156,21 @@ func TestKeepDollarEscaped(t *testing.T) {
 				t.Fatalf("got %q; want %q", got, c.want)
 			}
 		})
+	}
+}
+
+func TestConfirmHealthcheck_reformattedDuration(t *testing.T) {
+	shortenConfirmWrite(t, time.Second)
+	srv := newMockAxonOpsServer(t)
+	c := axonopsClient.CreateHTTPClient("http", srv.URL(), "key", "testorg", "Bearer", false)
+	ctx := context.Background()
+	doc := &axonopsClient.HealthchecksResponse{ShellChecks: []axonopsClient.ShellHealthcheck{
+		{Name: "ssl", Interval: "1d", Timeout: "60s"},
+	}}
+	if err := c.UpdateHealthchecks(ctx, "cassandra", "c1", *doc); err != nil {
+		t.Fatal(err)
+	}
+	if err := confirmHealthcheck(ctx, c, "cassandra", "c1", "shell", "ssl", "24h", "1m"); err != nil {
+		t.Fatalf("reformatted durations not matched: %v", err)
 	}
 }

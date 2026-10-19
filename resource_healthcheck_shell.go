@@ -230,8 +230,8 @@ func (r *shellHealthcheckResource) Read(ctx context.Context, req resource.ReadRe
 	data.ID = types.StringValue(found.ID)
 	data.Script = types.StringValue(found.Script)
 	data.Shell = types.StringValue(found.Shell)
-	data.Interval = types.StringValue(found.Interval)
-	data.Timeout = types.StringValue(found.Timeout)
+	data.Interval = types.StringValue(preferPriorDuration(data.Interval.ValueString(), found.Interval))
+	data.Timeout = types.StringValue(preferPriorDuration(data.Timeout.ValueString(), found.Timeout))
 	data.Readonly = types.BoolValue(found.Readonly)
 
 	diags = resp.State.Set(ctx, &data)
