@@ -48,8 +48,8 @@ resource "axonops_kafka_topic" "configured" {
 
 ### Required
 
-- `cluster_name` (String) Kafka cluster name. Changing this forces a new topic.
-- `name` (String) Topic name. Changing this forces a new topic.
+- `cluster_name` (String) Name of the Kafka cluster in AxonOps. Changing it destroys and recreates the topic, which deletes its messages.
+- `name` (String) Name of the topic. Changing it destroys and recreates the topic, which deletes its messages.
 - `partitions` (Number) Number of partitions. Can be increased in place; decreasing is not supported by Kafka.
 - `replication_factor` (Number) Replication factor. Changes are applied in place via partition reassignment.
 

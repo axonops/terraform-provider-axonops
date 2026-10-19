@@ -32,7 +32,7 @@ data "axonops_kafka_acl" "producer" {
 ### Required
 
 - `cluster_name` (String) The name of the Kafka cluster.
-- `host` (String) The host.
+- `host` (String) Host the ACL entry applies to, or * for all hosts.
 - `operation` (String) The operation. Valid values: ANY, ALL, READ, WRITE, CREATE, DELETE, ALTER, DESCRIBE, CLUSTER_ACTION, DESCRIBE_CONFIGS, ALTER_CONFIGS, IDEMPOTENT_WRITE, CREATE_TOKENS, DESCRIBE_TOKENS.
 - `permission_type` (String) The permission type. Valid values: ANY, DENY, ALLOW.
 - `principal` (String) The principal (e.g., User:alice).

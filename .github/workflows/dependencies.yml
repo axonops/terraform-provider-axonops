@@ -18,8 +18,9 @@ jobs:
         with:
           go-version-file: 'go.mod'
           cache: true
+      # v2.29.0 cannot read Go 1.27 export data; pin an unreleased commit that can.
       - name: Install gosec
-        run: go install github.com/securego/gosec/v2/cmd/gosec@latest
+        run: go install github.com/securego/gosec/v2/cmd/gosec@707f2271f665
       - name: Run gosec
         # InsecureSkipVerify (G402) is only reachable via the opt-in
         # tls_skip_verify setting and is annotated inline with #nosec.

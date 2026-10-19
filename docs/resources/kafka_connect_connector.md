@@ -55,10 +55,10 @@ resource "axonops_kafka_connect_connector" "jdbc_source" {
 
 ### Required
 
-- `cluster_name` (String) The name of the Kafka cluster.
+- `cluster_name` (String) Name of the Kafka cluster in AxonOps. Changing it destroys and recreates the connector.
 - `config` (Map of String, Sensitive) The connector configuration as a map of key-value pairs. May contain secrets (e.g. connection credentials).
-- `connect_cluster_name` (String) The name of the Kafka Connect cluster.
-- `name` (String) The name of the connector.
+- `connect_cluster_name` (String) Name of the Kafka Connect cluster that runs the connector. Changing it destroys and recreates the connector.
+- `name` (String) Name of the connector. Changing it destroys and recreates the connector.
 
 ### Read-Only
 

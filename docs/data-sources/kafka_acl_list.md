@@ -55,10 +55,10 @@ output "producer_acls" {
 
 Read-Only:
 
-- `host` (String) The host.
-- `operation` (String) The operation.
-- `permission_type` (String) The permission type.
-- `principal` (String) The principal.
+- `host` (String) Host the ACL entry applies to, or * for all hosts.
+- `operation` (String) Operation the ACL entry allows or denies, for example READ or WRITE.
+- `permission_type` (String) Whether the ACL entry is ALLOW or DENY.
+- `principal` (String) Principal the ACL entry applies to, for example User:alice.
 - `resource_name` (String) The name of the resource.
 - `resource_pattern_type` (String) The pattern type.
 - `resource_type` (String) The type of resource.

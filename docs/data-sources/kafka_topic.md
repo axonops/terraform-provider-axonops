@@ -56,4 +56,4 @@ resource "axonops_kafka_acl" "topic_read" {
 
 - `config` (Map of String) Topic configuration (keys use underscores instead of dots).
 - `partitions` (Number) Number of partitions.
-- `replication_factor` (Number) Replication factor.
+- `replication_factor` (Number) Number of replicas kept for each partition of the topic.

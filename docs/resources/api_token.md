@@ -72,12 +72,12 @@ AxonOps tokens cannot be changed or rotated in place. Changing `allowed_roles`, 
 
 ### Required
 
-- `allowed_roles` (List of String) Role scopes granted to the token. Each entry is `<org>/<role>`, `<org>/<cluster_type>/<role>` or `<org>/<cluster_type>/<cluster_name>/<role>`, where role is superuser, admin, readonly or backupadmin.
+- `allowed_roles` (List of String) Role scopes granted to the token. Each entry is `<org>/<role>`, `<org>/<cluster_type>/<role>` or `<org>/<cluster_type>/<cluster_name>/<role>`, where role is superuser, admin, readonly or backupadmin. Changing it destroys and recreates the token.
 - `name` (String) A label for the token. AxonOps does not store token names, so this value is kept in Terraform state only and can change without replacing the token.
 
 ### Optional
 
-- `expires_at` (String) Expiry time in RFC 3339 format (e.g. 2027-01-01T00:00:00Z). Omit for a token that never expires.
+- `expires_at` (String) Expiry time in RFC 3339 format (e.g. 2027-01-01T00:00:00Z). Omit for a token that never expires. Changing it destroys and recreates the token.
 - `rotation_triggers` (Map of String) Arbitrary values that force a new token when changed. Use it to rotate the token, for example with a `time_rotating` resource. Combine with `create_before_destroy`.
 
 ### Read-Only

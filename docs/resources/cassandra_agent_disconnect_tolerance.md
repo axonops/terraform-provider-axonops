@@ -31,11 +31,11 @@ resource "axonops_cassandra_agent_disconnect_tolerance" "relaxed" {
 
 ### Required
 
-- `cluster_name` (String) The name of the cluster.
+- `cluster_name` (String) Name of the cluster in AxonOps. Changing it destroys and recreates the setting.
 
 ### Optional
 
-- `cluster_type` (String) The cluster type (cassandra or dse). Default: cassandra
+- `cluster_type` (String) Cluster type: cassandra or dse. Defaults to cassandra. Changing it destroys and recreates the setting.
 - `error_timeout` (String) How long an agent may be disconnected before AxonOps raises an error, e.g. "1m" or "5m". Default: 1m
 - `warn_timeout` (String) How long an agent may be disconnected before AxonOps raises a warning, e.g. "30s" or "2m". Default: 30s
 

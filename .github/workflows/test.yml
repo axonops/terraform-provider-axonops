@@ -15,7 +15,7 @@ jobs:
     strategy:
       matrix:
         # go.mod requires Go 1.27.1; also test against the latest stable release.
-        go-version: ['1.27.1', 'stable']
+        go-version: ['1.27.2', 'stable']
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -39,3 +39,18 @@ jobs:
       # Acceptance tests run against an in-process mock AxonOps API, so no
       # credentials or live cluster are required.
       - run: TF_ACC=1 go test -v -cover -timeout 10m ./...
+
+  validate-examples:
+    name: Validate Example Scenarios
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+          cache: true
+      - uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_wrapper: false
+      - run: scripts/validate-examples.sh

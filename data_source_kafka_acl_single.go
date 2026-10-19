@@ -73,7 +73,7 @@ func (d *aclSingleDataSource) Schema(ctx context.Context, req datasource.SchemaR
 			},
 			"host": schema.StringAttribute{
 				Required:    true,
-				Description: "The host.",
+				Description: "Host the ACL entry applies to, or * for all hosts.",
 			},
 			"operation": schema.StringAttribute{
 				Required:    true,

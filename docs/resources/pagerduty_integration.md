@@ -42,10 +42,10 @@ resource "axonops_alert_route" "pagerduty_global" {
 
 ### Required
 
-- `cluster_name` (String) The name of the cluster.
-- `cluster_type` (String) The cluster type (cassandra, kafka, or dse).
+- `cluster_name` (String) Name of the cluster in AxonOps. Changing it destroys and recreates the integration.
+- `cluster_type` (String) Cluster type: cassandra, kafka or dse. Changing it destroys and recreates the integration.
 - `integration_key` (String, Sensitive) The PagerDuty integration key.
-- `name` (String) The name of the integration.
+- `name` (String) Name of the integration. Changing it destroys and recreates the integration.
 
 ### Read-Only
 

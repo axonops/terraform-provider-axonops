@@ -1,5 +1,4 @@
-main.tf
-CLAUDE.md
+/main.tf
 terraform-provider-axonops
 terraform.tfstate
 terraform.tfstate.*

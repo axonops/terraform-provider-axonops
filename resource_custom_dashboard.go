@@ -118,7 +118,7 @@ func (r *customDashboardResource) Schema(ctx context.Context, req resource.Schem
 			},
 			"cluster_type": schema.StringAttribute{
 				Required:    true,
-				Description: "The type of cluster (cassandra, kafka or dse).",
+				Description: "Cluster type: cassandra, kafka or dse. Changing it destroys and recreates the dashboard.",
 				Validators:  []validator.String{clusterTypeValidator()},
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
@@ -126,7 +126,7 @@ func (r *customDashboardResource) Schema(ctx context.Context, req resource.Schem
 			},
 			"cluster_name": schema.StringAttribute{
 				Required:    true,
-				Description: "The name of the cluster.",
+				Description: "Name of the cluster in AxonOps. Changing it destroys and recreates the dashboard.",
 				Validators:  []validator.String{stringvalidator.LengthAtLeast(1)},
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),

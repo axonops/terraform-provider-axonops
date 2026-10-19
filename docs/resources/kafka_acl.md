@@ -54,17 +54,17 @@ resource "axonops_kafka_acl" "consumer_group" {
 
 ### Required
 
-- `cluster_name` (String) The name of the Kafka cluster.
-- `operation` (String) The operation. Valid values: ANY, ALL, READ, WRITE, CREATE, DELETE, ALTER, DESCRIBE, CLUSTER_ACTION, DESCRIBE_CONFIGS, ALTER_CONFIGS, IDEMPOTENT_WRITE, CREATE_TOKENS, DESCRIBE_TOKENS.
-- `permission_type` (String) The permission type. Valid values: ANY, DENY, ALLOW.
-- `principal` (String) The principal (e.g., User:alice).
-- `resource_name` (String) The name of the resource.
-- `resource_type` (String) The type of resource. Valid values: ANY, TOPIC, GROUP, CLUSTER, TRANSACTIONAL_ID, DELEGATION_TOKEN, USER.
+- `cluster_name` (String) Name of the Kafka cluster in AxonOps. Changing it destroys and recreates the ACL.
+- `operation` (String) The operation. Valid values: ANY, ALL, READ, WRITE, CREATE, DELETE, ALTER, DESCRIBE, CLUSTER_ACTION, DESCRIBE_CONFIGS, ALTER_CONFIGS, IDEMPOTENT_WRITE, CREATE_TOKENS, DESCRIBE_TOKENS. Changing it destroys and recreates the ACL.
+- `permission_type` (String) The permission type. Valid values: ANY, DENY, ALLOW. Changing it destroys and recreates the ACL.
+- `principal` (String) The principal (e.g., User:alice). Changing it destroys and recreates the ACL.
+- `resource_name` (String) The name of the resource. Changing it destroys and recreates the ACL.
+- `resource_type` (String) The type of resource. Valid values: ANY, TOPIC, GROUP, CLUSTER, TRANSACTIONAL_ID, DELEGATION_TOKEN, USER. Changing it destroys and recreates the ACL.
 
 ### Optional
 
-- `host` (String) The host. Default: * (all hosts).
-- `resource_pattern_type` (String) The pattern type. Valid values: ANY, MATCH, LITERAL, PREFIXED. Default: LITERAL.
+- `host` (String) The host. Default: * (all hosts). Changing it destroys and recreates the ACL.
+- `resource_pattern_type` (String) The pattern type. Valid values: ANY, MATCH, LITERAL, PREFIXED. Default: LITERAL. Changing it destroys and recreates the ACL.
 
 ## Import
 

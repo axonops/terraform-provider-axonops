@@ -99,14 +99,14 @@ func (r *alertRouteResource) Schema(ctx context.Context, req resource.SchemaRequ
 			},
 			"cluster_name": schema.StringAttribute{
 				Required:    true,
-				Description: "The name of the cluster.",
+				Description: "Name of the cluster in AxonOps. Changing it destroys and recreates the route.",
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},
 			},
 			"cluster_type": schema.StringAttribute{
 				Required:    true,
-				Description: "The cluster type (cassandra, kafka, or dse).",
+				Description: "Cluster type: cassandra, kafka or dse. Changing it destroys and recreates the route.",
 				Validators:  []validator.String{clusterTypeValidator()},
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
@@ -114,14 +114,14 @@ func (r *alertRouteResource) Schema(ctx context.Context, req resource.SchemaRequ
 			},
 			"integration_name": schema.StringAttribute{
 				Required:    true,
-				Description: "The name of the integration.",
+				Description: "Name of the integration the route sends alerts to. Changing it destroys and recreates the route.",
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},
 			},
 			"integration_type": schema.StringAttribute{
 				Required:    true,
-				Description: "The type of integration: email, smtp, pagerduty, slack, teams, servicenow, webhook, opsgenie.",
+				Description: "The type of integration: email, smtp, pagerduty, slack, teams, servicenow, webhook, opsgenie. Changing it destroys and recreates the route.",
 				Validators:  []validator.String{stringvalidator.OneOf(validIntegrationTypes...)},
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
@@ -129,7 +129,7 @@ func (r *alertRouteResource) Schema(ctx context.Context, req resource.SchemaRequ
 			},
 			"type": schema.StringAttribute{
 				Required:    true,
-				Description: "The route type: global, metrics, backups, servicechecks, nodes, commands, repairs, rollingrestart.",
+				Description: "The route type: global, metrics, backups, servicechecks, nodes, commands, repairs, rollingrestart. Changing it destroys and recreates the route.",
 				Validators:  []validator.String{stringvalidator.OneOf(validRouteTypes...)},
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
@@ -137,7 +137,7 @@ func (r *alertRouteResource) Schema(ctx context.Context, req resource.SchemaRequ
 			},
 			"severity": schema.StringAttribute{
 				Required:    true,
-				Description: "The severity level: info, warning, error.",
+				Description: "The severity level: info, warning, error. Changing it destroys and recreates the route.",
 				Validators:  []validator.String{stringvalidator.OneOf(validRouteSeverities...)},
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
