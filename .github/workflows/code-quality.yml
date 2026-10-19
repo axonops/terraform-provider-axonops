@@ -18,11 +18,13 @@ jobs:
         with:
           go-version-file: 'go.mod'
           cache: true
-      # golangci-lint v1 is built with Go 1.24 and cannot lint a Go 1.27
-      # module; v2 requires golangci-lint-action v7 or later.
+      # The prebuilt golangci-lint binary is built with an older Go and cannot
+      # read export data from the Go 1.27 toolchain; build it with the
+      # runner's Go instead. v2 requires golangci-lint-action v7 or later.
       - uses: golangci/golangci-lint-action@v8
         with:
-          version: v2.13.1
+          version: v2.15.0
+          install-mode: goinstall
           args: --timeout=5m
 
   fmt:
