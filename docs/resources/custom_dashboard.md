@@ -85,6 +85,15 @@ resource "axonops_custom_dashboard" "cassandra_latency" {
     layout = { x = 0, y = 0, w = 18, h = 8 }
   }]
 }
+
+# Dashboard created from a JSON document of an existing dashboard.
+# dashboard.json must exist next to this configuration.
+resource "axonops_custom_dashboard" "imported" {
+  cluster_type   = "kafka"
+  cluster_name   = "my-kafka-cluster"
+  name           = "Imported dashboard"
+  dashboard_json = file("${path.module}/dashboard.json")
+}
 ```
 
 ## Panels
@@ -111,15 +120,35 @@ Panel UUIDs follow list position. Add new panels at the end of the list to keep 
 - `cluster_name` (String) Name of the cluster in AxonOps. Changing it destroys and recreates the dashboard.
 - `cluster_type` (String) Cluster type: cassandra, kafka or dse. Changing it destroys and recreates the dashboard.
 - `name` (String) The dashboard name shown in the AxonOps UI.
-- `panels` (Attributes List) Dashboard panels in display order. A panel of type `row` starts a collapsible group; the panels after it belong to that row. (see [below for nested schema](#nestedatt--panels))
 
 ### Optional
 
-- `filters` (Attributes List) Dashboard filters (template variables) shown above the panels. (see [below for nested schema](#nestedatt--filters))
+- `dashboard_json` (String) The whole dashboard as one JSON document in the AxonOps API dashboard shape (`filters` and `panels` with `layout`). Use it to create or update a dashboard from an existing one, e.g. `file("dashboard.json")`, instead of describing `filters` and `panels`; it cannot be combined with either. The `name` attribute is used and the document's own `name` and UUIDs are ignored. Panel UUIDs are generated on create and reused by position on update. After `terraform import` or a change made in the UI, the attribute shows the dashboard as stored, and the first plan after an import switches the dashboard to this JSON form.
+- `filters` (Attributes List) Dashboard filters (template variables) shown above the panels. Not used with `dashboard_json`. (see [below for nested schema](#nestedatt--filters))
+- `panels` (Attributes List) Dashboard panels in display order. A panel of type `row` starts a collapsible group; the panels after it belong to that row. Required unless `dashboard_json` is set. (see [below for nested schema](#nestedatt--panels))
 
 ### Read-Only
 
 - `id` (String) The dashboard UUID.
+
+<a id="nestedatt--filters"></a>
+### Nested Schema for `filters`
+
+Required:
+
+- `name` (String) The filter variable name used in panel queries.
+- `type` (String) The filter type: query or custom.
+
+Optional:
+
+- `custom_logic` (String) Custom logic applied to the filter.
+- `label` (String) The label shown in the UI.
+- `limit` (Number) Maximum number of values to list.
+- `multi` (Boolean) Whether more than one value can be selected.
+- `query` (String) The query that lists filter values (type query).
+- `regex` (String) A regular expression applied to query results.
+- `values` (String) Comma-separated filter values (type custom).
+
 
 <a id="nestedatt--panels"></a>
 ### Nested Schema for `panels`
@@ -147,26 +176,6 @@ Required:
 - `w` (Number) Width in grid columns.
 - `x` (Number) Column of the top-left corner.
 - `y` (Number) Row of the top-left corner.
-
-
-
-<a id="nestedatt--filters"></a>
-### Nested Schema for `filters`
-
-Required:
-
-- `name` (String) The filter variable name used in panel queries.
-- `type` (String) The filter type: query or custom.
-
-Optional:
-
-- `custom_logic` (String) Custom logic applied to the filter.
-- `label` (String) The label shown in the UI.
-- `limit` (Number) Maximum number of values to list.
-- `multi` (Boolean) Whether more than one value can be selected.
-- `query` (String) The query that lists filter values (type query).
-- `regex` (String) A regular expression applied to query results.
-- `values` (String) Comma-separated filter values (type custom).
 
 ## Import
 

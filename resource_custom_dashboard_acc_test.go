@@ -282,3 +282,128 @@ resource "axonops_custom_dashboard" "ui" {
 		},
 	})
 }
+
+const testDashboardJSON = `{
+  "uuid": "from-another-cluster",
+  "name": "Exported name",
+  "filters": [{"name": "host", "label": "Host", "type": "custom", "multi": true, "values": "a,b"}],
+  "panels": [
+    {"uuid": "e", "type": "row", "title": "__EMPTY_ROW__", "details": {"filters":{},"isHideNullValue":false,"max":0,"queries":[],"y":{}}, "layout": {"x":0,"y":0,"w":18,"h":1,"i":"e"}},
+    {"uuid": "r", "type": "row", "title": "Brokers", "layout": {"x":0,"y":1,"w":18,"h":1,"i":"r"}},
+    {"uuid": "p", "type": "line-chart", "title": "Messages in", "group": "r",
+     "details": {"queries": [{"query": %q, "legend": "{{host}}"}]},
+     "layout": {"x":0,"y":2,"w":9,"h":6,"i":"p"}}
+  ]
+}`
+
+func testAccCustomDashboardJSONConfig(host, name, query string) string {
+	return testAccProviderConfig(host) + fmt.Sprintf(`
+resource "axonops_custom_dashboard" "j" {
+  cluster_type   = "kafka"
+  cluster_name   = "kcluster"
+  name           = %q
+  dashboard_json = %q
+}
+`, name, fmt.Sprintf(testDashboardJSON, query))
+}
+
+func TestAccCustomDashboard_json(t *testing.T) {
+	srv := newAccTestServer(t)
+	var panelUUID string
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccCustomDashboardJSONConfig(srv.URL(), "Imported", "kafka_messages_in"),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("axonops_custom_dashboard.j", "name", "Imported"),
+					resource.TestCheckNoResourceAttr("axonops_custom_dashboard.j", "panels.#"),
+					func(s *terraform.State) error {
+						id := s.RootModule().Resources["axonops_custom_dashboard.j"].Primary.ID
+						dash := srv.dashboardV2("kafka", "kcluster", id)
+						if err := checkUIRenderable(dash); err != nil {
+							return err
+						}
+						if dash.Name != "Imported" || id == "from-another-cluster" {
+							return fmt.Errorf("name %q id %q: document name and uuid must be ignored", dash.Name, id)
+						}
+						if len(dash.Panels) != 3 || len(dash.Filters) != 1 {
+							return fmt.Errorf("stored %d panels, %d filters; want 3, 1", len(dash.Panels), len(dash.Filters))
+						}
+						if dash.Panels[2].Layout.Y != 2 || dash.Panels[2].Group != dash.Panels[1].UUID {
+							return fmt.Errorf("panel y=%d group=%q", dash.Panels[2].Layout.Y, dash.Panels[2].Group)
+						}
+						if dash.Panels[2].UUID == "p" {
+							return fmt.Errorf("panel uuid from the document was reused")
+						}
+						panelUUID = dash.Panels[2].UUID
+						return nil
+					},
+				),
+			},
+			{
+				Config: testAccCustomDashboardJSONConfig(srv.URL(), "Imported", "kafka_messages_in"),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()},
+				},
+			},
+			{
+				Config: testAccCustomDashboardJSONConfig(srv.URL(), "Imported", "kafka_bytes_in"),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction("axonops_custom_dashboard.j", plancheck.ResourceActionUpdate),
+					},
+				},
+				Check: func(s *terraform.State) error {
+					dash := srv.dashboardV2("kafka", "kcluster", s.RootModule().Resources["axonops_custom_dashboard.j"].Primary.ID)
+					if dash.Panels[2].UUID != panelUUID {
+						return fmt.Errorf("panel uuid changed from %s to %s", panelUUID, dash.Panels[2].UUID)
+					}
+					return nil
+				},
+			},
+		},
+	})
+}
+
+func TestAccCustomDashboard_jsonInvalid(t *testing.T) {
+	srv := newAccTestServer(t)
+	cfg := func(extra, doc string) string {
+		return testAccProviderConfig(srv.URL()) + fmt.Sprintf(`
+resource "axonops_custom_dashboard" "j" {
+  cluster_type = "kafka"
+  cluster_name = "kcluster"
+  name         = "Bad"
+  %s
+  dashboard_json = %q
+}
+`, extra, doc)
+	}
+	good := fmt.Sprintf(testDashboardJSON, "q")
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{Config: cfg("", "not json"), ExpectError: regexp.MustCompile(`Invalid dashboard JSON`)},
+			{Config: cfg("", `{"panels": []}`), ExpectError: regexp.MustCompile(`no panels`)},
+			{Config: cfg("", `{"panels": [{"type":"line-chart","title":"x","layout":{"w":0,"h":1}}]}`), ExpectError: regexp.MustCompile(`invalid layout`)},
+			{Config: cfg("", `{"panels": [{"type":"","title":"x","layout":{"w":1,"h":1}}]}`), ExpectError: regexp.MustCompile(`has no type`)},
+			{Config: cfg("", `{"filters":[{"name":"f","type":"nope"}],"panels":[{"type":"counter","title":"x","layout":{"w":1,"h":1}}]}`), ExpectError: regexp.MustCompile(`want query or custom`)},
+			{
+				Config:      cfg(`panels = [{ title = "p", type = "row", layout = { x = 0, y = 0, w = 1, h = 1 } }]`, good),
+				ExpectError: regexp.MustCompile(`(?s)Invalid Attribute Combination`),
+			},
+			{
+				Config: testAccProviderConfig(srv.URL()) + `
+resource "axonops_custom_dashboard" "j" {
+  cluster_type = "kafka"
+  cluster_name = "kcluster"
+  name         = "Neither"
+}
+`,
+				ExpectError: regexp.MustCompile(`(?s)Invalid Attribute Combination`),
+			},
+		},
+	})
+}

@@ -137,9 +137,23 @@ func (r *customDashboardResource) Schema(ctx context.Context, req resource.Schem
 				Description: "The dashboard name shown in the AxonOps UI.",
 				Validators:  []validator.String{stringvalidator.LengthAtLeast(1)},
 			},
+			"dashboard_json": schema.StringAttribute{
+				Optional: true,
+				Description: "The whole dashboard as one JSON document in the AxonOps API dashboard shape " +
+					"(`filters` and `panels` with `layout`). Use it to create or update a dashboard from an existing " +
+					"one, e.g. `file(\"dashboard.json\")`, instead of describing `filters` and `panels`; it cannot be " +
+					"combined with either. The `name` attribute is used and the document's own `name` and UUIDs are " +
+					"ignored. Panel UUIDs are generated on create and reused by position on update. After " +
+					"`terraform import` or a change made in the UI, the attribute shows the dashboard as stored, " +
+					"and the first plan after an import switches the dashboard to this JSON form.",
+				Validators: []validator.String{
+					dashboardJSONValidator{},
+					stringvalidator.ConflictsWith(path.MatchRoot("filters"), path.MatchRoot("panels")),
+				},
+			},
 			"filters": schema.ListNestedAttribute{
 				Optional:    true,
-				Description: "Dashboard filters (template variables) shown above the panels.",
+				Description: "Dashboard filters (template variables) shown above the panels. Not used with `dashboard_json`.",
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
 						"name": schema.StringAttribute{
@@ -185,10 +199,13 @@ func (r *customDashboardResource) Schema(ctx context.Context, req resource.Schem
 				},
 			},
 			"panels": schema.ListNestedAttribute{
-				Required: true,
+				Optional: true,
 				Description: "Dashboard panels in display order. A panel of type `row` starts a collapsible group; " +
-					"the panels after it belong to that row.",
-				Validators: []validator.List{listvalidator.SizeAtLeast(1)},
+					"the panels after it belong to that row. Required unless `dashboard_json` is set.",
+				Validators: []validator.List{
+					listvalidator.SizeAtLeast(1),
+					listvalidator.AtLeastOneOf(path.MatchRoot("dashboard_json")),
+				},
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
 						"uuid": schema.StringAttribute{
@@ -238,6 +255,7 @@ type customDashboardData struct {
 	ClusterType types.String           `tfsdk:"cluster_type"`
 	ClusterName types.String           `tfsdk:"cluster_name"`
 	Name        types.String           `tfsdk:"name"`
+	JSON        types.String           `tfsdk:"dashboard_json"`
 	Filters     []dashboardFilterModel `tfsdk:"filters"`
 	Panels      []dashboardPanelModel  `tfsdk:"panels"`
 }
@@ -335,12 +353,48 @@ func (data *customDashboardData) toAPI(emptyRowUUID string) axonopsClient.Custom
 	return dash
 }
 
+// fromAPIKeepingJSON is fromAPI for Create and Update: the applied
+// dashboard_json must equal the planned value, so it is never replaced. Drift
+// is reported by Read.
+func (data *customDashboardData) fromAPIKeepingJSON(dash *axonopsClient.CustomDashboard) {
+	planned := data.JSON
+	data.fromAPI(dash)
+	data.JSON = planned
+}
+
+// build returns the API dashboard for data. existing is the stored dashboard
+// on update, nil on create.
+func (data *customDashboardData) build(existing *axonopsClient.CustomDashboard) (axonopsClient.CustomDashboard, error) {
+	emptyRowUUID := ""
+	if existing != nil {
+		if row, _ := splitEmptyRow(existing.Panels); row != nil {
+			emptyRowUUID = row.UUID
+		}
+	}
+	if data.JSON.IsNull() || data.JSON.IsUnknown() {
+		return data.toAPI(emptyRowUUID), nil
+	}
+	if data.ID.IsUnknown() || data.ID.ValueString() == "" {
+		data.ID = types.StringValue(uuid.NewString())
+	}
+	return dashboardFromJSON(data.JSON.ValueString(), data.ID.ValueString(), data.Name.ValueString(), existing)
+}
+
 // fromAPI copies the server view of a dashboard into data. Values that are
 // equivalent to what data already holds (JSON details, unset optional
 // attributes) keep their current form to avoid spurious diffs.
 func (data *customDashboardData) fromAPI(dash *axonopsClient.CustomDashboard) {
 	data.ID = types.StringValue(dash.UUID)
 	data.Name = types.StringValue(dash.Name)
+
+	if !data.JSON.IsNull() && !data.JSON.IsUnknown() {
+		// Keep the configured document unless the stored content differs.
+		if prev, err := parseDashboardJSON(data.JSON.ValueString()); err != nil ||
+			canonicalDashboardContent(prev) != canonicalDashboardContent(dash) {
+			data.JSON = types.StringValue(exportDashboardJSON(dash))
+		}
+		return
+	}
 
 	prevFilters := data.Filters
 	if len(dash.Filters) == 0 {
@@ -491,9 +545,13 @@ func (r *customDashboardResource) Create(ctx context.Context, req resource.Creat
 	}
 
 	clusterType, clusterName := data.ClusterType.ValueString(), data.ClusterName.ValueString()
-	dash := data.toAPI("")
+	dash, err := data.build(nil)
+	if err != nil {
+		resp.Diagnostics.AddError("Invalid dashboard", err.Error())
+		return
+	}
 
-	err := r.write(ctx, clusterType, clusterName, func(tmpl *axonopsClient.DashboardTemplate) error {
+	err = r.write(ctx, clusterType, clusterName, func(tmpl *axonopsClient.DashboardTemplate) error {
 		tmpl.Dashboards = append(tmpl.Dashboards, dash)
 		return nil
 	})
@@ -507,7 +565,7 @@ func (r *customDashboardResource) Create(ctx context.Context, req resource.Creat
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to confirm dashboard was created: %s", err))
 		return
 	}
-	data.fromAPI(got)
+	data.fromAPIKeepingJSON(got)
 
 	tflog.Info(ctx, "Created custom dashboard", map[string]interface{}{"id": dash.UUID})
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
@@ -551,12 +609,12 @@ func (r *customDashboardResource) Update(ctx context.Context, req resource.Updat
 		if existing == nil {
 			return fmt.Errorf("dashboard %s no longer exists on cluster %s/%s", data.ID.ValueString(), clusterType, clusterName)
 		}
-		// Keep the hidden row's UUID so UI state tied to it survives.
-		emptyRowUUID := ""
-		if row, _ := splitEmptyRow(existing.Panels); row != nil {
-			emptyRowUUID = row.UUID
+		// The hidden row's UUID is kept so UI state tied to it survives.
+		built, err := data.build(existing)
+		if err != nil {
+			return err
 		}
-		dash = data.toAPI(emptyRowUUID)
+		dash = built
 		*existing = dash
 		return nil
 	})
@@ -570,7 +628,7 @@ func (r *customDashboardResource) Update(ctx context.Context, req resource.Updat
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to confirm dashboard was updated: %s", err))
 		return
 	}
-	data.fromAPI(got)
+	data.fromAPIKeepingJSON(got)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
