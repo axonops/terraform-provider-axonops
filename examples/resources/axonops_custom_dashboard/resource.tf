@@ -69,3 +69,12 @@ resource "axonops_custom_dashboard" "cassandra_latency" {
     layout = { x = 0, y = 0, w = 18, h = 8 }
   }]
 }
+
+# Dashboard created from a JSON document of an existing dashboard.
+# dashboard.json must exist next to this configuration.
+resource "axonops_custom_dashboard" "imported" {
+  cluster_type   = "kafka"
+  cluster_name   = "my-kafka-cluster"
+  name           = "Imported dashboard"
+  dashboard_json = file("${path.module}/dashboard.json")
+}
